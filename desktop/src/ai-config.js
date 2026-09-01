@@ -29,6 +29,18 @@ function saveConfig(cfgPath, cfg) {
   fs.writeFileSync(cfgPath, text, 'utf8');
 }
 
+// 桌面版强制默认项：local_mode=true（免登录）、绑定 127.0.0.1（不暴露公网）。
+// 在 startBackend 复制 config.example.yaml 后调用，确保桌面版双击即免登录。
+function ensureDesktopDefaults(cfgPath) {
+  const cfg = loadConfig(cfgPath) || {};
+  if (!cfg.auth) cfg.auth = {};
+  cfg.auth.local_mode = true; // 桌面版/本地部署强制免登录
+  // 绑定本机回环，避免桌面版意外暴露到局域网（强制覆盖 0.0.0.0 等公开绑定）
+  if (!cfg.server) cfg.server = {};
+  cfg.server.host = '127.0.0.1';
+  saveConfig(cfgPath, cfg);
+}
+
 // 返回 {needSetup, channel, channelId}
 function inspectAIChannel(cfg) {
   if (!cfg || !cfg.ai) return { needSetup: true };
@@ -69,4 +81,4 @@ function applyChannel(cfgPath, { id, name, provider, base_url, api_key, model, m
   return cleanId;
 }
 
-module.exports = { isKeyUnconfigured, loadConfig, saveConfig, inspectAIChannel, applyChannel };
+module.exports = { isKeyUnconfigured, loadConfig, saveConfig, inspectAIChannel, applyChannel, ensureDesktopDefaults };

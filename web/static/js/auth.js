@@ -672,6 +672,62 @@ function setupLoginUI() {
 
 async function initializeApp() {
     setupLoginUI();
+    // local_mode（桌面版/本地部署免登录）：后端返回 local_mode=true 时直接以内置 admin 身份进入主界面，不弹登录窗。
+    // 优先尝试 /api/auth/login 兜底：若已配 local_mode，后端不校验密码直接返回会话；普通模式则按既有流程走。
+    const storedLocalMode = (() => {
+        try { return localStorage.getItem('cyberstrike-local-mode') === 'true'; } catch (_) { return false; }
+    })();
+    if (storedLocalMode) {
+        // 已知是 local_mode：直接打 validate（AuthMiddleware 会注入 local session），无需登录。
+        try {
+            const response = await fetch('/api/auth/validate', { method: 'GET', headers: { 'Authorization': 'Bearer local-mode' } });
+            if (response.ok) {
+                const result = await response.json().catch(() => ({}));
+                if (result.local_mode) {
+                    saveAuth(result.token || 'local-mode', result.expires_at || new Date(Date.now() + 12 * 3600 * 1000), {
+                        user: result.user, roles: result.roles, permissions: result.permissions, scope: result.scope
+                    });
+                    hideLoginOverlay();
+                    applyRBACToUI();
+                    resolveAuthPromises(true);
+                    await bootstrapApp();
+                    return;
+                }
+            }
+        } catch (error) {
+            // 落到常规流程
+        }
+    }
+    // 探测后端是否 local_mode（轻量 GET /api/config，受 local_mode 放行；普通模式未登录会 401，不影响后续登录流）。
+    try {
+        const probe = await fetch('/api/config', { method: 'GET' });
+        if (probe.ok || probe.status === 403 || probe.status === 401) {
+            // local_mode 下 200；普通模式 401——都说明后端在线。若 200 说明 local_mode 已开启，直接走免登录。
+            if (probe.ok) {
+                try {
+                    localStorage.setItem('cyberstrike-local-mode', 'true');
+                } catch (_) {}
+                const result = await probe.json().catch(() => ({}));
+                // 取一次 validate 拿完整会话信息。
+                const v = await fetch('/api/auth/validate', { method: 'GET', headers: { 'Authorization': 'Bearer local-mode' } });
+                if (v.ok) {
+                    const session = await v.json().catch(() => ({}));
+                    saveAuth(session.token || 'local-mode', session.expires_at || new Date(Date.now() + 12 * 3600 * 1000), {
+                        user: session.user, roles: session.roles, permissions: session.permissions, scope: session.scope
+                    });
+                    hideLoginOverlay();
+                    applyRBACToUI();
+                    resolveAuthPromises(true);
+                    await bootstrapApp();
+                    return;
+                }
+                void result;
+            }
+        }
+    } catch (error) {
+        // 探测失败（后端未起），落常规流程
+    }
+
     const hasStoredAuth = loadAuthFromStorage();
     if (hasStoredAuth && isTokenValid()) {
         try {

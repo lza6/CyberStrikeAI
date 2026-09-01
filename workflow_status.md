@@ -26,6 +26,9 @@
 | C6 dotdotpwn 修复 | 加载日志 | 后端启动无 dotdotpwn 加载警告 | done |
 | E1 独立审查 | 6 方面报告 | 只读，不改代码，输出 PASS/FAIL/待验证 | done |
 | F1 修复审查发现 | 修复 + 复验 | 按 P0/P1 优先级修，复验通过 | done |
+| G1 桌面免登录（local_mode） | 后端 + 前端 + 桌面壳 | local_mode 下不带 token 访问 /api/config /api/auth/validate /api/skills /api/conversations 全 200；桌面版双击直接进对话页不弹登录 | done |
+| G2 原生 exe 界面 | Electron BrowserWindow | 双击 exe → BrowserWindow 加载 http://127.0.0.1:8080（内置 admin 全权限），Web UI 可在窗口内切换 | done |
+| G3 agent/skill/tool 内置 | 后端自动加载 | agents/skills/tools 启动时自动加载到 MCP 池 + skill 渐进披露池 + 多代理 sub_agents，对话界面可触发（T3 子代理验证） | done |
 
 ## 任务图（依赖）
 

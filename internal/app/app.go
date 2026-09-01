@@ -109,9 +109,14 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 
 	// 认证管理器（数据库初始化后挂载 RBAC）
 	authManager := security.NewAuthManager(cfg.Auth.SessionDurationHours)
+	// 本地单机模式：免登录免 RBAC，内置 admin 全权限身份。仅供桌面版/本地部署，暴露公网前必须关闭。
+	if cfg.Auth.LocalMode {
+		authManager.SetLocalMode(true)
+		log.Logger.Info("已启用本地免登录模式（local_mode），所有 API 以内置 admin 全权限身份执行；暴露到公网前请关闭")
+	}
 	if generatedPassword, err := authManager.AttachRBACStore(db); err != nil {
 		return nil, fmt.Errorf("初始化RBAC失败: %w", err)
-	} else if generatedPassword != "" {
+	} else if generatedPassword != "" && !cfg.Auth.LocalMode {
 		config.PrintBootstrapAdminPassword(generatedPassword)
 	}
 	for platform, userID := range cfg.Robots.ServiceAccountUserIDs() {

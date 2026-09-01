@@ -49,6 +49,21 @@ type changePasswordRequest struct {
 
 // Login verifies password and returns a session token.
 func (h *AuthHandler) Login(c *gin.Context) {
+	// local_mode：直接返回内置 admin 会话，不校验密码，方便桌面版前端 apiFetch 调用 /auth/validate 前先 login 拿 token。
+	if h.manager.IsLocalMode() {
+		session := h.manager.LocalSession()
+		c.JSON(http.StatusOK, gin.H{
+			"token":             session.Token,
+			"expires_at":        session.ExpiresAt.UTC().Format(time.RFC3339),
+			"user":              gin.H{"id": session.UserID, "username": session.Username, "display_name": session.DisplayName},
+			"roles":             session.Roles,
+			"permissions":       permissionKeys(session.Permissions),
+			"permission_scopes": session.PermissionScopes,
+			"scope":             session.Scope,
+			"local_mode":        true,
+		})
+		return
+	}
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "密码不能为空"})
@@ -202,6 +217,26 @@ func (h *AuthHandler) Validate(c *gin.Context) {
 	token := c.GetString(security.ContextAuthTokenKey)
 	if token == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "会话无效"})
+		return
+	}
+
+	// local_mode：token 为 "local-mode" 占位，不落盘 sessions map，直接返回内置 admin 会话。
+	if h.manager.IsLocalMode() {
+		session := h.manager.LocalSession()
+		c.JSON(http.StatusOK, gin.H{
+			"token":      session.Token,
+			"expires_at": session.ExpiresAt.UTC().Format(time.RFC3339),
+			"user": gin.H{
+				"id":           session.UserID,
+				"username":     session.Username,
+				"display_name": session.DisplayName,
+			},
+			"roles":             session.Roles,
+			"permissions":       permissionKeys(session.Permissions),
+			"permission_scopes": session.PermissionScopes,
+			"scope":             session.Scope,
+			"local_mode":         true,
+		})
 		return
 	}
 

@@ -37,6 +37,10 @@ type AuthManager struct {
 
 	mu       sync.RWMutex
 	sessions map[string]Session
+
+	// localMode 为 true 时，所有请求以内置 admin 全权限身份执行，免登录免 RBAC。
+	// 仅供桌面版/本地单机部署使用，暴露到公网前必须关闭。
+	localMode bool
 }
 
 // NewAuthManager creates a new AuthManager instance.
@@ -48,6 +52,44 @@ func NewAuthManager(sessionDurationHours int) *AuthManager {
 	return &AuthManager{
 		sessionDuration: time.Duration(sessionDurationHours) * time.Hour,
 		sessions:        make(map[string]Session),
+	}
+}
+
+// SetLocalMode 启用或关闭本地免登录模式。
+func (a *AuthManager) SetLocalMode(enabled bool) {
+	a.mu.Lock()
+	a.localMode = enabled
+	a.mu.Unlock()
+}
+
+// IsLocalMode 返回当前是否处于本地免登录模式。
+func (a *AuthManager) IsLocalMode() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.localMode
+}
+
+// LocalSession 返回 localMode 下使用的内置 admin 全权限会话。
+// 该会话不落盘到 sessions map（每个请求临时构造），也不可被 Revoke。
+func (a *AuthManager) LocalSession() Session {
+	perms := make(map[string]bool, len(PermissionCatalog))
+	for p := range PermissionCatalog {
+		perms[p] = true
+	}
+	scopes := make(map[string]string, len(PermissionCatalog))
+	for p := range PermissionCatalog {
+		scopes[p] = database.RBACScopeAll
+	}
+	return Session{
+		Token:            "local-mode",
+		ExpiresAt:        time.Now().Add(a.sessionDuration),
+		UserID:           "local-admin",
+		Username:         "admin",
+		DisplayName:      "Local Admin",
+		Roles:            []string{"admin"},
+		Permissions:      perms,
+		PermissionScopes: scopes,
+		Scope:            database.RBACScopeAll,
 	}
 }
 

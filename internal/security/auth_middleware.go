@@ -22,6 +22,20 @@ const (
 // AuthMiddleware enforces authentication on protected routes.
 func AuthMiddleware(manager *AuthManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 本地单机模式：跳过登录，以内置 admin 全权限身份执行。
+		if manager.IsLocalMode() {
+			session := manager.LocalSession()
+			c.Set(ContextAuthTokenKey, session.Token)
+			c.Set(ContextSessionExpiry, session.ExpiresAt)
+			c.Set(ContextUserIDKey, session.UserID)
+			c.Set(ContextUsernameKey, session.Username)
+			c.Set(ContextUserScopeKey, session.Scope)
+			c.Set(ContextSessionKey, session)
+			principal := authctx.NewPrincipalWithScopes(session.UserID, session.Username, session.Scope, session.Permissions, session.PermissionScopes)
+			c.Request = c.Request.WithContext(authctx.WithPrincipal(c.Request.Context(), principal))
+			c.Next()
+			return
+		}
 		token := extractTokenFromRequest(c)
 		session, ok := manager.ValidateToken(token)
 		if !ok {

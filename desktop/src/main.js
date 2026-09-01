@@ -33,6 +33,8 @@ function startBackend() {
   if (!fs.existsSync(exe)) throw new Error('cyberstrike-ai.exe 不存在，请重新安装或从 Release 下载完整包。');
   if (!fs.existsSync(cfg) && fs.existsSync(cfgExample)) fs.copyFileSync(cfgExample, cfg);
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  // 桌面版强制 local_mode=true 免登录 + 绑定 127.0.0.1，确保双击即用、不暴露公网
+  ai.ensureDesktopDefaults(cfg);
 
   const env = Object.assign({}, process.env);
   env.PATH = pyHome + path.delimiter + path.join(pyHome, 'Scripts') + path.delimiter + (env.PATH || '');

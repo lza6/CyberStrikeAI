@@ -1286,7 +1286,10 @@ func normalizeHitlModeForPrompt(mode string) string {
 }
 
 type AuthConfig struct {
-	SessionDurationHours int `yaml:"session_duration_hours" json:"session_duration_hours"`
+	SessionDurationHours int  `yaml:"session_duration_hours" json:"session_duration_hours"`
+	// LocalMode 本地单机部署模式：开启后所有 API 免登录免 RBAC，以内置 admin 全权限身份执行。
+	// 仅供桌面版/本地部署使用，暴露到公网前必须关闭。
+	LocalMode           bool `yaml:"local_mode" json:"local_mode"`
 }
 
 // MonitorConfig MCP 状态监控（tool_executions）保留策略。
