@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberStrikeAI I 批次变更报告</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", system-ui, sans-serif; line-height: 1.7; color: #2d3748; background: #f7fafc; padding: 24px; }
+  .container { max-width: 920px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); overflow: hidden; }
+  header { background: linear-gradient(135deg, #4a9eff 0%, #2d6cdf 100%); color: #fff; padding: 32px 40px; }
+  header h1 { font-size: 26px; margin-bottom: 8px; }
+  header .meta { font-size: 13px; opacity: 0.9; }
+  .content { padding: 32px 40px; }
+  h2 { color: #1a365d; font-size: 20px; margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+  h3 { color: #2c5282; font-size: 16px; margin: 18px 0 8px; }
+  p { margin-bottom: 10px; }
+  ul, ol { margin: 8px 0 12px 24px; }
+  li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  th { background: #edf2f7; font-weight: 600; }
+  code { background: #edf2f7; padding: 2px 6px; border-radius: 3px; font-size: 13px; color: #c53030; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+  .badge-done { background: #c6f6d5; color: #22543d; }
+  .badge-partial { background: #feebc8; color: #744210; }
+  .badge-risk { background: #fed7d7; color: #742a2a; }
+  .quiz { background: #f0fff4; border-left: 4px solid #48bb78; padding: 20px 24px; margin: 24px 0; border-radius: 4px; }
+  .quiz h3 { color: #22543d; }
+  .question { background: #fff; padding: 14px 16px; margin: 10px 0; border-radius: 6px; border: 1px solid #e2e8f0; }
+  .question .q-text { font-weight: 600; margin-bottom: 8px; }
+  .question label { display: block; padding: 4px 0 4px 24px; position: relative; cursor: pointer; }
+  .question input[type=radio] { position: absolute; left: 0; top: 6px; }
+  .submit-btn { background: #48bb78; color: #fff; border: none; padding: 10px 28px; font-size: 15px; border-radius: 6px; cursor: pointer; margin-top: 16px; }
+  .submit-btn:hover { background: #38a169; }
+  .result { margin-top: 20px; padding: 16px; border-radius: 6px; display: none; }
+  .result.pass { background: #c6f6d5; color: #22543d; display: block; }
+  .result.fail { background: #fed7d7; color: #742a2a; display: block; }
+  footer { background: #2d3748; color: #a0aec0; text-align: center; padding: 16px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>CyberStrikeAI I 批次变更报告</h1>
+    <div class="meta">参考项目设计迁移落地 · 2026-09-02 · 提交 1fe6546 → 9e0488e</div>
+  </header>
+  <div class="content">
+
+    <h2>1. 任务目标与上下文</h2>
+    <p>用户在生产环境部署 CyberStrikeAI，要求把 11 个参考项目（Pentest-Swarm-AI/strix/caveman/VulnClaw/bettercap 等）中<strong>已验证的设计思想</strong>迁移进主项目，补齐工程/性能/安全差距，并解决三大架构分歧裁决：</p>
+    <ul>
+      <li><strong>Redis 允许引入</strong>（可选依赖，默认关，启用后 Cache-Aside 降 DB 负载）——用户："性能更强更好扩展的技术架构肯定用"</li>
+      <li><strong>无线攻击模块允许集成</strong>（作为工具 yaml + MCP 工具）——用户："让 agent 有这个功能工具，后面省得单独扩展"</li>
+      <li><strong>Electron 原生外壳要增强</strong>（托盘/启动画面/原生对话框/单实例锁）——用户："主项目是 Electron 但你只套了 Web UI"</li>
+    </ul>
+    <p>采用 spec-driven-development 工作流：先落 <code>spec.md</code> 契约，再并行派 5 个子代理（i1-i5）实现。</p>
+
+    <h2>2. 做了什么（I1-I7 节点）</h2>
+    <table>
+      <tr><th>节点</th><th>内容</th><th>状态</th></tr>
+      <tr><td>I1 shellsafe</td><td><code>internal/security/shellsafe.go</code> ShellSafeParse quote-aware 元字符拒绝；executor 两条 exec 路径接入；24 case 单测</td><td><span class="badge badge-done">done</span></td></tr>
+      <tr><td>I2 skill 供应链双闸</td><td><code>lock.go</code> skills-lock.json 生成+Verify + <code>verbs_gate.go</code> 漂移门扫描；cmd/genlock + cmd/verbs-gate 实跑</td><td><span class="badge badge-done">done</span></td></tr>
+      <tr><td>I3 Cache-Aside + 无线工具</td><td><code>internal/cache/cache.go</code> memory 默认+redis 可选降级；9 个无线工具 yaml（aircrack-ng/airodump-ng/bettercap 等）</td><td><span class="badge badge-done">done</span></td></tr>
+      <tr><td>I4 Electron 外壳</td><td>tray.js 系统托盘 + splash.html 启动画面 + 单实例锁 + 关窗最小化到托盘 + 原生错误对话框</td><td><span class="badge badge-done">done</span></td></tr>
+      <tr><td>I5 文档体系</td><td>ADR×6 + SOP.md + ONBOARDING.md + Makefile targets</td><td><span class="badge badge-done">done</span></td></tr>
+      <tr><td>I6 前端拆分</td><td>chat.js 11190 行拆分（P2，本次未做，避免与安全批次冲突）</td><td><span class="badge badge-partial">P2 待续</span></td></tr>
+      <tr><td>I7 E2E + 审查</td><td>9 项 E2E 全过；executor_test 适配 shellsafe（修复 5 个 FAIL）</td><td><span class="badge badge-done">done</span></td></tr>
+    </table>
+
+    <h2>3. 关键设计决策（直觉）</h2>
+    <h3>3.1 确定性安全层叠在 LLM 之前（ADR-0006）</h3>
+    <p>shellsafe/scope/HIGH_IMPACT/TurnLimiter 四闸全部<strong>纯函数、无 LLM 在环</strong>，零延迟零 token。移植自 Pentest-Swarm-AI/mcpstrike/strix，Go 重写为纯函数（"逻辑各语言相通，重构而非依赖"）。</p>
+
+    <h3>3.2 skill 供应链双闸（caveman 思想）</h3>
+    <p><code>skills-lock.json</code> SHA256 锁（28 skill，篡改/缺失/未锁定三型违规）+ <code>verbs-gate</code> 工具引用漂移门（246 真实工具全集，扫描 SKILL.md 引用幽灵工具）。启动时 Verify 违规只 Warn 不阻断（生产兼容）。</p>
+
+    <h3>3.3 Cache-Aside 降级哲学（ADR-0002）</h3>
+    <p>Redis 是<strong>可选依赖</strong>：<code>cache.driver: memory</code>（默认）零外部依赖；<code>redis</code> 连接失败自动降级 memory + Warn，不阻断启动。用户"单文件不是硬约束"，Redis 引入不破坏桌面定位。</p>
+
+    <h3>3.4 Electron 原生外壳增强（ADR-0005）</h3>
+    <p>托盘常驻（显示主窗/打开Web/重启后端/退出 + 双击恢复 + 气泡）、启动画面（三阶段状态文案）、单实例锁（防双开端口冲突）、关窗最小化到托盘（不退出）、原生错误对话框（重试/打开日志/退出）。</p>
+
+    <h2>4. 修改文件清单</h2>
+    <ul>
+      <li>新增：shellsafe.go+test、lock.go+test、verbs_gate.go+test、cache.go+test、tray.js、splash.html、smoke.js、cmd/genlock、cmd/verbs-gate、9 无线 yaml、ADR×6、SOP、ONBOARDING、spec.md、tasks/todo.md、skills-lock.json</li>
+      <li>修改：executor.go（接 shellsafe）、executor_test.go（适配）、config.go（CacheConfig + LoadToolsFromDir 递归）、app.go（skills-lock 启动校验）、main.js（托盘+splash+单实例）、Makefile、go.mod（go-redis）</li>
+    </ul>
+
+    <h2>5. 验证证据（实跑）</h2>
+    <ul>
+      <li><code>go vet ./...</code> exit 0；<code>go build</code> ok</li>
+      <li>单测：TestShellSafeParse(24)、cache -race(6)、lock(6)、verbs_gate(3) 全 PASS</li>
+      <li>executor_test 适配后 TestExecuteSystemCommand_*(5) PASS（shellsafe 有独立 24 case 覆盖）</li>
+      <li>剩余 4 FAIL 全是 EinoStreamingShell_*(/bin/sh Windows 不存在历史环境问题)</li>
+      <li>E2E 9 项：探活/免登录/安全头/shellsafe 拦截('nmap ; rm' 被拒)/skills-lock 0违规/无线工具加载/system-prompts/update/对话回复"在的"</li>
+    </ul>
+
+    <h2>6. 剩余风险与边界</h2>
+    <ul>
+      <li><strong>chat.js 11190 行拆分</strong>（P2，本次未做——避免与安全批次冲突，单独批次）</li>
+      <li><strong>CSP 'unsafe-inline'</strong>（有意妥协，需先迁 265 处 inline onclick，P2）</li>
+      <li><strong>无线工具需 root + monitor 网卡</strong>（本机环境依赖，非代码问题）</li>
+      <li><strong>verbs-gate 50 处幽灵多为误报</strong>（skill 间引用/字段名，已加 skill 名白名单降误报，剩余需人工复核）</li>
+      <li><strong>scope validator 接入点未全接</strong>（I 批次只落库函数+单测，campaign 级配置接入需后续）</li>
+    </ul>
+
+    <div class="quiz">
+      <h3>变更测验（需通过 80% = 8/10）</h3>
+      <div id="questions"></div>
+      <button class="submit-btn" onclick="gradeQuiz()">提交测验</button>
+      <div id="result" class="result"></div>
+    </div>
+
+  </div>
+  <footer>CyberStrikeAI · 仅限授权测试 · 由 critical-code-reviewer 思路审查 · 报告自包含无 CDN</footer>
+</div>
+
+<script>
+const questions = [
+  { q: "I 批次 shellsafe 接入到 executor 的哪条路径？", o: ["仅 exec.CommandContext 824/827 行两条 shell -c 路径", "所有 http.NewRequest", "MCP server.go", "auth_middleware"], a: 0 },
+  { q: "skills-lock.json 启动校验发现违规时的行为？", o: ["fatal 拒绝启动", "只 Warn 不阻断", "删除违规 skill", "自动修复"], a: 1 },
+  { q: "Redis 连接失败时的降级行为？", o: ["启动失败", "降级 memory + Warn", "panic", "禁用缓存"], a: 1 },
+  { q: "verbs-gate 扫描的'幽灵工具'指什么？", o: ["SKILL.md 引用了不存在于真实工具全集的工具名", "无线攻击工具", "builtin 工具", "MCP 外部工具"], a: 0 },
+  { q: "Electron 桌面壳关窗后的行为（有托盘时）？", o: ["退出应用", "最小化到托盘不退出", "隐藏到后台进程", "无变化"], a: 1 },
+  { q: "local_mode 强制回环的逃生口环境变量是？", o: ["CYBERSTRIKE_NO_AUTO_OPEN", "CYBERSTRIKE_ALLOW_NONLOOPBACK_LOCALMODE", "LOCAL_MODE_ALLOW", "HOST_BIND"], a: 1 },
+  { q: "LoadToolsFromDir 改造后支持什么？", o: ["递归子目录（如 tools/wireless/）", "热重载", "远程加载", "加密 yaml"], a: 0 },
+  { q: "cache 包的 NewFromConfig 在 driver 省略时返回？", o: ["RedisCache", "MemoryCache", "nil", "panic"], a: 1 },
+  { q: "shellsafe 对引号内的元字符（如 \"a|b\"）行为？", o: ["拒绝", "允许（引号内合法）", "截断", "转义"], a: 1 },
+  { q: "executor_test.go 为何加 SetShellSafeEnabled(false)？", o: ["shellsafe 有 bug", "历史 executor 测试测输出/流式不测注入，shellsafe 有独立 24 case 覆盖", "性能考虑", "兼容性"], a: 1 }
+];
+const container = document.getElementById('questions');
+questions.forEach((item, i) => {
+  const div = document.createElement('div');
+  div.className = 'question';
+  let html = '<div class="q-text">' + (i+1) + '. ' + item.q + '</div>';
+  item.o.forEach((opt, j) => {
+    html += '<label><input type="radio" name="q' + i + '" value="' + j + '">' + opt + '</label>';
+  });
+  div.innerHTML = html;
+  container.appendChild(div);
+});
+function gradeQuiz() {
+  let correct = 0;
+  questions.forEach((item, i) => {
+    const sel = document.querySelector('input[name="q' + i + '"]:checked');
+    if (sel && parseInt(sel.value) === item.a) correct++;
+  });
+  const pct = Math.round(correct / questions.length * 100);
+  const el = document.getElementById('result');
+  if (pct >= 80) {
+    el.className = 'result pass';
+    el.innerHTML = '✓ 通过：' + correct + '/' + questions.length + '（' + pct + '%）';
+  } else {
+    el.className = 'result fail';
+    let wrong = [];
+    questions.forEach((item, i) => {
+      const sel = document.querySelector('input[name="q' + i + '"]:checked');
+      if (!sel || parseInt(sel.value) !== item.a) wrong.push((i+1));
+    });
+    el.innerHTML = '✗ 未通过：' + correct + '/' + questions.length + '（' + pct + '%）。错题：' + wrong.join(', ') + '。请回顾报告后重试。';
+  }
+}
+</script>
+</body>
+</html>

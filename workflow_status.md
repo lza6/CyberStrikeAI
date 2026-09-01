@@ -64,7 +64,10 @@
 | I6 | chat.js/settings.js 模块化拆分（前端可维护性） | 待派 | pending |
 | I7 | 全链路 E2E 复验 + 独立 Critic 审查 + 修复循环 | 主代理+独立子代理 | pending |
 | I8 | 提交推送 + NSIS 打包 + Release 更新 | 主代理 | pending |
-| I9 | 变更 HTML 报告（含测验）+ 记忆/规则沉淀（复用知识台账） | 主代理 | pending |
+| I9 | 变更 HTML 报告（含测验）+ 记忆/规则沉淀（验证台账复用） | 主代理 | done |
+| I5-docs | ADR×6 + SOP + ONBOARDING + README 门面 | 主代理（i5 子代理 403 失败后主代理接管） | done |
+| I7-E2E | 9 项 E2E 全链路复验 | 主代理 | done |
+| I8 | 提交推送 + NSIS 打包 + Release 更新 | 主代理 | done |
 
 ## 任务图（依赖）
 
