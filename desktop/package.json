@@ -1,0 +1,62 @@
+{
+  "name": "cyberstrike-ai-desktop",
+  "version": "1.7.17",
+  "description": "CyberStrikeAI 桌面启动器",
+  "main": "src/main.js",
+  "author": "CyberStrikeAI",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "pack": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.cyberstrikeai.desktop",
+    "productName": "CyberStrikeAI",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "../cyberstrike-ai.exe", "to": "cyberstrike-ai.exe" },
+      { "from": "../runtime", "to": "runtime" },
+      { "from": "../tools", "to": "tools" },
+      { "from": "../skills", "to": "skills" },
+      { "from": "../agents", "to": "agents" },
+      { "from": "../roles", "to": "roles" },
+      { "from": "../web", "to": "web" },
+      { "from": "../knowledge_base", "to": "knowledge_base" },
+      { "from": "../config.example.yaml", "to": "config.example.yaml" },
+      { "from": "../requirements.txt", "to": "requirements.txt" },
+      { "from": "../start.bat", "to": "start.bat" },
+      { "from": "../stop.bat", "to": "stop.bat" },
+      { "from": "../scripts/windows", "to": "scripts/windows" }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CyberStrikeAI"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
+}

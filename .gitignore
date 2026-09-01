@@ -59,9 +59,32 @@ vendor/
 # Node / browser extension
 node_modules/
 
+# Desktop packaging (electron-builder)
+desktop/node_modules/
+desktop/dist/
+desktop/build/
+# CyberStrikeAI Windows desktop
+runtime/
+
 # macOS / Windows / editors
 .DS_Store
 Thumbs.db
 desktop.ini
 .idea/
 .vscode/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
+
+# Local AI tooling configs (per-machine, not part of CyberStrikeAI source)
+.agents/
+.claude/
+.cline/
+.codebuddy/
+.codegraph/
+.continue/
+.junie/
+.kiro/
+.ignore
+.mcp.json
+skills-lock.json
