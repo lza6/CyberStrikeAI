@@ -47,6 +47,40 @@ type Config struct {
 	Project     ProjectConfig         `yaml:"project,omitempty" json:"project,omitempty"`
 	Vision      VisionConfig          `yaml:"vision,omitempty" json:"vision,omitempty"`
 	Cache       CacheConfig           `yaml:"cache,omitempty" json:"cache,omitempty"`
+	Metrics     MetricsConfig         `yaml:"metrics,omitempty" json:"metrics,omitempty"` // Prometheus 指标采集
+	Storage     StorageConfig         `yaml:"storage,omitempty" json:"storage,omitempty"` // 可选：统一 home 目录迁移
+}
+
+// StorageConfig 可选统一 home 目录迁移配置。留空（默认）= 继续使用项目根 data/，不破坏现有部署。
+// 配置 home_dir 后，app.go 启动时调用 storage.MigrateLegacyData 把 data/ 内容迁到 home_dir。
+type StorageConfig struct {
+	// HomeDir 统一 home 目录（如 ~/.cyberstrikeai）。空=不迁移，沿用项目根 data/。
+	HomeDir string `yaml:"home_dir,omitempty" json:"home_dir,omitempty"`
+}
+
+// MetricsConfig Prometheus 指标采集配置。
+type MetricsConfig struct {
+	// Enabled 是否启用 /metrics 端点与 HTTP 指标中间件。默认 true（省略时）。
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// Path /metrics 端点路径。默认 /metrics。
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+}
+
+// EnabledEffective 默认启用：省略或显式 true 都返回 true。
+func (m MetricsConfig) EnabledEffective() bool {
+	if m.Enabled == nil {
+		return true
+	}
+	return *m.Enabled
+}
+
+// PathEffective 返回 /metrics 路径；空时默认 "/metrics"。
+func (m MetricsConfig) PathEffective() string {
+	p := strings.TrimSpace(m.Path)
+	if p == "" {
+		return "/metrics"
+	}
+	return p
 }
 
 // CacheConfig 可选缓存层：memory（默认，进程内 TTL map）与 redis（可选）。

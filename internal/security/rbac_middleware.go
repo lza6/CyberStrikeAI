@@ -149,6 +149,9 @@ func permissionForRequest(method, fullPath string) string {
 		return "mcp:write"
 	case strings.HasPrefix(path, "/attack-chain"):
 		return crudPermission(method, "attackchain")
+	case strings.HasPrefix(path, "/blackboard"):
+		// 黑板复用 attackchain 权限：read 只读查询，write 暂未开放（Agent 内部写）。
+		return crudPermission(method, "attackchain")
 	case strings.HasPrefix(path, "/knowledge"):
 		if path == "/knowledge/search" {
 			return "knowledge:read"

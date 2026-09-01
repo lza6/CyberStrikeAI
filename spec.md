@@ -80,16 +80,41 @@ func Parse(cmd string) ([]string, error) { ... }
 
 ## Success Criteria
 
-1. `shellsafe.Parse` 拦截 22+ 注入 case，executor 两条 exec 路径（824/827 行）全部过 shellsafe
+1. `shellsafe.Parse` 拦截 22+ 注入 case，executor 两条 exec 路径（824/827 行）全部过 shellsafe ✅done
 2. HIGH_IMPACT 集（≥8 个破坏性工具）默认要求审批，未审批 403 + 审计记录
 3. scope validator 支持工具 yaml `scope:` 字段，越界目标 400
-4. `skills-lock.json` 覆盖全部 skill（SHA256），锁校验失败启动 Warn；verbs-gate 扫描 skill 引用→不存在工具报 Violation 清单
+4. `skills-lock.json` 覆盖全部 skill（SHA256），锁校验失败启动 Warn；verbs-gate 扫描 skill 引用→不存在工具报 Violation 清单 ✅done
 5. TurnToolCallLimiter：单 turn 工具调用 >N 拦截（N 可配，默认 25）；`tool_call_ids` 全 turn 唯一
-6. cache.Cache-Aside：memory 实现 + Redis 可选（`cache.driver: memory|redis`），未配置 Redis 时 memory 兜底且零告警
-7. 无线工具 8 个 yaml 加载进 MCP 池（/api/config/tools 可见）
-8. Electron 外壳：托盘（显示/隐藏/退出）+ 启动画面（后端 ONLINE 后淡出）+ 原生错误对话框
+6. cache.Cache-Aside：memory 实现 + Redis 可选（`cache.driver: memory|redis`），未配置 Redis 时 memory 兜底且零告警 ✅done
+7. 无线工具 8 个 yaml 加载进 MCP 池（/api/config/tools 可见）✅done（9 个）
+8. Electron 外壳：托盘（显示/隐藏/退出）+ 启动画面（后端 ONLINE 后淡出）+ 原生错误对话框 ✅done
 9. chat.js 拆分后 node --check 全过、行为不变（DOM 结构/事件绑定/i18n 不动）
-10. ADR 6 篇 + SOP 文档落盘；全链路 E2E 复验（启动→免登录→对话→工具→审批拦截）
+10. ADR 6 篇 + SOP 文档落盘；全链路 E2E 复验（启动→免登录→对话→工具→审批拦截）✅done
+
+## J 批次（剩余 P2/P3 全闭环，用户明确"所有都完整落地"）
+
+| 节点 | 内容 | 状态 |
+|------|------|------|
+| J1 blackboard (MemoryBoard+SQLite) | 多 agent 涌现式协作 | pending |
+| J2 SARIF 2.1.0 输出 | attackchain + CWE 归一化 | pending |
+| J3 Prometheus metrics | /metrics 端点 + otel | pending |
+| J4 scope 全链路接入 | executor 调用前过 scope | pending |
+| J5 Capability Provider 生命周期 | 破坏性工具 plan/validate/rollback | pending |
+| J6 HIGH_IMPACT 审批集 | 破坏性工具第二道闸 | pending |
+| J7 TurnToolCallLimiter + tool_call_ids | 防退化卡死 | pending |
+| J8 app.go 拆分（2254 行） | 拆 5-8 文件，路由数不变 | pending |
+| J9 RunDeepAgent 拆分（582 行） | runner.go 拆 | pending |
+| J10 chat.js 拆分（11190 行） | 模块化拆分 | pending |
+| J11 CSP nonce 化 | 迁 265 处 inline onclick | pending |
+| J12 console.* 清理 | 265 处→可选 logger | pending |
+| J13 前端 Playwright E2E | 登录→配置→对话链路 | pending |
+| J14 三层 evals（Tier 1/2） | skill 触发路由质量 | pending |
+| J15 audit/robot/skillpackage 测试补齐 | 关键包零测试→有 | pending |
+| J16 RunModelTurn 单入口 | 收敛桌面/CLI | pending |
+| J17 Dockerfile | 容器化部署 | pending |
+| J18 统一 home 目录迁移 | ~/.cyberstrikeai/ | pending |
+| J19 全链路 E2E + Critic + 修复循环 | 终验 | pending |
+| J20 提交推送 + 打包 + Release | 发行 | pending |
 
 ## Open Questions
 

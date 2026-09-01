@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"cyberstrike-ai/internal/attackchain"
+	"cyberstrike-ai/internal/blackboard"
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/database"
 
@@ -22,6 +24,7 @@ type AttackChainHandler struct {
 	mu           sync.RWMutex // 保护 openAIConfig 的并发访问
 	// 用于防止同一对话的并发生成
 	generatingLocks sync.Map // map[string]*sync.Mutex
+	board           blackboard.Board // 进程内黑板（Agent 共享 findings），可为 nil
 }
 
 // NewAttackChainHandler 创建新的攻击链处理器
@@ -31,6 +34,47 @@ func NewAttackChainHandler(db *database.DB, openAIConfig *config.OpenAIConfig, l
 		logger:       logger,
 		openAIConfig: openAIConfig,
 	}
+}
+
+// SetBlackboard 注入黑板实例，供只读查询端点使用。
+func (h *AttackChainHandler) SetBlackboard(b blackboard.Board) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.board = b
+}
+
+// getBoard 线程安全地取黑板。
+func (h *AttackChainHandler) getBoard() blackboard.Board {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.board
+}
+
+// ListBlackboardFindings 只读查询黑板上的 findings。
+// GET /api/blackboard/findings?project_id=xxx
+// 不传 project_id 时返回全部。复用 attackchain:read 权限。
+func (h *AttackChainHandler) ListBlackboardFindings(c *gin.Context) {
+	board := h.getBoard()
+	if board == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"findings": []any{},
+			"total":    0,
+			"enabled":  false,
+			"message":  "黑板功能未初始化",
+		})
+		return
+	}
+	projectID := strings.TrimSpace(c.Query("project_id"))
+	findings, err := board.List(c.Request.Context(), projectID)
+	if err != nil {
+		internalError(c, h.logger, "attackchain.go ListBlackboardFindings", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"findings": findings,
+		"total":    len(findings),
+		"enabled":  true,
+	})
 }
 
 // UpdateConfig 更新OpenAI配置

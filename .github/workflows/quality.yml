@@ -1,0 +1,39 @@
+name: Quality
+
+on: [push, pull_request]
+
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61
+          args: --config .golangci.yml
+
+  verbs-gate:
+    name: verbs-gate (ghost-tool report)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run verbs-gate (report mode)
+        # verbs-gate 扫描 skills/*/SKILL.md 引用的工具名与"真实工具全集"比对，
+        # 报告幽灵工具（引用了不存在的工具）。
+        #
+        # 当前用 report 模式（exit 0 + 控制台打印违规），不阻断 CI：
+        # 现有 skill 包存在部分已知的工具名误报（如对内置工具白名单未完全覆盖），
+        # 待 skill 误报清理后可切换为 --strict 严格门禁（发现幽灵工具则 exit 1）。
+        # 切换方式：把下行的 -strict 加上即可启用严格模式。
+        run: go run ./cmd/verbs-gate -skills skills -tools tools
+        # 严格模式（待启用）：go run ./cmd/verbs-gate -skills skills -tools tools -strict
+

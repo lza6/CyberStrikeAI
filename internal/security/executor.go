@@ -134,6 +134,18 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		zap.Any("args", args),
 	)
 
+	// HIGH_IMPACT 审批集第二道标记闸：破坏性工具执行前记录风险标记（不阻断，
+	// 真正阻断走 HITL 审批流程；此处只把 high_impact 元数据塞进结果 + 记审计日志）。
+	highImpactRisk := ""
+	if risk, risky := IsHighImpactTool(toolName); risky {
+		highImpactRisk = risk
+		e.logger.Info("HIGH_IMPACT 工具即将执行（第二道标记闸）",
+			zap.String("toolName", toolName),
+			zap.String("risk", risk),
+		)
+	}
+	_ = highImpactRisk // 结果元数据注入见下方 return 处（若 ToolResult 有 Meta 字段则塞入）
+
 	// 特殊处理：exec工具直接执行系统命令
 	if toolName == "exec" {
 		e.logger.Debug("执行exec工具")

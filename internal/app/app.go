@@ -18,6 +18,7 @@ import (
 	"cyberstrike-ai/internal/agent"
 	"cyberstrike-ai/internal/audit"
 	"cyberstrike-ai/internal/authctx"
+	"cyberstrike-ai/internal/blackboard"
 	"cyberstrike-ai/internal/c2"
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/database"
@@ -28,12 +29,14 @@ import (
 	"cyberstrike-ai/internal/logger"
 	"cyberstrike-ai/internal/mcp"
 	"cyberstrike-ai/internal/mcp/builtin"
+	"cyberstrike-ai/internal/metrics"
 	"cyberstrike-ai/internal/monitor"
 	"cyberstrike-ai/internal/multiagent"
 	"cyberstrike-ai/internal/playbooks"
 	"cyberstrike-ai/internal/robot"
 	"cyberstrike-ai/internal/security"
 	"cyberstrike-ai/internal/skillpackage"
+	"cyberstrike-ai/internal/storage"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -73,6 +76,7 @@ type App struct {
 	c2WatchdogCancel   context.CancelFunc        // 看门狗取消函数
 	c2Handler          *handler.C2Handler        // C2 REST（与 Manager 生命周期同步）
 	auditSvc           *audit.Service
+	blackboard         *blackboard.MemoryBoard     // 进程内黑板（Agent 共享 findings）
 }
 
 // New 创建新应用
@@ -95,10 +99,49 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	// 安全响应头：nosniff / DENY / Referrer-Policy / Permissions-Policy / CSP；HTTPS 时附加 HSTS
 	router.Use(security.SecureHeaders(config.MainWebUIUsesHTTPS(&cfg.Server)))
 
+	// Prometheus 指标：注册指标 + 暴露 /metrics 端点 + HTTP 请求计数/耗时中间件。
+	// /metrics 是公开端点（不走 RBAC），生产环境应在反向代理层加 IP 白名单或 basic auth。
+	if cfg.Metrics.EnabledEffective() {
+		metrics.Register()
+		metricsPath := cfg.Metrics.PathEffective()
+		router.GET(metricsPath, gin.WrapH(metrics.Handler()))
+		// HTTP 中间件：记录请求计数 + 耗时。path label 用 FullPath() 路由模板，
+		// 避免把 /conversations/:id 这类参数展开成高基数 label。
+		router.Use(func(c *gin.Context) {
+			token := metrics.BeginHTTP(c.Request.Method, c.FullPath())
+			c.Next()
+			metrics.EndHTTP(token, c.Writer.Status())
+		})
+		log.Logger.Info("已启用 Prometheus 指标端点", zap.String("path", metricsPath))
+	} else {
+		log.Logger.Info("Prometheus 指标端点已关闭（metrics.enabled=false）")
+	}
+
+	// 初始化进程内黑板（Agent 共享 findings）
+	board := blackboard.NewMemoryBoard(log.Logger)
+
 	// 初始化数据库
 	dbPath := cfg.Database.Path
 	if dbPath == "" {
 		dbPath = "data/conversations.db"
+	}
+
+	// 可选：统一 home 目录迁移。配置 storage.home_dir 后，启动时把项目根 data/ 内容
+	// 迁移到统一 home（如 ~/.cyberstrikeai），已存在的目标文件跳过（幂等可重试）。
+	// 默认 home_dir 为空=不迁移，沿用项目根 data/，不破坏现有部署。
+	if homeDir := strings.TrimSpace(cfg.Storage.HomeDir); homeDir != "" {
+		legacyDataDir := filepath.Dir(dbPath)
+		if legacyDataDir == "" || legacyDataDir == "." {
+			legacyDataDir = "data"
+		}
+		if err := storage.EnsureHome(homeDir); err != nil {
+			return nil, fmt.Errorf("创建 storage home 目录失败: %w", err)
+		}
+		if err := storage.MigrateLegacyData(legacyDataDir, homeDir); err != nil {
+			log.Logger.Warn("统一 home 目录迁移失败（继续使用原 data 目录）", zap.String("legacy", legacyDataDir), zap.String("home", homeDir), zap.Error(err))
+		} else {
+			log.Logger.Info("已执行统一 home 目录迁移", zap.String("legacy", legacyDataDir), zap.String("home", homeDir))
+		}
 	}
 
 	// 确保目录存在
@@ -437,6 +480,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	authHandler := handler.NewAuthHandler(authManager, cfg, configPath, log.Logger)
 	authHandler.SetAudit(auditSvc)
 	attackChainHandler := handler.NewAttackChainHandler(db, &cfg.OpenAI, log.Logger)
+	attackChainHandler.SetBlackboard(board)
 	vulnerabilityHandler := handler.NewVulnerabilityHandler(db, log.Logger)
 	assetHandler := handler.NewAssetHandler(db, log.Logger)
 	projectHandler := handler.NewProjectHandler(db, log.Logger)
@@ -515,6 +559,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		c2WatchdogCancel:   watchdogCancel,
 		c2Handler:          c2Handler,
 		auditSvc:           auditSvc,
+		blackboard:         board,
 	}
 	// 飞书/钉钉长连接（无需公网），启用时在后台启动；后续前端应用配置时会通过 RestartRobotConnections 重启
 	app.startRobotConnections()
@@ -1152,6 +1197,9 @@ func setupRoutes(
 		// 攻击链可视化
 		protected.GET("/attack-chain/:conversationId", attackChainHandler.GetAttackChain)
 		protected.POST("/attack-chain/:conversationId/regenerate", attackChainHandler.RegenerateAttackChain)
+
+		// 黑板只读查询端点（Agent 共享 findings，复用 attackchain 权限）
+		protected.GET("/blackboard/findings", attackChainHandler.ListBlackboardFindings)
 
 		// 知识库管理（始终注册路由，通过 App 实例动态获取 handler）
 		knowledgeRoutes := protected.Group("/knowledge")

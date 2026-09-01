@@ -1,0 +1,55 @@
+# 版本控制与 IDE/agent 元数据
+.git
+.gitignore
+.github
+.codegraph
+.code-review-graph
+.claude
+.cline
+.codebuddy
+.continue
+.copilotignore
+.junie
+.kiro
+.agents
+.mcp.json
+.ignore
+
+# 本地构建产物与运行时数据（容器内不应带入）
+*.exe
+*.dll
+*.so
+*.dylib
+cyberstrike-ai
+cyberstrike-ai.exe
+dist/
+build/
+tmp/
+runtime/
+data/
+!data/.gitkeep
+
+# 桌面打包与参考项目（体积大且与容器无关）
+desktop/
+docs/
+images/
+graft/
+
+# 测试与覆盖率
+*_test.go
+coverage.out
+coverage.txt
+
+# 本地配置（容器用 config.example.yaml 复制为 config.yaml）
+config.yaml
+
+# 日志
+*.log
+logs/
+
+# OS 杂项
+.DS_Store
+Thumbs.db
+
+# Makefile 等开发工具脚本（不影响运行）
+Makefile

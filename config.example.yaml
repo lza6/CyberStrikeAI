@@ -338,6 +338,12 @@ multi_agent:
 database:
   path: data/conversations.db # SQLite 数据库文件路径，用于存储对话历史和消息
   knowledge_db_path: data/knowledge.db # 知识库数据库文件路径（可选，为空则使用会话数据库），用于存储知识库项和向量嵌入，可独立复制和复用
+# 可选：统一 home 目录迁移。留空（默认）= 继续使用项目根 data/，不破坏现有部署。
+# 配置 home_dir 后，启动时会把 data/ 下的内容迁移到统一 home（已存在目标文件跳过，幂等可重试）。
+# 环境变量 CYBERSTRIKEAI_HOME 也可覆盖默认 home（优先级低于此处显式配置）。
+# storage:
+#   home_dir: ~/.cyberstrikeai # 例如 ~/.cyberstrikeai 或 C:\Users\you\.cyberstrikeai
+
 # ============================================
 # 任务管理相关配置
 # ============================================
@@ -534,3 +540,11 @@ project:
   fact_index_path_max_runes: 10000
   fact_summary_max_runes: 24000
   default_inject_deprecated: false
+
+# ============================================
+# Prometheus 指标采集
+# ============================================
+# /metrics 端点默认公开（不走 RBAC），生产环境应在反向代理层加 IP 白名单或 basic auth。
+metrics:
+  enabled: true   # 省略时默认 true；设为 false 关闭 /metrics 端点与 HTTP 指标中间件
+  path: /metrics  # 端点路径，默认 /metrics
