@@ -72,9 +72,11 @@
         if (!resultEl || !data) return;
         if (data.has_update) {
             const url = data.release_url || '';
+            // 只允许 http/https 链接，防止注入 javascript: 等危险 scheme。
+            const safeUrl = /^https?:\/\//i.test(url) ? url : '';
             const notes = data.release_notes || '';
-            const link = url
-                ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" class="version-update-link">' + escapeHtml(vuT('versionUpdate.viewRelease', '查看发布说明')) + '</a>'
+            const link = safeUrl
+                ? '<a href="' + escapeHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer" class="version-update-link">' + escapeHtml(vuT('versionUpdate.viewRelease', '查看发布说明')) + '</a>'
                 : '';
             const notesBlock = notes
                 ? '<details class="version-update-notes"><summary>' + escapeHtml(vuT('versionUpdate.releaseNotes', '发布说明')) + '</summary><pre>' + escapeHtml(notes) + '</pre></details>'
