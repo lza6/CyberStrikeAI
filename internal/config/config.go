@@ -153,6 +153,10 @@ type MultiAgentConfig struct {
 	MaxIteration int `yaml:"max_iteration,omitempty" json:"max_iteration,omitempty"`
 	// PlanExecuteLoopMaxIterations plan_execute 模式下 execute↔replan 外层循环上限；0 表示用 Eino 默认 10。
 	PlanExecuteLoopMaxIterations int `yaml:"plan_execute_loop_max_iterations,omitempty" json:"plan_execute_loop_max_iterations,omitempty"`
+	// TurnToolCallLimit 单轮（turn）内工具调用次数上限，防退化生成排队大量工具调用卡死 agent
+	// （移植自 strix config.tool_call_limits.TurnToolCallLimiter）。0 表示不启用；默认 25。
+	// 命中上限后超限的工具调用返回合成结果而非真实执行，让模型在下一轮重新决策。
+	TurnToolCallLimit int `yaml:"turn_tool_call_limit,omitempty" json:"turn_tool_call_limit,omitempty"`
 	// SubAgentMaxIterations 已废弃：子代理与主代理均使用 agent.max_iterations（Markdown max_iterations>0 可覆盖）。
 	SubAgentMaxIterations   int    `yaml:"sub_agent_max_iterations,omitempty" json:"sub_agent_max_iterations,omitempty"`
 	WithoutGeneralSubAgent  bool   `yaml:"without_general_sub_agent" json:"without_general_sub_agent"`
@@ -177,6 +181,22 @@ type MultiAgentConfig struct {
 // SubAgentUserContextMaxRunesEffective returns max runes for sub-agent task supplement; 0 = unlimited; negative = disabled.
 func (c MultiAgentConfig) SubAgentUserContextMaxRunesEffective() int {
 	return c.SubAgentUserContextMaxRunes
+}
+
+// DefaultTurnToolCallLimit 是 turn_tool_call_limit 的默认值（未配置或 ≤0 时启用此值）。
+// 移植自 strix 思想：单轮工具调用上限防退化生成卡死；25 在多数渗透工具链下够用。
+const DefaultTurnToolCallLimit = 25
+
+// TurnToolCallLimitEffective 返回单轮工具调用上限。配置 ≤0 时返回默认 25；
+// 想完全关闭需显式置为负数（此时调用方应判断 <0 不挂中间件）。
+func (c MultiAgentConfig) TurnToolCallLimitEffective() int {
+	if c.TurnToolCallLimit > 0 {
+		return c.TurnToolCallLimit
+	}
+	if c.TurnToolCallLimit < 0 {
+		return 0 // 负数表示显式关闭
+	}
+	return DefaultTurnToolCallLimit
 }
 
 // MultiAgentEinoCallbacksConfig enables Eino unified callbacks on each ADK agent run (deep / plan_execute / supervisor / eino_single).

@@ -152,6 +152,10 @@ type einoADKRunLoopArgs struct {
 
 	// TurnLoopInterruptTimeout 仅供测试/特殊运行时覆盖；0 使用 EinoTurnLoopRuntime 默认值。
 	TurnLoopInterruptTimeout time.Duration
+
+	// TurnToolCallLimiter J7：单轮工具调用限流器。非 nil 且启用时，
+	// run loop 在每轮新消息入口调 Reset 清零计数，与 ToolsNode 中间件配合。
+	TurnToolCallLimiter *TurnToolCallLimiter
 }
 
 func runEinoADKAgentLoop(ctx context.Context, args *einoADKRunLoopArgs, baseMsgs []adk.Message) (*RunResult, error) {
@@ -217,6 +221,13 @@ func runEinoADKAgentLoop(ctx context.Context, args *einoADKRunLoopArgs, baseMsgs
 	}()
 
 	msgs := append([]adk.Message(nil), baseMsgs...)
+
+	// J7：每轮新消息入口 Reset 单轮工具调用限流器。Eino 无原生 turnID，
+	// 用 conversationID 作 key（与中间件 turnIDFromContext 一致）。
+	// 限流器未启用时 Reset 空操作。
+	if args.TurnToolCallLimiter != nil {
+		turnToolCallLimiterReset(args.TurnToolCallLimiter, conversationID)
+	}
 
 	emptyHint := strings.TrimSpace(args.EmptyResponseMessage)
 	if emptyHint == "" {

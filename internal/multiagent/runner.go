@@ -131,6 +131,11 @@ func RunDeepAgent(
 	var mcpIDsMu sync.Mutex
 	var mcpIDs []string
 	mcpExecBinder := NewMCPExecutionBinder()
+
+	// J7：单轮工具调用限流器。limit>0 时启用，挂为 ToolsNode 中间件并在每轮
+	// 新消息入口 Reset。移植自 strix TurnToolCallLimiter：防退化生成排队大量
+	// 工具调用卡死 agent。limit<=0（含负数显式关闭）时不创建。
+	turnToolCallLimiter := NewTurnToolCallLimiter(ma.TurnToolCallLimitEffective())
 	recorder := func(id, toolCallID string) {
 		if id == "" {
 			return
@@ -275,12 +280,14 @@ func RunDeepAgent(
 					ToolsNodeConfig: compose.ToolsNodeConfig{
 						Tools:               subToolsForCfg,
 						UnknownToolsHandler: einomcp.UnknownToolReminderHandler(),
-						ToolCallMiddlewares: []compose.ToolMiddleware{
-							modelOutputExecutionGuardMiddleware(),
-							localToolRBACMiddleware(),
-							hitlToolCallMiddleware(),
+						ToolCallMiddlewares: append(
+							append([]compose.ToolMiddleware{
+								modelOutputExecutionGuardMiddleware(),
+								localToolRBACMiddleware(),
+								hitlToolCallMiddleware(),
+							}, einoTurnLimiterMiddlewares(turnToolCallLimiter, logger)...),
 							softRecoveryToolMiddleware(),
-						},
+						),
 					},
 					EmitInternalEvents: true,
 				},
@@ -455,12 +462,14 @@ func RunDeepAgent(
 		ToolsNodeConfig: compose.ToolsNodeConfig{
 			Tools:               mainToolsForCfg,
 			UnknownToolsHandler: einomcp.UnknownToolReminderHandler(),
-			ToolCallMiddlewares: []compose.ToolMiddleware{
-				modelOutputExecutionGuardMiddleware(),
-				localToolRBACMiddleware(),
-				hitlToolCallMiddleware(),
+			ToolCallMiddlewares: append(
+				append([]compose.ToolMiddleware{
+					modelOutputExecutionGuardMiddleware(),
+					localToolRBACMiddleware(),
+					hitlToolCallMiddleware(),
+				}, einoTurnLimiterMiddlewares(turnToolCallLimiter, logger)...),
 				softRecoveryToolMiddleware(),
-			},
+			),
 		},
 		EmitInternalEvents: true,
 	}
@@ -641,6 +650,7 @@ func RunDeepAgent(
 		ToolMaxBytes:            toolMaxBytesFromMW(&ma.EinoMiddleware),
 		ModelName:               appCfg.OpenAI.Model,
 		MiddlewareConfig:        &ma.EinoMiddleware,
+		TurnToolCallLimiter:     turnToolCallLimiter,
 		EmptyResponseMessage: "(Eino multi-agent orchestration completed but no assistant text was captured. Check process details or logs.) " +
 			"（Eino 多代理编排已完成，但未捕获到助手文本输出。请查看过程详情或日志。）",
 	}, baseMsgs)

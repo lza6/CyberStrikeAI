@@ -272,6 +272,10 @@ multi_agent:
   batch_use_multi_agent: false # true 时「批量任务」队列中每个子任务也走 Eino 多代理（成本更高）
   # plan_execute 专用：execute↔replan 外层循环上限，0 表示 Eino 默认 10。主/子代理 ReAct 轮次见 agent.max_iterations。
   plan_execute_loop_max_iterations: 0
+  # turn_tool_call_limit：单轮（turn）内工具调用次数上限，防退化生成排队大量工具调用卡死 agent
+  # （如 poll/wait 循环模型一次性排出数百调用）。0=用默认 25；负数=完全关闭；正值=该上限。
+  # 命中上限后超限工具调用返回合成结果而非真实执行，模型下一轮重新决策。
+  turn_tool_call_limit: 25
   sub_agent_user_context_max_runes: 0 # 子代理 task 描述中注入用户原文；0=不截断（默认），>0=总字符上限，负数=禁用
   without_general_sub_agent: false # false 时保留 Deep 内置 general-purpose 子代理
   without_write_todos: false

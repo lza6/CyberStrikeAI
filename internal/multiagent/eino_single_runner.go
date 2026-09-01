@@ -58,6 +58,9 @@ func RunEinoSingleChatModelAgent(
 	var mcpIDsMu sync.Mutex
 	var mcpIDs []string
 	mcpExecBinder := NewMCPExecutionBinder()
+
+	// J7：单轮工具调用限流器（eino_single 模式）。与 deep/plan_execute/supervisor 共用逻辑。
+	turnToolCallLimiter := NewTurnToolCallLimiter(ma.TurnToolCallLimitEffective())
 	recorder := func(id, toolCallID string) {
 		if id == "" {
 			return
@@ -146,12 +149,14 @@ func RunEinoSingleChatModelAgent(
 		ToolsNodeConfig: compose.ToolsNodeConfig{
 			Tools:               mainToolsForCfg,
 			UnknownToolsHandler: einomcp.UnknownToolReminderHandler(),
-			ToolCallMiddlewares: []compose.ToolMiddleware{
-				modelOutputExecutionGuardMiddleware(),
-				localToolRBACMiddleware(),
-				hitlToolCallMiddleware(),
+			ToolCallMiddlewares: append(
+				append([]compose.ToolMiddleware{
+					modelOutputExecutionGuardMiddleware(),
+					localToolRBACMiddleware(),
+					hitlToolCallMiddleware(),
+				}, einoTurnLimiterMiddlewares(turnToolCallLimiter, logger)...),
 				softRecoveryToolMiddleware(),
-			},
+			),
 		},
 		EmitInternalEvents: true,
 	}
@@ -230,6 +235,7 @@ func RunEinoSingleChatModelAgent(
 		ToolMaxBytes:            toolMaxBytesFromMW(&ma.EinoMiddleware),
 		ModelName:               appCfg.OpenAI.Model,
 		MiddlewareConfig:        &ma.EinoMiddleware,
+		TurnToolCallLimiter:     turnToolCallLimiter,
 		EmptyResponseMessage: "(Eino ADK single-agent session completed but no assistant text was captured. Check process details or logs.) " +
 			"（Eino ADK 单代理会话已完成，但未捕获到助手文本输出。请查看过程详情或日志。）",
 	}, baseMsgs)
