@@ -101,6 +101,7 @@
     "agentsManagement": "Agent management",
     "roles": "Roles",
     "rolesManagement": "Roles Management",
+    "playbooks": "Playbooks",
     "workflows": "Workflows",
     "settings": "System settings",
     "hitl": "Human-in-the-loop",
@@ -2689,6 +2690,11 @@
     "deleteConfirm": "Delete {{name}}?",
     "deleteOk": "Deleted",
     "deleteFailed": "Delete failed"
+  },
+  "playbooksPage": {
+    "title": "Playbooks",
+    "hint": "Phased attack-chain playbooks. Maintained as YAML in the playbooks/ directory; reload after editing.",
+    "loading": "Loading..."
   },
   "settingsBasic": {
     "basicTitle": "Basic settings",

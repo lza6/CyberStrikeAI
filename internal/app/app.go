@@ -30,6 +30,7 @@ import (
 	"cyberstrike-ai/internal/mcp/builtin"
 	"cyberstrike-ai/internal/monitor"
 	"cyberstrike-ai/internal/multiagent"
+	"cyberstrike-ai/internal/playbooks"
 	"cyberstrike-ai/internal/robot"
 	"cyberstrike-ai/internal/security"
 	"cyberstrike-ai/internal/skillpackage"
@@ -598,6 +599,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		mcpServer,
 		authManager,
 		openAPIHandler,
+		configPath,
 	)
 
 	return app, nil
@@ -900,6 +902,7 @@ func setupRoutes(
 	mcpServer *mcp.Server,
 	authManager *security.AuthManager,
 	openAPIHandler *handler.OpenAPIHandler,
+	configPath string,
 ) {
 	// API路由
 	api := router.Group("/api")
@@ -1354,6 +1357,12 @@ func setupRoutes(
 		protected.POST("/roles", roleHandler.CreateRole)
 		protected.PUT("/roles/:name", roleHandler.UpdateRole)
 		protected.DELETE("/roles/:name", roleHandler.DeleteRole)
+
+		// 攻击剧本（playbooks/ 目录，启动时一次性加载到内存，只读）
+		playbookList, _ := playbooks.LoadPlaybooksFromDir(filepath.Join(filepath.Dir(configPath), "playbooks"))
+		playbookHandler := handler.NewPlaybooksHandler(playbookList)
+		protected.GET("/playbooks", playbookHandler.ListPlaybooks)
+		protected.GET("/playbooks/:name", playbookHandler.GetPlaybook)
 
 		// 工作流定义（图结构固定，业务字段保存在 graph_json 中）
 		protected.GET("/workflows/runs/pending", workflowHandler.ListPendingRuns)

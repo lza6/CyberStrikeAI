@@ -542,6 +542,14 @@ async function initPage(pageId) {
                 initPlatformRbacPage();
             }
             break;
+        case 'playbooks':
+            // 初始化攻击剧本页面
+            if (typeof initPlaybooksPage === 'function') {
+                initPlaybooksPage();
+            } else if (typeof loadPlaybooks === 'function') {
+                loadPlaybooks();
+            }
+            break;
         case 'workflows':
             if (typeof refreshWorkflows === 'function') {
                 refreshWorkflows();

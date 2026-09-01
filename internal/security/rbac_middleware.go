@@ -168,6 +168,8 @@ func permissionForRequest(method, fullPath string) string {
 		return crudPermission(method, "files")
 	case strings.HasPrefix(path, "/roles"):
 		return crudPermission(method, "roles")
+	case strings.HasPrefix(path, "/playbooks"):
+		return crudPermission(method, "roles")
 	case path == "/workflows/:id/package":
 		return "workflow:read"
 	case strings.HasPrefix(path, "/workflow-package-inspections"), strings.HasPrefix(path, "/workflow-package-imports"):
@@ -262,7 +264,7 @@ func isMutationMethod(method string) bool {
 
 func isProcessGlobalMutationPath(path string) bool {
 	if strings.HasPrefix(path, "/roles") || strings.HasPrefix(path, "/skills") ||
-		strings.HasPrefix(path, "/external-mcp") || strings.HasPrefix(path, "/robot") {
+		strings.HasPrefix(path, "/playbooks") || strings.HasPrefix(path, "/external-mcp") || strings.HasPrefix(path, "/robot") {
 		return true
 	}
 	if strings.HasPrefix(path, "/workflows") {

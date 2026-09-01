@@ -29,8 +29,8 @@ function saveConfig(cfgPath, cfg) {
   fs.writeFileSync(cfgPath, text, 'utf8');
 }
 
-// 桌面版强制默认项：local_mode=true（免登录）、绑定 127.0.0.1（不暴露公网）。
-// 在 startBackend 复制 config.example.yaml 后调用，确保桌面版双击即免登录。
+// 桌面版强制默认项：local_mode=true（免登录）、绑定 127.0.0.1（不暴露公网）、关闭 TLS（桌面版走纯 HTTP，避免自签证书导致 Electron 加载失败）。
+// 在 startBackend 复制 config.example.yaml 后调用，确保桌面版双击即免登录、原生窗口能正常加载。
 function ensureDesktopDefaults(cfgPath) {
   const cfg = loadConfig(cfgPath) || {};
   if (!cfg.auth) cfg.auth = {};
@@ -38,6 +38,11 @@ function ensureDesktopDefaults(cfgPath) {
   // 绑定本机回环，避免桌面版意外暴露到局域网（强制覆盖 0.0.0.0 等公开绑定）
   if (!cfg.server) cfg.server = {};
   cfg.server.host = '127.0.0.1';
+  // 桌面版关闭 TLS：Electron BrowserWindow 加载 http://127.0.0.1:8080 最稳；
+  // 自签 HTTPS 会让 Chromium 报证书警告拦截页面，桌面场景无意义。
+  cfg.server.tls_enabled = false;
+  cfg.server.tls_auto_self_sign = false;
+  cfg.server.tls_http_redirect = false;
   saveConfig(cfgPath, cfg);
 }
 

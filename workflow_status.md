@@ -29,6 +29,10 @@
 | G1 桌面免登录（local_mode） | 后端 + 前端 + 桌面壳 | local_mode 下不带 token 访问 /api/config /api/auth/validate /api/skills /api/conversations 全 200；桌面版双击直接进对话页不弹登录 | done |
 | G2 原生 exe 界面 | Electron BrowserWindow | 双击 exe → BrowserWindow 加载 http://127.0.0.1:8080（内置 admin 全权限），Web UI 可在窗口内切换 | done |
 | G3 agent/skill/tool 内置 | 后端自动加载 | agents/skills/tools 启动时自动加载到 MCP 池 + skill 渐进披露池 + 多代理 sub_agents，对话界面可触发（T3 子代理验证） | done |
+| G4 playbooks 全栈内置 | 后端 loader + API + 前端 | `/api/playbooks` 返回 8 剧本；对话页左侧导航有"攻击剧本"菜单，点击渲染卡片 | done |
+| G5 独立 exe 双击即开界面 | 后端 auto-open + 桌面壳原生菜单 | 独立 `cyberstrike-ai.exe` 启动后自动打开默认浏览器到 Web UI；桌面壳有原生菜单（视图/在浏览器中打开/退出） | done |
+| G6 桌面版关闭 TLS | ensureDesktopDefaults 关 TLS | 桌面版 http://127.0.0.1:8080 纯 HTTP，Electron BrowserWindow 正常加载（无自签证书拦截） | done |
+| G7 仓库文档中文化 | README/docs 主入口中文优先 | 根 README.md 改为中文（英文转 README_EN.md）；mcp-servers/README.md 中文优先；docs/README.md 中文段在前 | done |
 
 ## 任务图（依赖）
 
@@ -101,6 +105,12 @@ E1 审查 5 项必须修 + A2 P0/P1 关键项已全部修复并复验通过：
   - **G1 复验**（go run 实跑）：启动日志"已启用本地免登录模式"；/api/auth/validate 不带 token → 200 {local_mode:true, permission_scopes:全 all}；/api/config 200；/api/skills 200；/api/conversations 200；go vet ./... exit 0；go build ok；desktop 4 JS node --check 全 OK；ensureDesktopDefaults 单测 local_mode=true host=127.0.0.1（强制覆盖 0.0.0.0）
   - 注：exe 直接前台 `timeout` 跑会 segfault（exit 139），是 bash 后台 fork + CGO 的已知环境问题，非代码缺陷；`go run` 正常启动并 ONLINE。NSIS 打包用的二进制与 go run 同源，安装包内 exe 在 Electron 子进程下可正常启动
 - 2026-09-01 19:5x G1-G3 最终安装包重新打包完成：size=165449095，含 local_mode 后端 + auth.js 免登录探测 + ensureDesktopDefaults；上传到 Release 进行中
+- 2026-09-01 20:2x-20:4x G4-G7 剩余风险全闭环：
+  - **G4 playbooks 全栈**：internal/playbooks/playbooks.go（LoadPlaybooksFromDir，7 子用例 test PASS）；internal/handler/playbooks.go（ListPlaybooks/GetPlaybook）；app.go:1361-1364 挂 /api/playbooks 路由；rbac_middleware.go 加 /playbooks → roles CRUD 权限映射 + isProcessGlobalMutationPath；web/static/js/playbooks.js（IIFE，loadPlaybooks 渲染卡片）；index.html 加 nav 项 + page-playbooks section + script 引用；router.js initPage 加 case 'playbooks'；i18n zh/en 加 nav.playbooks + playbooksPage 段。复验：`/api/playbooks` 不带 token → 200 返回 8 剧本（api-security/bug-bounty/ci-cd-security/ctf-solver/external-asm/internal-network/owasp-top10/pheromones）；`/api/playbooks/owasp-top10` → 200；不存在 → 404
+  - **G5 独立 exe 双击即开界面**：internal/termout/browser.go OpenBrowser（cmd /c start / open / xdg-open）；cmd/server/main.go 服务器启动后异步等端口就绪自动开浏览器（CYBERSTRIKE_NO_AUTO_OPEN=1 抑制，桌面壳已设）；desktop/src/main.js 加原生菜单（CyberStrikeAI/视图两个 submenu：在浏览器中打开/重新加载/开发者工具/放大缩小/全屏/退出）
+  - **G6 桌面版关闭 TLS**：ensureDesktopDefaults 强制 tls_enabled/tls_auto_self_sign/tls_http_redirect 全 false；复验启动日志 `http://127.0.0.1:8080/` 无 TLS/Redirect 行；HTTP 200
+  - **G7 仓库文档中文化**：根 README.md ← 原 README_CN.md 内容（中文优先），原英文版 → README_EN.md，README.md/README_CN.md/README_EN.md 三者链接互指修正；mcp-servers/README.md ← README_CN.md（中文优先）+ README_EN.md；docs/README.md 标题+导语改中文。desktop/README.md、tools/README.md、cmd/test-sse-mcp-server/README.md 本就是中文。docs/zh-CN/ 与 docs/en-US/ 双语并存（设计如此，英文版供英文用户）
+- 2026-09-01 20:4x G4-G7 最终安装包重新打包完成（含无 TLS + playbooks + 原生菜单 + 文档中文化）
 
 ## 阻塞项
 

@@ -1,6 +1,6 @@
 # MCP 服务
 
-[English](README.md)
+[English](README_EN.md)
 
 本目录存放 **独立 MCP（Model Context Protocol）服务**，采用标准 MCP 协议（stdio 或部分服务支持 HTTP/SSE），因此 **任意支持 MCP 的客户端** 均可使用——不限于 CyberStrikeAI，**Cursor**、**VS Code**（配合 MCP 扩展）、**Claude Code** 等均可接入。
 

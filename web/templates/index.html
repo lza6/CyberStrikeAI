@@ -418,6 +418,16 @@
                             </div>
                         </div>
                     </div>
+                    <div class="nav-item" data-page="playbooks">
+                        <div class="nav-item-content" data-title="攻击剧本" onclick="switchPage('playbooks')" data-i18n="nav.playbooks" data-i18n-attr="data-title" data-i18n-skip-text="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 4h16v4H4z"></path>
+                                <path d="M4 12h6v8H4z"></path>
+                                <path d="M14 12h6v8h-6z"></path>
+                            </svg>
+                            <span data-i18n="nav.playbooks">攻击剧本</span>
+                        </div>
+                    </div>
                     <div class="nav-section-label" role="presentation">
                         <span data-i18n="navGroups.administration">平台管理</span>
                     </div>
@@ -3315,6 +3325,21 @@
                     </div>
                 </div>
 
+                <!-- 攻击剧本页面 -->
+                <div id="page-playbooks" class="page">
+                    <div class="page-header">
+                        <h2 data-i18n="playbooks.title">攻击剧本</h2>
+                        <div class="page-header-actions">
+                            <button class="btn-secondary" onclick="loadPlaybooks()" data-i18n="common.refresh">刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-content">
+                        <div id="playbooks-list" class="playbooks-grid">
+                            <div class="loading-spinner" data-i18n="knowledgePage.loading">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Skills状态监控页面 -->
                 <div id="page-skills-monitor" class="page skills-monitor-page">
                     <div class="page-header">
@@ -3465,6 +3490,22 @@
                         <div class="modal-footer">
                             <button type="button" class="btn-secondary" onclick="closeMarkdownAgentModal()" data-i18n="common.cancel">取消</button>
                             <button type="button" class="btn-primary" data-require-permission="agents:write" onclick="saveMarkdownAgent()" data-i18n="common.save">保存</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统设置页面 -->
+                <div id="page-playbooks" class="page">
+                    <div class="page-header">
+                        <h2 data-i18n="playbooksPage.title">攻击剧本</h2>
+                        <div class="page-header-actions">
+                            <button type="button" class="btn-secondary" onclick="playbooksCache=null;initPlaybooksPage()" data-i18n="common.refresh">刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-content">
+                        <p class="agents-page-hint" data-i18n="playbooksPage.hint">分阶段攻击链编排。剧本在 playbooks/ 目录下以 YAML 维护，重启后生效。</p>
+                        <div id="playbooks-list" class="skills-grid">
+                            <div class="loading-spinner" data-i18n="common.loading">加载中...</div>
                         </div>
                     </div>
                 </div>
@@ -6725,6 +6766,7 @@
     <script src="/static/js/workflow-package-client.js"></script>
     <script src="/static/js/workflows.js"></script>
     <script src="/static/js/roles.js"></script>
+    <script src="/static/js/playbooks.js"></script>
     <script src="/static/js/rbac.js"></script>
     <script src="/static/js/c2.js"></script>
     <script src="/static/js/rbac-guards.js?v=20260717-1"></script>

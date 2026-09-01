@@ -1,8 +1,8 @@
-# CyberStrikeAI Documentation
+# CyberStrikeAI 文档
 
 [中文](#中文文档) | [English](#english-documentation)
 
-CyberStrikeAI documentation is organized by user journey. Start with deployment, then move to the topic that matches your task.
+CyberStrikeAI 文档按用户旅程组织。先看部署，再根据任务选对应主题阅读。
 
 ## 中文文档
 

@@ -39,6 +39,8 @@ function startBackend() {
   const env = Object.assign({}, process.env);
   env.PATH = pyHome + path.delimiter + path.join(pyHome, 'Scripts') + path.delimiter + (env.PATH || '');
   env.CYBERSTRIKE_HTTPS = '0';
+  // 桌面壳自己打开 BrowserWindow，抑制后端自动开浏览器，避免双开
+  env.CYBERSTRIKE_NO_AUTO_OPEN = '1';
 
   backendProc = spawn(exe, ['-config', cfg, '--http'], { cwd: root, env, windowsHide: false });
   // 把后端 stdout/stderr 落盘到 data/logs/desktop-backend.log，便于启动失败排查
@@ -90,11 +92,37 @@ async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1024, minHeight: 700,
     title: 'CyberStrikeAI', icon: iconPath(),
-    backgroundColor: '#0b0f14', autoHideMenuBar: true,
+    backgroundColor: '#0b0f14', autoHideMenuBar: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false }
   });
-  Menu.setApplicationMenu(null);
-  await mainWindow.loadURL('http://127.0.0.1:8080/');
+  // 原生应用菜单：保留「在浏览器中打开」「重新加载」「开发者工具」「退出」等桌面原生入口
+  const webURL = 'http://127.0.0.1:8080/';
+  const template = [
+    {
+      label: 'CyberStrikeAI',
+      submenu: [
+        { label: '在浏览器中打开', click: () => shell.openExternal(webURL) },
+        { type: 'separator' },
+        { label: '退出', role: 'quit' }
+      ]
+    },
+    {
+      label: '视图',
+      submenu: [
+        { label: '重新加载', role: 'reload' },
+        { label: '强制重新加载', role: 'forceReload' },
+        { label: '开发者工具', role: 'toggleDevTools' },
+        { type: 'separator' },
+        { label: '放大', role: 'zoomIn' },
+        { label: '缩小', role: 'zoomOut' },
+        { label: '重置缩放', role: 'resetZoom' },
+        { type: 'separator' },
+        { label: '全屏', role: 'togglefullscreen' }
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  await mainWindow.loadURL(webURL);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://127.0.0.1:8080') || url.startsWith('http://localhost:8080')) return { action: 'allow' };
     shell.openExternal(url); return { action: 'deny' };

@@ -101,6 +101,7 @@
     "agentsManagement": "智能体管理",
     "roles": "角色",
     "rolesManagement": "角色管理",
+    "playbooks": "攻击剧本",
     "workflows": "工作流",
     "settings": "系统设置",
     "hitl": "人机协同",
@@ -2677,6 +2678,11 @@
     "deleteConfirm": "确定删除 {{name}} 吗？",
     "deleteOk": "已删除",
     "deleteFailed": "删除失败"
+  },
+  "playbooksPage": {
+    "title": "攻击剧本",
+    "hint": "分阶段攻击链编排。剧本在 playbooks/ 目录下以 YAML 维护，重启后生效。",
+    "loading": "加载中..."
   },
   "settingsBasic": {
     "basicTitle": "基本设置",

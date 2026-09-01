@@ -10,10 +10,12 @@ import (
 	"cyberstrike-ai/internal/termout"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/term"
@@ -126,6 +128,27 @@ func main() {
 	}()
 
 	// 启动服务器（传入 context 以支持优雅关闭）
+	// 在独立 cmd/server 运行时（非桌面壳），服务器启动后自动打开默认浏览器到 Web UI。
+	// 桌面壳由 Electron 负责打开窗口，会通过 CYBERSTRIKE_NO_AUTO_OPEN=1 抑制这里的行为。
+	go func() {
+		// 等服务器真正开始监听后再尝试打开浏览器；最长等 5s。
+		for i := 0; i < 50; i++ {
+			if isPortListening(port) {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		autoOpen := strings.TrimSpace(os.Getenv("CYBERSTRIKE_NO_AUTO_OPEN"))
+		if strings.EqualFold(autoOpen, "1") || strings.EqualFold(autoOpen, "true") {
+			return
+		}
+		uiURL := fmt.Sprintf("%s://127.0.0.1:%d/", scheme, port)
+		if err := termout.OpenBrowser(uiURL); err != nil {
+			// 打不开浏览器不致命（headless/无桌面环境），只打印提示
+			fmt.Fprintf(os.Stderr, "提示：未自动打开浏览器，请手动访问 %s\n", uiURL)
+		}
+	}()
+
 	if err := application.RunWithContext(ctx); err != nil {
 		// context 取消导致的关闭不视为错误
 		if ctx.Err() != nil {
@@ -134,6 +157,16 @@ func main() {
 			log.Fatal("服务器启动失败", "error", err)
 		}
 	}
+}
+
+// isPortListening 探测本地端口是否已开始监听（用于判断服务器是否就绪再开浏览器）。
+func isPortListening(port int) bool {
+	c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	c.Close()
+	return true
 }
 
 func runResetAdminPassword(cfg *config.Config) error {

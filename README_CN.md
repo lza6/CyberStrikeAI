@@ -4,7 +4,7 @@
 
 # CyberStrikeAI
 
-[中文](README_CN.md) | [English](README.md)
+[中文](README_CN.md) | [English](README_EN.md)
 
 **CyberStrikeAI 是 AI 原生网络安全的智能执行中枢——让意图转化为受治理的行动，让证据沉淀为运营记忆，并让每次行动优化下一次行动。**
 
