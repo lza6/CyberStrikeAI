@@ -173,20 +173,20 @@ func (h *AgentHandler) ListHITLLogs(c *gin.Context) {
 	q, args = appendConversationAccessSQL(q, args, "conversation_id", notificationAccessFromContext(c))
 	total, err := h.countHitlQuery(q, args)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl_logs.go:176 GetHitlLog", err)
 		return
 	}
 	q += " ORDER BY COALESCE(decided_at, created_at) DESC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
 	rows, err := h.db.Query(q, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl_logs.go:183 GetHitlLog-query", err)
 		return
 	}
 	defer rows.Close()
 	items, err := h.scanHitlInterruptRows(rows)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl_logs.go:189 GetHitlLog-scan", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items, "page": page, "pageSize": pageSize, "total": total, "retentionDays": h.hitlRetentionDays()})
@@ -218,7 +218,7 @@ func (h *AgentHandler) DeleteHITLLogs(c *gin.Context) {
 		where, args = appendConversationAccessSQL(where, args, "conversation_id", notificationAccessFromContext(c))
 		deleted, err = h.db.DeleteHitlInterruptLogsMatching(where, args)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "hitl_logs.go:221 ListDecisionLogs", err)
 			return
 		}
 		if h.audit != nil {
@@ -238,7 +238,7 @@ func (h *AgentHandler) DeleteHITLLogs(c *gin.Context) {
 		}
 		deleted, err = h.db.DeleteHitlInterruptLogsByIDs(ids)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "hitl_logs.go:241 ListToolLogs", err)
 			return
 		}
 		if h.audit != nil {
@@ -270,7 +270,7 @@ func (h *AgentHandler) GetHITLLog(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl_logs.go:273 ListExecutionLogs", err)
 		return
 	}
 	if !h.hitlConversationAllowed(c, cid) {

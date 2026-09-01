@@ -221,7 +221,7 @@ func (h *AgentHandler) runRoleWorkflowJSONIfBound(c *gin.Context, req *ChatReque
 				"errorType":      "task_already_running",
 			})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "❌ 无法启动任务: " + err.Error()})
+			internalError(c, h.logger, "workflow_integration.go:224 StartWorkflowTask", err)
 		}
 		return true
 	}

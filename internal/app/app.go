@@ -92,6 +92,13 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	// CORS中间件
 	router.Use(corsMiddleware(cfg.Server.CORSAllowedOrigins))
 
+	// 全局 API 限流：600 req/min/IP；流式/长连接端点（/stream、/sse、/ws、/mcp）豁免
+	globalRateLimiter := security.NewRateLimiter(600, time.Minute)
+	router.Use(security.GlobalRateLimitMiddleware(globalRateLimiter))
+
+	// 安全响应头：nosniff / DENY / Referrer-Policy / Permissions-Policy / CSP；HTTPS 时附加 HSTS
+	router.Use(security.SecureHeaders(config.MainWebUIUsesHTTPS(&cfg.Server)))
+
 	// 初始化数据库
 	dbPath := cfg.Database.Path
 	if dbPath == "" {
@@ -114,6 +121,15 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	if cfg.Auth.LocalMode {
 		authManager.SetLocalMode(true)
 		log.Logger.Info("已启用本地免登录模式（local_mode），所有 API 以内置 admin 全权限身份执行；暴露到公网前请关闭")
+		// G1 防护：local_mode 绑定非回环地址且非桌面壳环境时，强制改绑 127.0.0.1，
+		// 防止免登录的 admin 全权限 API 意外暴露到局域网/公网。
+		host := strings.ToLower(strings.TrimSpace(cfg.Server.Host))
+		loopback := map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true, "[::1]": true}
+		if host != "" && !loopback[host] && os.Getenv("CYBERSTRIKE_NO_AUTO_OPEN") != "1" {
+			log.Logger.Warn("local_mode 已开启但服务绑定到非回环地址，存在公网暴露风险！将强制改绑 127.0.0.1",
+				zap.String("original_host", cfg.Server.Host))
+			cfg.Server.Host = "127.0.0.1"
+		}
 	}
 	if generatedPassword, err := authManager.AttachRBACStore(db); err != nil {
 		return nil, fmt.Errorf("初始化RBAC失败: %w", err)
@@ -385,6 +401,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	}
 	markdownAgentsHandler := handler.NewMarkdownAgentsHandler(agentsDir)
 	markdownAgentsHandler.SetAudit(auditSvc)
+	markdownAgentsHandler.SetLogger(log.Logger)
 	log.Logger.Debug("多代理 Markdown 子 Agent 目录", zap.String("agentsDir", agentsDir))
 
 	// 创建处理器
@@ -415,7 +432,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	workflowHandler.SetAudit(auditSvc)
 	workflowHandler.SetRuntime(agent, cfg)
 	vulnerabilityHandler.SetAudit(auditSvc)
-	webshellHandler := handler.NewWebShellHandler(log.Logger, db)
+	webshellHandler := handler.NewWebShellHandler(log.Logger, db, cfg.Security.WebshellAllowPrivateIP)
 	webshellHandler.SetAudit(auditSvc)
 	chatUploadsHandler := handler.NewChatUploadsHandler(log.Logger, db)
 	chatUploadsHandler.SetAudit(auditSvc)
@@ -1074,6 +1091,23 @@ func setupRoutes(
 		protected.POST("/config/test-openai", configHandler.TestOpenAI)
 		protected.POST("/config/test-vision", configHandler.TestVision)
 		protected.POST("/config/list-models", configHandler.ListModels)
+
+		// 系统提示词管理（prompts/ 目录；激活 = 内存热生效 + 写回 config.yaml）
+		systemPromptsHandler := handler.NewSystemPromptsHandler(filepath.Join(filepath.Dir(configPath), "prompts"))
+		systemPromptsHandler.SetConfig(app.config)
+		systemPromptsHandler.SetAudit(auditSvc)
+		systemPromptsHandler.SetLogger(app.logger.Logger)
+		protected.GET("/system-prompts", systemPromptsHandler.ListSystemPrompts)
+		protected.GET("/system-prompts/current", systemPromptsHandler.CurrentSystemPrompt)
+		protected.GET("/system-prompts/:filename", systemPromptsHandler.GetSystemPrompt)
+		protected.POST("/system-prompts", systemPromptsHandler.CreateSystemPrompt)
+		protected.PUT("/system-prompts/:filename", systemPromptsHandler.UpdateSystemPrompt)
+		protected.DELETE("/system-prompts/:filename", systemPromptsHandler.DeleteSystemPrompt)
+		protected.POST("/system-prompts/:filename/activate", systemPromptsHandler.ActivateSystemPrompt)
+
+		// 版本更新检测（查上游 lza6/CyberStrikeAI 的 GitHub releases/latest）
+		updateHandler := handler.NewUpdateHandler(app.config, app.logger.Logger)
+		protected.GET("/update/check", updateHandler.CheckUpdate)
 
 		// 系统设置 - 终端（执行命令，提高运维效率）
 		protected.POST("/terminal/run", terminalHandler.RunCommand)

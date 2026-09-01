@@ -176,7 +176,7 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 	// 保存配置到文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "role.go:179 SaveRoleConfig", err)
 		return
 	}
 
@@ -224,7 +224,7 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 	// 保存配置到文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "role.go:227 SaveRoleTools", err)
 		return
 	}
 

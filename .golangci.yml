@@ -1,0 +1,14 @@
+# 保守配置：只开启安全相关 linter，避免噪音。后续按需逐步收紧。
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - gosec
+    - ineffassign
+
+issues:
+  exclude-rules: []
+
+run:
+  timeout: 10m

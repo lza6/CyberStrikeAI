@@ -58,7 +58,7 @@ func (h *RBACHandler) Me(c *gin.Context) {
 func (h *RBACHandler) Metadata(c *gin.Context) {
 	roles, err := h.db.ListRBACRoles()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "rbac.go:61 ListRoles", err)
 		return
 	}
 	rolePermissions := map[string][]string{}
@@ -77,7 +77,7 @@ func (h *RBACHandler) Metadata(c *gin.Context) {
 func (h *RBACHandler) ListRoles(c *gin.Context) {
 	roles, err := h.db.ListRBACRoles()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "rbac.go:80 CreateRole", err)
 		return
 	}
 	out := make([]gin.H, 0, len(roles))
@@ -194,7 +194,7 @@ func (h *RBACHandler) DeleteRole(c *gin.Context) {
 func (h *RBACHandler) ListUsers(c *gin.Context) {
 	users, err := h.db.ListRBACUsers()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "rbac.go:197 UpdateRole", err)
 		return
 	}
 	out := make([]gin.H, 0, len(users))
@@ -234,7 +234,7 @@ func (h *RBACHandler) CreateUser(c *gin.Context) {
 	}
 	hash, err := security.HashPassword(req.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "rbac.go:237 DeleteRole", err)
 		return
 	}
 	enabled := true
@@ -286,11 +286,11 @@ func (h *RBACHandler) UpdateUser(c *gin.Context) {
 		}
 		hash, err := security.HashPassword(*req.Password)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "rbac.go:289 BindUserRole", err)
 			return
 		}
 		if err := h.db.UpdateRBACUserPassword(id, hash); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "rbac.go:293 UnbindUserRole", err)
 			return
 		}
 	}
@@ -374,7 +374,7 @@ func (h *RBACHandler) AssignResource(c *gin.Context) {
 func (h *RBACHandler) ListResourceAssignments(c *gin.Context) {
 	rows, err := h.db.ListRBACResourceAssignments(c.Query("user_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "rbac.go:377 ListUserRoles", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"assignments": rows})

@@ -175,7 +175,7 @@ func (h *ExternalMCPHandler) AddOrUpdateExternalMCP(c *gin.Context) {
 	// 添加或更新配置
 	if err := h.manager.AddOrUpdateConfig(name, req.Config); err != nil {
 		h.logger.Error("添加或更新外部MCP配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "添加或更新配置失败: " + err.Error()})
+		internalError(c, h.logger, "external_mcp.go:178 AddOrUpdate", err)
 		return
 	}
 
@@ -202,7 +202,7 @@ func (h *ExternalMCPHandler) AddOrUpdateExternalMCP(c *gin.Context) {
 	// 保存到配置文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "external_mcp.go:205 Delete", err)
 		return
 	}
 
@@ -241,7 +241,7 @@ func (h *ExternalMCPHandler) DeleteExternalMCP(c *gin.Context) {
 	// 保存到配置文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "external_mcp.go:244 Toggle", err)
 		return
 	}
 
@@ -277,7 +277,7 @@ func (h *ExternalMCPHandler) StartExternalMCP(c *gin.Context) {
 	// 保存到配置文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "external_mcp.go:280 UpdateConfig", err)
 		return
 	}
 
@@ -331,7 +331,7 @@ func (h *ExternalMCPHandler) StopExternalMCP(c *gin.Context) {
 	// 保存到配置文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "external_mcp.go:334 Reload", err)
 		return
 	}
 

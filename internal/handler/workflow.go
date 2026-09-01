@@ -58,7 +58,7 @@ func (h *WorkflowHandler) List(c *gin.Context) {
 	includeDisabled := strings.EqualFold(c.Query("includeDisabled"), "true") || c.Query("include_disabled") == "1"
 	items, err := h.db.ListWorkflowDefinitions(includeDisabled)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow.go:61 List", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"workflows": items})
@@ -68,7 +68,7 @@ func (h *WorkflowHandler) Get(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))
 	wf, err := h.db.GetWorkflowDefinition(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow.go:71 Get", err)
 		return
 	}
 	if wf == nil {
@@ -226,7 +226,7 @@ func (h *WorkflowHandler) save(c *gin.Context, pathID string) {
 		if h.logger != nil {
 			h.logger.Warn("保存工作流失败", zap.String("id", id), zap.Error(err))
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow.go:229 Delete", err)
 		return
 	}
 	saved, _ := h.db.GetWorkflowDefinition(id)
@@ -244,7 +244,7 @@ func (h *WorkflowHandler) Delete(c *gin.Context) {
 		return
 	}
 	if err := h.db.DeleteWorkflowDefinition(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow.go:247 Duplicate", err)
 		return
 	}
 	workflowrunner.InvalidateCompiledCache(id)

@@ -109,7 +109,7 @@ func (h *AttackChainHandler) GetAttackChain(c *gin.Context) {
 	chain, err = builder.BuildChainFromConversation(ctx, conversationID)
 	if err != nil {
 		h.logger.Error("生成攻击链失败", zap.String("conversationId", conversationID), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成攻击链失败: " + err.Error()})
+		internalError(c, h.logger, "attackchain.go:112 GetAttackChain", err)
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *AttackChainHandler) RegenerateAttackChain(c *gin.Context) {
 	chain, err := builder.BuildChainFromConversation(ctx, conversationID)
 	if err != nil {
 		h.logger.Error("生成攻击链失败", zap.String("conversationId", conversationID), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成攻击链失败: " + err.Error()})
+		internalError(c, h.logger, "attackchain.go:167 RegenerateAttackChain", err)
 		return
 	}
 

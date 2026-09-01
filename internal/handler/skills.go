@@ -63,7 +63,7 @@ func (h *SkillsHandler) GetSkills(c *gin.Context) {
 	allSummaries, err := skillpackage.ListSkillSummaries(h.skillsRootAbs())
 	if err != nil {
 		h.logger.Error("获取skills列表失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "skills.go:66 List", err)
 		return
 	}
 
@@ -293,7 +293,7 @@ func (h *SkillsHandler) PutSkillPackageFile(c *gin.Context) {
 	}
 	if err := skillpackage.WritePackageFile(h.skillsRootAbs(), skillID, req.Path, []byte(req.Content)); err != nil {
 		h.logger.Error("写入 skill 文件失败", zap.String("skill", skillID), zap.String("path", req.Path), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "skills.go:296 Get", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "saved", "path": req.Path})
@@ -345,7 +345,7 @@ func (h *SkillsHandler) CreateSkill(c *gin.Context) {
 	}
 	skillMD, err := skillpackage.BuildSkillMD(manifest, req.Content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "skills.go:348 Create", err)
 		return
 	}
 	if err := skillpackage.ValidateSkillMDPackage(skillMD, req.Name); err != nil {
@@ -356,7 +356,7 @@ func (h *SkillsHandler) CreateSkill(c *gin.Context) {
 	skillDir := filepath.Join(h.skillsRootAbs(), req.Name)
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		h.logger.Error("创建skill目录失败", zap.String("skill", req.Name), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建skill目录失败: " + err.Error()})
+		internalError(c, h.logger, "skills.go:359 Create-dir", err)
 		return
 	}
 
@@ -367,7 +367,7 @@ func (h *SkillsHandler) CreateSkill(c *gin.Context) {
 
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), skillMD, 0644); err != nil {
 		h.logger.Error("创建 SKILL.md 失败", zap.String("skill", req.Name), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建 SKILL.md 失败: " + err.Error()})
+		internalError(c, h.logger, "skills.go:370 Create-skillmd", err)
 		return
 	}
 
@@ -418,7 +418,7 @@ func (h *SkillsHandler) UpdateSkill(c *gin.Context) {
 	}
 	skillMD, err := skillpackage.BuildSkillMD(m, req.Content)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "skills.go:421 Update", err)
 		return
 	}
 	if err := skillpackage.ValidateSkillMDPackage(skillMD, skillName); err != nil {
@@ -430,7 +430,7 @@ func (h *SkillsHandler) UpdateSkill(c *gin.Context) {
 
 	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), skillMD, 0644); err != nil {
 		h.logger.Error("更新 SKILL.md 失败", zap.String("skill", skillName), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新 SKILL.md 失败: " + err.Error()})
+		internalError(c, h.logger, "skills.go:433 Update-skillmd", err)
 		return
 	}
 
@@ -462,7 +462,7 @@ func (h *SkillsHandler) DeleteSkill(c *gin.Context) {
 	skillDir := filepath.Join(h.skillsRootAbs(), skillName)
 	if err := os.RemoveAll(skillDir); err != nil {
 		h.logger.Error("删除skill失败", zap.String("skill", skillName), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除skill失败: " + err.Error()})
+		internalError(c, h.logger, "skills.go:465 Delete", err)
 		return
 	}
 	responseMsg := "skill已删除"
@@ -488,7 +488,7 @@ func (h *SkillsHandler) GetSkillStats(c *gin.Context) {
 	skillList, err := skillpackage.ListSkillDirNames(h.skillsRootAbs())
 	if err != nil {
 		h.logger.Error("获取skills列表失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "skills.go:491 UpdateStatus", err)
 		return
 	}
 
@@ -562,7 +562,7 @@ func (h *SkillsHandler) ClearSkillStats(c *gin.Context) {
 
 	if err := h.db.ClearSkillStats(); err != nil {
 		h.logger.Error("清空Skills统计信息失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空统计信息失败: " + err.Error()})
+		internalError(c, h.logger, "skills.go:565 ClearStats", err)
 		return
 	}
 
@@ -587,7 +587,7 @@ func (h *SkillsHandler) ClearSkillStatsByName(c *gin.Context) {
 
 	if err := h.db.ClearSkillStatsByName(skillName); err != nil {
 		h.logger.Error("清空指定skill统计信息失败", zap.String("skill", skillName), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空统计信息失败: " + err.Error()})
+		internalError(c, h.logger, "skills.go:590 ClearStats2", err)
 		return
 	}
 

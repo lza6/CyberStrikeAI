@@ -3494,6 +3494,40 @@
                     </div>
                 </div>
 
+                <!-- 系统提示词编辑弹窗 -->
+                <div id="system-prompt-modal" class="modal" style="display: none;">
+                    <div class="modal-content" style="max-width: 760px; max-height: 92vh;">
+                        <div class="modal-header">
+                            <h2 id="system-prompt-modal-title" data-i18n="systemPrompts.editTitle">编辑系统提示词</h2>
+                            <span class="modal-close" onclick="closeSystemPromptModal()">&times;</span>
+                        </div>
+                        <div class="modal-body" style="overflow-y: auto; max-height: calc(92vh - 130px);">
+                            <input type="hidden" id="system-prompt-filename-current" value="">
+                            <div class="form-group" id="system-prompt-filename-row">
+                                <label for="system-prompt-filename" data-i18n="systemPrompts.fieldFilename">文件名</label>
+                                <input type="text" id="system-prompt-filename" placeholder="pentest-assistant.yaml" />
+                                <small class="form-hint" data-i18n="systemPrompts.fieldFilenameHint">仅字母数字开头，可含 _ . -，自动补 .yaml 后缀；禁止路径分隔符。</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="system-prompt-name" data-i18n="systemPrompts.fieldName">名称</label>
+                                <input type="text" id="system-prompt-name" placeholder="默认渗透助手" />
+                            </div>
+                            <div class="form-group">
+                                <label for="system-prompt-description" data-i18n="systemPrompts.fieldDescription">描述</label>
+                                <input type="text" id="system-prompt-description" placeholder="单代理提示的增强版" />
+                            </div>
+                            <div class="form-group">
+                                <label for="system-prompt-content" data-i18n="systemPrompts.fieldContent">提示内容（Markdown）</label>
+                                <textarea id="system-prompt-content" rows="14" placeholder="你是 CyberStrikeAI 渗透测试助手..." data-i18n="systemPrompts.contentPlaceholder" data-i18n-attr="placeholder"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn-secondary" onclick="closeSystemPromptModal()" data-i18n="common.cancel">取消</button>
+                            <button type="button" class="btn-primary" data-require-permission="config:write" onclick="saveSystemPromptFromModal()" data-i18n="common.save">保存</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 系统设置页面 -->
                 <div id="page-playbooks" class="page">
                     <div class="page-header">
@@ -3564,6 +3598,10 @@
                                             <div>
                                                 <h4 data-i18n="settingsBasic.openaiConfig">AI 通道配置</h4>
                                                 <p id="ai-channel-save-hint" class="ai-channel-manager-hint" data-i18n="settingsBasic.aiChannelHint">通过下拉切换已保存通道；保存后写入 ai.channels，默认通道用于新对话和未指定通道的任务。</p>
+                                                <p class="ai-channel-manager-hint">
+                                                    <span data-i18n="settingsBasic.aiChannelActiveLabel">当前生效</span>:
+                                                    <span id="ai-channel-active-badge" class="ai-channel-badge" data-i18n="settingsBasic.aiChannelActiveLoading">加载中...</span>
+                                                </p>
                                             </div>
                                             <div class="ai-channel-header-actions">
                                                 <button type="button" class="btn-secondary" onclick="createAIChannelFromForm()" data-i18n="settingsBasic.aiChannelNew">新增</button>
@@ -3611,10 +3649,15 @@
                                                             </div>
                                                             <div class="form-group">
                                                                 <label for="openai-provider" data-i18n="settingsBasic.apiProvider">API 提供商</label>
-                                                                <select id="openai-provider">
+                                                                <select id="openai-provider" onchange="onAIChannelProviderPresetChange()">
                                                                     <option value="openai_compatible" data-i18n="settingsBasic.providerOpenAI">OpenAI / 兼容 OpenAI 协议</option>
                                                                     <option value="claude" data-i18n="settingsBasic.providerClaude">Claude (Anthropic Messages API)</option>
+                                                                    <option value="deepseek" data-i18n="settingsBasic.providerDeepSeek">DeepSeek</option>
+                                                                    <option value="qwen" data-i18n="settingsBasic.providerQwen">Qwen（DashScope 兼容）</option>
+                                                                    <option value="glm" data-i18n="settingsBasic.providerGLM">GLM（智谱）</option>
+                                                                    <option value="ollama" data-i18n="settingsBasic.providerOllama">Ollama（本地）</option>
                                                                 </select>
+                                                                <small class="form-hint" data-i18n="settingsBasic.providerPresetHint">选择常用提供商会自动填入默认 Base URL，可再手动修改。</small>
                                                             </div>
                                                             <div class="form-group span-2">
                                                                 <label for="openai-base-url">Base URL <span class="required-mark">*</span></label>
@@ -3907,6 +3950,32 @@
                                 </div>
                                 <div class="settings-actions">
                                     <button class="btn-primary" onclick="applySettings()" data-require-permission="config:write" data-i18n="settings.apply.button">应用配置</button>
+                                </div>
+
+                                <!-- 系统提示词管理 -->
+                                <div class="settings-subsection" id="system-prompts-section">
+                                    <div class="settings-section-header">
+                                        <h4 data-i18n="systemPrompts.title">系统提示词管理</h4>
+                                    </div>
+                                    <p class="form-hint" data-i18n="systemPrompts.hint">在 prompts/ 目录以 YAML 维护单代理系统提示词；点击「激活」后新对话立即使用所选提示，无需重启。激活「内置默认提示」可恢复出厂提示。</p>
+                                    <div class="system-prompts-toolbar">
+                                        <button type="button" class="btn-secondary" onclick="loadSystemPrompts()" data-i18n="common.refresh">刷新</button>
+                                        <button type="button" class="btn-primary" onclick="openSystemPromptModal()" data-require-permission="config:write" data-i18n="systemPrompts.new">新建提示词</button>
+                                    </div>
+                                    <div id="system-prompts-list" class="system-prompts-list" aria-live="polite"></div>
+                                </div>
+
+                                <!-- 版本与更新 -->
+                                <div class="settings-subsection" id="version-update-section">
+                                    <div class="settings-section-header">
+                                        <h4 data-i18n="versionUpdate.title">版本与更新</h4>
+                                    </div>
+                                    <div class="version-update-row">
+                                        <span class="ai-channel-badge" id="version-update-current-badge">-</span>
+                                        <button type="button" class="btn-secondary" onclick="checkForUpdate()" data-require-permission="config:read" data-i18n="versionUpdate.check">检查更新</button>
+                                    </div>
+                                    <div id="version-update-result" class="version-update-result" aria-live="polite"></div>
+                                    <p class="form-hint" data-i18n="versionUpdate.hotReloadHint">配置修改保存后立即生效（AI 通道 / 系统提示词），无需重启。</p>
                                 </div>
                             </div>
 
@@ -6749,6 +6818,8 @@
     <script src="/static/js/chat-plan-progress.js?v=20260815-1"></script>
     <script src="/static/js/hitl.js?v=20260819-1"></script>
     <script src="/static/js/settings.js?v=20260717-1"></script>
+    <script src="/static/js/systemprompts.js?v=20260901-1"></script>
+    <script src="/static/js/version-update.js?v=20260901-1"></script>
     <script src="/static/js/audit-datetime-picker.js"></script>
     <script src="/static/js/audit.js"></script>
     <script src="/static/js/wechat-robot.js"></script>

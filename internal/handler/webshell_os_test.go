@@ -9,7 +9,7 @@ import (
 )
 
 func newTestWebShellHandler() *WebShellHandler {
-	return NewWebShellHandler(zap.NewNop(), nil)
+	return NewWebShellHandler(zap.NewNop(), nil, true)
 }
 
 func TestNormalizeWebshellOS(t *testing.T) {

@@ -626,7 +626,7 @@ func (h *FofaHandler) Search(c *gin.Context) {
 
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "FOFA base_url 无效: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:629 FOFA-config", err)
 		return
 	}
 
@@ -646,7 +646,7 @@ func (h *FofaHandler) Search(c *gin.Context) {
 
 	httpReq, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, u.String(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建请求失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:649 FOFA-request", err)
 		return
 	}
 	httpReq.Header.Set("User-Agent", "CyberStrikeAI/1.7.4")
@@ -740,7 +740,7 @@ func (h *FofaHandler) searchZoomEye(c *gin.Context, req fofaSearchRequest, apiKe
 	baseURL := h.resolveBaseURL("zoomeye")
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ZoomEye base_url 无效: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:743 ZoomEye-config", err)
 		return
 	}
 	body := map[string]interface{}{
@@ -782,7 +782,7 @@ func (h *FofaHandler) searchQuake(c *gin.Context, req fofaSearchRequest, apiKey 
 	baseURL := h.resolveBaseURL("quake")
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Quake base_url 无效: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:785 Quake-config", err)
 		return
 	}
 	fields := splitAndCleanCSV(req.Fields)
@@ -968,7 +968,7 @@ func (h *FofaHandler) searchShodan(c *gin.Context, req fofaSearchRequest, apiKey
 	baseURL := strings.TrimRight(h.resolveBaseURL("shodan"), "/") + "/shodan/host/search"
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Shodan base_url 无效: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:971 Shodan-config", err)
 		return
 	}
 
@@ -1061,7 +1061,7 @@ func (h *FofaHandler) doJSONRequest(c *gin.Context, method, endpoint, apiKey, he
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建请求失败: " + err.Error()})
+			internalError(c, h.logger, "fofa.go:1064 Shodan-request", err)
 			return false
 		}
 		reqBody = strings.NewReader(string(b))
@@ -1070,7 +1070,7 @@ func (h *FofaHandler) doJSONRequest(c *gin.Context, method, endpoint, apiKey, he
 	}
 	httpReq, err := http.NewRequestWithContext(c.Request.Context(), method, endpoint, reqBody)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建请求失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:1073 Shodan-request2", err)
 		return false
 	}
 	httpReq.Header.Set("User-Agent", "CyberStrikeAI/1.7.4")

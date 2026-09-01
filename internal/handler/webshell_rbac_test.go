@@ -19,7 +19,7 @@ import (
 func TestWebshellExecRequiresConnectionAccessWhenConnectionIDProvided(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, user, allowed, hidden := setupWebshellRBACTest(t)
-	handler := NewWebShellHandler(zap.NewNop(), db)
+	handler := NewWebShellHandler(zap.NewNop(), db, true)
 
 	w := performWebshellJSON(user, http.MethodPost, "/api/webshell/exec", map[string]interface{}{
 		"url":           hidden.URL,
@@ -43,7 +43,7 @@ func TestWebshellExecRequiresConnectionAccessWhenConnectionIDProvided(t *testing
 func TestWebshellExecAllowsAdHocURLWithoutConnectionID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	_, user, _, _ := setupWebshellRBACTest(t)
-	handler := NewWebShellHandler(zap.NewNop(), nil)
+	handler := NewWebShellHandler(zap.NewNop(), nil, true)
 	// Ad-hoc probe (connectivity test before save) must not be rejected as "无权访问".
 	// The target URL will fail to connect; we only assert auth allows the request through.
 	w := performWebshellJSON(user, http.MethodPost, "/api/webshell/exec", map[string]interface{}{
@@ -64,7 +64,7 @@ func TestWebshellExecAllowsAdHocURLWithoutConnectionID(t *testing.T) {
 func TestWebshellExecRejectsAdHocWithoutWritePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	user := &database.RBACUser{ID: "u_ro", Username: "readonly"}
-	handler := NewWebShellHandler(zap.NewNop(), nil)
+	handler := NewWebShellHandler(zap.NewNop(), nil, true)
 	payload, _ := json.Marshal(map[string]interface{}{
 		"url": "http://127.0.0.1/admin", "command": "id",
 	})
@@ -87,7 +87,7 @@ func TestWebshellExecRejectsAdHocWithoutWritePermission(t *testing.T) {
 func TestWebshellFileOpRequiresConnectionAccessWhenConnectionIDProvided(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, user, _, hidden := setupWebshellRBACTest(t)
-	handler := NewWebShellHandler(zap.NewNop(), db)
+	handler := NewWebShellHandler(zap.NewNop(), db, true)
 
 	w := performWebshellJSON(user, http.MethodPost, "/api/webshell/file", map[string]interface{}{
 		"url":           hidden.URL,

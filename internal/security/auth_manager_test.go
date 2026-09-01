@@ -92,3 +92,54 @@ func TestQueryTokenOnlyAllowedForSSEAndWebSocketGET(t *testing.T) {
 		t.Fatalf("WebSocket token = %q", got)
 	}
 }
+
+func TestSessionLimitEviction(t *testing.T) {
+	db, err := database.NewDB(filepath.Join(t.TempDir(), "auth-limit.db"), zap.NewNop())
+	if err != nil {
+		t.Fatalf("NewDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	manager := NewAuthManagerWithLimit(12, 3)
+	if _, err := manager.AttachRBACStore(db); err != nil {
+		t.Fatalf("AttachRBACStore: %v", err)
+	}
+	hash, err := HashPassword("operator-secret")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	// 预建 4 个用户，逐个登录产生可区分的会话
+	usernames := []string{"user1", "user2", "user3", "user4"}
+	for _, name := range usernames {
+		if _, err := db.CreateRBACUser(name, name, hash, true, []string{database.RBACSystemRoleViewer}); err != nil {
+			t.Fatalf("CreateRBACUser %s: %v", name, err)
+		}
+	}
+
+	tokens := make([]string, 0, len(usernames))
+	for _, name := range usernames {
+		token, _, err := manager.Authenticate(name, "operator-secret")
+		if err != nil {
+			t.Fatalf("Authenticate %s: %v", name, err)
+		}
+		tokens = append(tokens, token)
+	}
+
+	manager.mu.RLock()
+	sessionCount := len(manager.sessions)
+	manager.mu.RUnlock()
+	if sessionCount > 3 {
+		t.Fatalf("sessions map size = %d, want <= 3", sessionCount)
+	}
+
+	// 最早的会话（user1）应被驱逐，最近的会话（user4）应仍然有效
+	if _, ok := manager.ValidateToken(tokens[0]); ok {
+		t.Fatalf("earliest session token should have been evicted")
+	}
+	if _, ok := manager.ValidateToken(tokens[3]); !ok {
+		t.Fatalf("latest session token should still validate")
+	}
+	if _, ok := manager.ValidateToken(tokens[2]); !ok {
+		t.Fatalf("second-latest session token should still validate")
+	}
+}

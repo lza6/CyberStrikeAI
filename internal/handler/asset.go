@@ -125,7 +125,7 @@ func (h *AssetHandler) Import(c *gin.Context) {
 			return
 		}
 		h.logger.Error("导入资产失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "asset.go:128 Import", err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -148,7 +148,7 @@ func (h *AssetHandler) List(c *gin.Context) {
 	assets, total, err := h.db.ListAssets(pageSize, (page-1)*pageSize, filter, assetAccess(c))
 	if err != nil {
 		h.logger.Error("加载资产失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "asset.go:151 List", err)
 		return
 	}
 	totalPages := (total + pageSize - 1) / pageSize
@@ -261,7 +261,7 @@ func (h *AssetHandler) Stats(c *gin.Context) {
 	}
 	stats, err := h.db.GetAssetStats(assetAccess(c), days)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "asset.go:264 Stats", err)
 		return
 	}
 	c.JSON(http.StatusOK, stats)
@@ -309,7 +309,7 @@ func (h *AssetHandler) RecordScans(c *gin.Context) {
 	for _, scan := range req.Scans {
 		if err := h.db.MarkAssetScanned(scan.AssetID, scan.ConversationID, scan.QueueID, scan.TaskID, access); err != nil {
 			h.logger.Error("记录资产扫描失败", zap.String("asset_id", scan.AssetID), zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "asset.go:312 RecordScans", err)
 			return
 		}
 	}

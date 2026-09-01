@@ -847,7 +847,7 @@ func (h *ChatUploadsHandler) List(c *gin.Context) {
 	files, folders, err := h.collectFiles(c, conversationFilter, projectFilter)
 	if err != nil {
 		h.logger.Warn("列举对话附件失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:850 ListPath", err)
 		return
 	}
 	files = filterChatUploadItems(files, sourceFilter, search)
@@ -871,7 +871,7 @@ func (h *ChatUploadsHandler) Export(c *gin.Context) {
 	files, _, err := h.collectFiles(c, conversationFilter, projectFilter)
 	if err != nil {
 		h.logger.Warn("导出对话附件失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:874 ReadFile", err)
 		return
 	}
 	files = filterChatUploadItems(files, sourceFilter, search)
@@ -1171,12 +1171,12 @@ func (h *ChatUploadsHandler) Delete(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1174 PathOps", err)
 		return
 	}
 	if st.IsDir() {
 		if err := os.RemoveAll(abs); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "chat_uploads.go:1179 PathOps-stat", err)
 			return
 		}
 	} else {
@@ -1185,7 +1185,7 @@ func (h *ChatUploadsHandler) Delete(c *gin.Context) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "chat_uploads.go:1188 PathOps-list", err)
 			return
 		}
 	}
@@ -1231,7 +1231,7 @@ func (h *ChatUploadsHandler) Mkdir(c *gin.Context) {
 
 	root, err := h.absRoot()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1234 Mkdir", err)
 		return
 	}
 
@@ -1264,7 +1264,7 @@ func (h *ChatUploadsHandler) Mkdir(c *gin.Context) {
 		return
 	}
 	if err := os.Mkdir(absNew, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1267 Rename", err)
 		return
 	}
 	relOut, _ := filepath.Rel(root, absNew)
@@ -1310,7 +1310,7 @@ func (h *ChatUploadsHandler) Rename(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1313 ReadContent", err)
 		return
 	}
 	newRel, _ := filepath.Rel(root, newAbs)
@@ -1347,7 +1347,7 @@ func (h *ChatUploadsHandler) GetContent(c *gin.Context) {
 	}
 	b, err := os.ReadFile(abs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1350 WriteContent", err)
 		return
 	}
 	if !utf8.Valid(b) {
@@ -1382,7 +1382,7 @@ func (h *ChatUploadsHandler) PutContent(c *gin.Context) {
 		return
 	}
 	if err := os.WriteFile(abs, []byte(body.Content), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1385 Delete", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -1407,7 +1407,7 @@ func (h *ChatUploadsHandler) Upload(c *gin.Context) {
 	}
 	root, err := h.absRoot()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1410 Upload-absRoot", err)
 		return
 	}
 
@@ -1427,11 +1427,11 @@ func (h *ChatUploadsHandler) Upload(c *gin.Context) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				if err := os.MkdirAll(absDir, 0755); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					internalError(c, h.logger, "chat_uploads.go:1430 Upload-mkdir", err)
 					return
 				}
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, h.logger, "chat_uploads.go:1434 Upload-chunk-read", err)
 				return
 			}
 		} else if !st.IsDir() {
@@ -1454,7 +1454,7 @@ func (h *ChatUploadsHandler) Upload(c *gin.Context) {
 		}
 		targetDir = filepath.Join(root, dateStr, convDir)
 		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "chat_uploads.go:1457 Upload-chunk-write", err)
 			return
 		}
 	}
@@ -1481,13 +1481,13 @@ func (h *ChatUploadsHandler) Upload(c *gin.Context) {
 	defer src.Close()
 	dst, err := os.Create(fullPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1484 Download", err)
 		return
 	}
 	defer dst.Close()
 	if _, err := io.Copy(dst, src); err != nil {
 		_ = os.Remove(fullPath)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "chat_uploads.go:1490 Download-open", err)
 		return
 	}
 	rel, _ := filepath.Rel(root, fullPath)

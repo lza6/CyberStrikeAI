@@ -62,7 +62,7 @@ func (h *C2Handler) SetManager(m *c2.Manager) {
 func (h *C2Handler) ListListeners(c *gin.Context) {
 	listeners, err := h.mgr().DB().ListC2ListenersForAccess(c2AccessFromContext(c), c.Query("project_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:65 CreateListener-mgr", err)
 		return
 	}
 	// 移除敏感字段
@@ -137,7 +137,7 @@ func (h *C2Handler) GetListener(c *gin.Context) {
 	id := c.Param("id")
 	listener, err := h.mgr().DB().GetC2Listener(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:140 GetListener", err)
 		return
 	}
 	if listener == nil {
@@ -154,7 +154,7 @@ func (h *C2Handler) UpdateListener(c *gin.Context) {
 	id := c.Param("id")
 	listener, err := h.mgr().DB().GetC2Listener(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:157 UpdateListener", err)
 		return
 	}
 	if listener == nil {
@@ -210,14 +210,14 @@ func (h *C2Handler) UpdateListener(c *gin.Context) {
 		cfg.ApplyDefaults()
 		cfgJSON, err := json.Marshal(cfg)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "c2.go:213 CreateListener-tls", err)
 			return
 		}
 		listener.ConfigJSON = string(cfgJSON)
 	}
 
 	if err := h.mgr().DB().UpdateC2Listener(listener); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:220 DeleteListener", err)
 		return
 	}
 	listener.EncryptionKey = ""
@@ -303,7 +303,7 @@ func (h *C2Handler) ListSessions(c *gin.Context) {
 
 	sessions, err := h.mgr().DB().ListC2SessionsForAccess(filter, c2AccessFromContext(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:306 GetSession", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"sessions": sessions})
@@ -314,7 +314,7 @@ func (h *C2Handler) GetSession(c *gin.Context) {
 	id := c.Param("id")
 	session, err := h.mgr().DB().GetC2Session(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:317 KillSession", err)
 		return
 	}
 	if session == nil {
@@ -338,7 +338,7 @@ func (h *C2Handler) GetSession(c *gin.Context) {
 func (h *C2Handler) DeleteSession(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.mgr().DB().DeleteC2Session(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:341 UpdateSessionRemark", err)
 		return
 	}
 	if h.audit != nil {
@@ -366,7 +366,7 @@ func (h *C2Handler) DeleteSessions(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:369 ListSessions", err)
 		return
 	}
 	if h.audit != nil {
@@ -403,7 +403,7 @@ func (h *C2Handler) SetSessionSleep(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:406 GetSessionOutput", err)
 		return
 	}
 	out := gin.H{
@@ -435,7 +435,7 @@ func (h *C2Handler) SetSessionNote(c *gin.Context) {
 
 	session, err := h.mgr().DB().GetC2Session(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:438 GetTask", err)
 		return
 	}
 	if session == nil {
@@ -444,7 +444,7 @@ func (h *C2Handler) SetSessionNote(c *gin.Context) {
 	}
 
 	if err := h.mgr().DB().SetC2SessionNote(id, note); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:447 ListTasks", err)
 		return
 	}
 	if h.audit != nil {
@@ -503,7 +503,7 @@ func (h *C2Handler) ListTasks(c *gin.Context) {
 	access := c2AccessFromContext(c)
 	tasks, err := h.mgr().DB().ListC2TasksForAccess(filter, access)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:506 CreateTask-enqueue", err)
 		return
 	}
 
@@ -520,12 +520,12 @@ func (h *C2Handler) ListTasks(c *gin.Context) {
 
 	total, err := h.mgr().DB().CountC2TasksForAccess(filter, access)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:523 GetTaskResult-poll", err)
 		return
 	}
 	statusCounts, err := h.mgr().DB().CountC2TasksByStatusForAccess(filter, access)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:528 GetTaskResult-get", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -557,7 +557,7 @@ func (h *C2Handler) DeleteTasks(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:560 DownloadFile", err)
 		return
 	}
 	if h.audit != nil {
@@ -573,7 +573,7 @@ func (h *C2Handler) GetTask(c *gin.Context) {
 	id := c.Param("id")
 	task, err := h.mgr().DB().GetC2Task(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:576 ListFiles", err)
 		return
 	}
 	if task == nil {
@@ -669,7 +669,7 @@ func (h *C2Handler) WaitTask(c *gin.Context) {
 	for time.Now().Before(deadline) {
 		task, err := h.mgr().DB().GetC2Task(id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "c2.go:672 GetTaskResult-wait", err)
 			return
 		}
 		if task == nil {
@@ -703,7 +703,7 @@ func (h *C2Handler) PayloadOneliner(c *gin.Context) {
 
 	listener, err := h.mgr().DB().GetC2Listener(req.ListenerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:706 GenerateBeacon", err)
 		return
 	}
 	if listener == nil {
@@ -770,7 +770,7 @@ func (h *C2Handler) PayloadBuild(c *gin.Context) {
 
 	listener, err := h.mgr().DB().GetC2Listener(req.ListenerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:773 DeleteSession", err)
 		return
 	}
 	if listener == nil {
@@ -794,7 +794,7 @@ func (h *C2Handler) PayloadBuild(c *gin.Context) {
 
 	result, err := builder.BuildBeacon(input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:797 ClearSessionOutput", err)
 		return
 	}
 	if session, ok := security.CurrentSession(c); ok {
@@ -888,7 +888,7 @@ func (h *C2Handler) ListEvents(c *gin.Context) {
 	access := c2AccessFromContext(c)
 	events, err := h.mgr().DB().ListC2EventsForAccess(filter, access)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:891 CreateProfile", err)
 		return
 	}
 	if !paginated {
@@ -897,12 +897,12 @@ func (h *C2Handler) ListEvents(c *gin.Context) {
 	}
 	total, err := h.mgr().DB().CountC2EventsForAccess(filter, access)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:900 ListProfiles", err)
 		return
 	}
 	levelCounts, err := h.mgr().DB().CountC2EventsByLevelForAccess(filter, access)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:905 GetProfile", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -933,7 +933,7 @@ func (h *C2Handler) DeleteEvents(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:936 DeleteProfile", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": n})
@@ -984,7 +984,7 @@ func (h *C2Handler) EventStream(c *gin.Context) {
 func (h *C2Handler) ListProfiles(c *gin.Context) {
 	profiles, err := h.mgr().DB().ListC2Profiles()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:987 GetOPSEC", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"profiles": profiles})
@@ -995,7 +995,7 @@ func (h *C2Handler) GetProfile(c *gin.Context) {
 	id := c.Param("id")
 	profile, err := h.mgr().DB().GetC2Profile(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:998 UpdateOPSEC", err)
 		return
 	}
 	if profile == nil {
@@ -1017,7 +1017,7 @@ func (h *C2Handler) CreateProfile(c *gin.Context) {
 	req.CreatedAt = time.Now()
 
 	if err := h.mgr().DB().CreateC2Profile(&req); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1020 GetOPSECHistory", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"profile": req})
@@ -1028,7 +1028,7 @@ func (h *C2Handler) UpdateProfile(c *gin.Context) {
 	id := c.Param("id")
 	profile, err := h.mgr().DB().GetC2Profile(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1031 GetEventStream", err)
 		return
 	}
 	if profile == nil {
@@ -1052,7 +1052,7 @@ func (h *C2Handler) UpdateProfile(c *gin.Context) {
 	profile.JitterMaxMS = req.JitterMaxMS
 
 	if err := h.mgr().DB().UpdateC2Profile(profile); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1055 GetStats", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"profile": profile})
@@ -1062,7 +1062,7 @@ func (h *C2Handler) UpdateProfile(c *gin.Context) {
 func (h *C2Handler) DeleteProfile(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.mgr().DB().DeleteC2Profile(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1065 GetDashboard", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": true})
@@ -1095,19 +1095,19 @@ func (h *C2Handler) UploadFileForImplant(c *gin.Context) {
 	fileID := "f_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:14]
 	dir := filepath.Join(h.mgr().StorageDir(), "downstream")
 	if err := osMkdirAll(dir); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1098 MCPListListeners", err)
 		return
 	}
 	dstPath := filepath.Join(dir, fileID+".bin")
 	dst, err := osCreate(dstPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1104 MCPCreateListener", err)
 		return
 	}
 	n, err := io.Copy(dst, file)
 	dst.Close()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1110 MCPListSessions", err)
 		return
 	}
 
@@ -1144,7 +1144,7 @@ func (h *C2Handler) ListFiles(c *gin.Context) {
 	}
 	files, err := h.mgr().DB().ListC2FilesBySession(sessionID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1147 MCPEnqueueTask", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"files": files})
@@ -1155,7 +1155,7 @@ func (h *C2Handler) DownloadResultFile(c *gin.Context) {
 	taskID := c.Param("id")
 	task, err := h.mgr().DB().GetC2Task(taskID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "c2.go:1158 MCPGetTaskResult", err)
 		return
 	}
 	if task == nil {

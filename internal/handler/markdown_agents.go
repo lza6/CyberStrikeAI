@@ -13,14 +13,16 @@ import (
 	"cyberstrike-ai/internal/config"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 var markdownAgentFilenameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*\.md$`)
 
 // MarkdownAgentsHandler 管理 agents 目录下子代理 Markdown（增删改查）。
 type MarkdownAgentsHandler struct {
-	dir   string
-	audit *audit.Service
+	dir    string
+	audit  *audit.Service
+	logger *zap.Logger
 }
 
 // NewMarkdownAgentsHandler dir 须为已解析的绝对路径。
@@ -31,6 +33,11 @@ func NewMarkdownAgentsHandler(dir string) *MarkdownAgentsHandler {
 // SetAudit wires platform audit logging.
 func (h *MarkdownAgentsHandler) SetAudit(s *audit.Service) {
 	h.audit = s
+}
+
+// SetLogger wires structured logging for sanitized 5xx responses.
+func (h *MarkdownAgentsHandler) SetLogger(l *zap.Logger) {
+	h.logger = l
 }
 
 func (h *MarkdownAgentsHandler) safeJoin(filename string) (string, error) {
@@ -81,7 +88,7 @@ func (h *MarkdownAgentsHandler) ListMarkdownAgents(c *gin.Context) {
 	}
 	files, err := agents.LoadMarkdownAgentFiles(h.dir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "markdown_agents.go:84 List", err)
 		return
 	}
 	out := make([]gin.H, 0, len(files))
@@ -113,7 +120,7 @@ func (h *MarkdownAgentsHandler) GetMarkdownAgent(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "markdown_agents.go:116 Get", err)
 		return
 	}
 	sub, err := agents.ParseMarkdownSubAgent(filename, string(b))
@@ -211,14 +218,14 @@ func (h *MarkdownAgentsHandler) CreateMarkdownAgent(c *gin.Context) {
 	} else {
 		out, err = agents.BuildMarkdownFile(sub)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "markdown_agents.go:214 Save", err)
 			return
 		}
 	}
 	if want := agents.WantsMarkdownOrchestrator(filepath.Base(path), body.Kind, string(out)); want {
 		other, oerr := existingOtherOrchestrator(h.dir, filepath.Base(path))
 		if oerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": oerr.Error()})
+			internalError(c, h.logger, "markdown_agents.go:221 Save-otherOrchestrator", oerr)
 			return
 		}
 		if other != "" {
@@ -227,11 +234,11 @@ func (h *MarkdownAgentsHandler) CreateMarkdownAgent(c *gin.Context) {
 		}
 	}
 	if err := os.MkdirAll(h.dir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "markdown_agents.go:230 Save-mkdir", err)
 		return
 	}
 	if err := os.WriteFile(path, out, 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "markdown_agents.go:234 Save-audit", err)
 		return
 	}
 	if h.audit != nil {
@@ -281,14 +288,14 @@ func (h *MarkdownAgentsHandler) UpdateMarkdownAgent(c *gin.Context) {
 	} else {
 		out, err = agents.BuildMarkdownFile(sub)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "markdown_agents.go:284 Delete", err)
 			return
 		}
 	}
 	if want := agents.WantsMarkdownOrchestrator(filename, body.Kind, string(out)); want {
 		other, oerr := existingOtherOrchestrator(h.dir, filename)
 		if oerr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": oerr.Error()})
+			internalError(c, h.logger, "markdown_agents.go:291 Delete-otherOrchestrator", oerr)
 			return
 		}
 		if other != "" {
@@ -301,7 +308,7 @@ func (h *MarkdownAgentsHandler) UpdateMarkdownAgent(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "markdown_agents.go:304 Delete-audit", err)
 		return
 	}
 	if h.audit != nil {
@@ -323,7 +330,7 @@ func (h *MarkdownAgentsHandler) DeleteMarkdownAgent(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "markdown_agents.go:326 Validate", err)
 		return
 	}
 	if h.audit != nil {

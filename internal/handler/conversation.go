@@ -93,7 +93,7 @@ func (h *ConversationHandler) CreateConversation(c *gin.Context) {
 	conv, err := h.db.CreateConversation(title, meta)
 	if err != nil {
 		h.logger.Error("创建对话失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:96 Create", err)
 		return
 	}
 	if session, ok := security.CurrentSession(c); ok {
@@ -172,7 +172,7 @@ func (h *ConversationHandler) ListConversations(c *gin.Context) {
 	}
 	if err != nil {
 		h.logger.Error("获取对话列表失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:175 List", err)
 		return
 	}
 	if conversations == nil {
@@ -208,7 +208,7 @@ func (h *ConversationHandler) UpdateConversationPinned(c *gin.Context) {
 
 	if err := h.db.UpdateConversationPinned(conversationID, req.Pinned); err != nil {
 		h.logger.Error("更新对话置顶状态失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:211 Get", err)
 		return
 	}
 
@@ -329,7 +329,7 @@ func (h *ConversationHandler) GetMessageProcessDetails(c *gin.Context) {
 		summary, err := h.db.GetProcessDetailsSummary(messageID)
 		if err != nil {
 			h.logger.Error("获取过程详情摘要失败", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "conversation.go:332 SetProject", err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"summary": summary})
@@ -341,7 +341,7 @@ func (h *ConversationHandler) GetMessageProcessDetails(c *gin.Context) {
 		details, err := h.db.GetProcessDetails(messageID)
 		if err != nil {
 			h.logger.Error("获取过程详情失败", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "conversation.go:344 UpdatePinned", err)
 			return
 		}
 
@@ -391,7 +391,7 @@ func (h *ConversationHandler) GetMessageProcessDetails(c *gin.Context) {
 	details, total, err := h.db.GetProcessDetailsPage(messageID, limit, offset)
 	if err != nil {
 		h.logger.Error("分页获取过程详情失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:394 Update", err)
 		return
 	}
 	details = database.DedupeConsecutiveProcessDetails(details)
@@ -555,7 +555,7 @@ func (h *ConversationHandler) UpdateConversation(c *gin.Context) {
 
 	if err := h.db.UpdateConversationTitle(id, req.Title); err != nil {
 		h.logger.Error("更新对话失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:558 DeleteTurn-find", err)
 		return
 	}
 
@@ -563,7 +563,7 @@ func (h *ConversationHandler) UpdateConversation(c *gin.Context) {
 	conv, err := h.db.GetConversation(id)
 	if err != nil {
 		h.logger.Error("获取更新后的对话失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:566 DeleteTurn-exec", err)
 		return
 	}
 
@@ -580,7 +580,7 @@ func (h *ConversationHandler) DeleteConversation(c *gin.Context) {
 
 	if err := h.db.DeleteConversation(id); err != nil {
 		h.logger.Error("删除对话失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "conversation.go:583 DeleteTurn-conv", err)
 		return
 	}
 

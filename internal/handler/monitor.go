@@ -877,7 +877,7 @@ func (h *MonitorHandler) DeleteExecution(c *gin.Context) {
 		err = h.db.DeleteToolExecution(id)
 		if err != nil {
 			h.logger.Error("删除执行记录失败", zap.Error(err), zap.String("executionId", id))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除执行记录失败: " + err.Error()})
+			internalError(c, h.logger, "monitor.go:880 DeleteExecRecord", err)
 			return
 		}
 
@@ -942,7 +942,7 @@ func (h *MonitorHandler) DeleteExecutions(c *gin.Context) {
 		executions, err := h.db.GetToolExecutionsByIds(request.IDs)
 		if err != nil {
 			h.logger.Error("获取执行记录失败", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取执行记录失败: " + err.Error()})
+			internalError(c, h.logger, "monitor.go:945 GetExecRecord", err)
 			return
 		}
 
@@ -972,7 +972,7 @@ func (h *MonitorHandler) DeleteExecutions(c *gin.Context) {
 		err = h.db.DeleteToolExecutions(request.IDs)
 		if err != nil {
 			h.logger.Error("批量删除执行记录失败", zap.Error(err), zap.Int("count", len(request.IDs)))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "批量删除执行记录失败: " + err.Error()})
+			internalError(c, h.logger, "monitor.go:975 BatchDeleteExecRecords", err)
 			return
 		}
 

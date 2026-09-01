@@ -235,7 +235,7 @@ func (h *WechatRobotHandler) HandleWechatQRCodeStatus(c *gin.Context) {
 		if h.configSaver != nil {
 			if err := h.configSaver.ApplyWechatRobotBinding(wc); err != nil {
 				h.logger.Warn("保存微信机器人配置失败", zap.Error(err))
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+				internalError(c, h.logger, "wechat_robot.go:238 SaveConfig", err)
 				return
 			}
 		} else {

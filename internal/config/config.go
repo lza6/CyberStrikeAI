@@ -1072,6 +1072,10 @@ type SecurityConfig struct {
 	Tools               []ToolConfig `yaml:"tools,omitempty"`                 // 向后兼容：支持在主配置文件中定义工具
 	ToolsDir            string       `yaml:"tools_dir,omitempty"`             // 工具配置文件目录（新方式）
 	ToolDescriptionMode string       `yaml:"tool_description_mode,omitempty"` // 工具描述模式: "short" | "full"，默认 short
+
+	// WebshellAllowPrivateIP 允许 WebShell 连接私有/保留网段地址（本地授权内网渗透场景）。
+	// 默认 false：禁止对私有 IP 建 WebShell 连接，防 SSRF 打内网。本地授权场景可显式开启。
+	WebshellAllowPrivateIP bool `yaml:"webshell_allow_private_ip" json:"webshell_allow_private_ip"`
 }
 
 type DatabaseConfig struct {
@@ -1093,6 +1097,22 @@ type AgentConfig struct {
 	WorkspaceRootDir string `yaml:"workspace_root_dir,omitempty" json:"workspace_root_dir,omitempty"`
 	// SystemPromptPath 单代理系统提示 Markdown/文本文件路径（相对 config.yaml 所在目录，或可写绝对路径）。非空且可读时替换内置单代理提示；留空用内置。
 	SystemPromptPath string `yaml:"system_prompt_path,omitempty" json:"system_prompt_path,omitempty"`
+}
+
+// GetAgentSystemPromptPath 读取 agent.system_prompt_path（供系统提示词管理等模块通过接口访问）。
+func (c *Config) GetAgentSystemPromptPath() string {
+	if c == nil {
+		return ""
+	}
+	return c.Agent.SystemPromptPath
+}
+
+// SetAgentSystemPromptPath 更新内存中的 agent.system_prompt_path（热生效；持久化由调用方负责写回 config.yaml）。
+func (c *Config) SetAgentSystemPromptPath(path string) {
+	if c == nil {
+		return
+	}
+	c.Agent.SystemPromptPath = path
 }
 
 // HitlConfig 人机协同全局选项；与会话侧栏/API 中的白名单合并为并集后参与判定。

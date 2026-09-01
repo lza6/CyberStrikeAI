@@ -22,7 +22,7 @@ func (h *ConversationHandler) GetTokenUsageStats(c *gin.Context) {
 	stats, err := h.db.GetModelTokenUsageStats(filter)
 	if err != nil {
 		h.logger.Error("获取Token用量统计失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "token_usage.go:25 GetTokenUsageStats", err)
 		return
 	}
 	c.JSON(http.StatusOK, stats)
@@ -38,7 +38,7 @@ func (h *ConversationHandler) GetConversationTokenUsageStats(c *gin.Context) {
 	stats, err := h.db.GetModelTokenUsageStats(filter)
 	if err != nil {
 		h.logger.Error("获取对话Token用量统计失败", zap.Error(err), zap.String("conversationId", filter.ConversationID))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "token_usage.go:41 GetConversationTokenUsageStats", err)
 		return
 	}
 	c.JSON(http.StatusOK, stats)

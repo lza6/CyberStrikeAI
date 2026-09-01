@@ -131,6 +131,11 @@ func permissionForRequest(method, fullPath string) string {
 		return "notification:write"
 	case strings.HasPrefix(path, "/config"):
 		return crudPermission(method, "config")
+	case strings.HasPrefix(path, "/system-prompts"):
+		// 系统提示词属平台配置范畴：激活/增删改复用 config 权限。
+		return crudPermission(method, "config")
+	case strings.HasPrefix(path, "/update"):
+		return "config:read"
 	case strings.HasPrefix(path, "/terminal"):
 		return "terminal:execute"
 	case strings.HasPrefix(path, "/audit"):
@@ -265,6 +270,10 @@ func isMutationMethod(method string) bool {
 func isProcessGlobalMutationPath(path string) bool {
 	if strings.HasPrefix(path, "/roles") || strings.HasPrefix(path, "/skills") ||
 		strings.HasPrefix(path, "/playbooks") || strings.HasPrefix(path, "/external-mcp") || strings.HasPrefix(path, "/robot") {
+		return true
+	}
+	if strings.HasPrefix(path, "/system-prompts") {
+		// 系统提示词与 config.yaml 同为全局配置，不随用户资源隔离。
 		return true
 	}
 	if strings.HasPrefix(path, "/workflows") {

@@ -50,14 +50,14 @@ func (h *AuditHandler) Summary(c *gin.Context) {
 	base := auditFilterForAccess(c, auditFilterFromQuery(c))
 	total, err := h.db.CountAuditLogs(base)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "audit.go:53 CountAuditLogs(total)", err)
 		return
 	}
 	failFilter := base
 	failFilter.Result = "failure"
 	failures, err := h.db.CountAuditLogs(failFilter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "audit.go:60 CountAuditLogs(failures)", err)
 		return
 	}
 	since := time.Now().AddDate(0, 0, -7)
@@ -65,7 +65,7 @@ func (h *AuditHandler) Summary(c *gin.Context) {
 	recentFilter.Since = &since
 	recent7d, err := h.db.CountAuditLogs(recentFilter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "audit.go:68 CountAuditLogs(recent7d)", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -90,12 +90,12 @@ func (h *AuditHandler) ListLogs(c *gin.Context) {
 
 	logs, err := h.db.ListAuditLogs(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "audit.go:93 ListAuditLogs", err)
 		return
 	}
 	total, err := h.db.CountAuditLogs(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "audit.go:98 CountAuditLogs", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -137,7 +137,7 @@ func (h *AuditHandler) ExportLogs(c *gin.Context) {
 
 	logs, err := h.db.ListAuditLogs(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "audit.go:140 ListAuditLogs(export)", err)
 		return
 	}
 	if c.Query("format") == "csv" {

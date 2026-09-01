@@ -28,7 +28,7 @@ func (h *WorkflowHandler) GetRun(c *gin.Context) {
 	}
 	run, err := h.db.GetWorkflowRun(runID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:31 GetRun", err)
 		return
 	}
 	if run == nil {
@@ -37,7 +37,7 @@ func (h *WorkflowHandler) GetRun(c *gin.Context) {
 	}
 	nodeRuns, err := h.db.ListWorkflowNodeRuns(runID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:40 ReplayRun", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"run": run, "nodeRuns": nodeRuns})
@@ -51,7 +51,7 @@ func (h *WorkflowHandler) ReplayRun(c *gin.Context) {
 	}
 	nodeRuns, err := h.db.ListWorkflowNodeRuns(runID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:54 ListPendingRuns", err)
 		return
 	}
 	steps := make([]gin.H, 0, len(nodeRuns))
@@ -83,7 +83,7 @@ func (h *WorkflowHandler) ListPendingRuns(c *gin.Context) {
 	}
 	runs, err := h.db.ListWorkflowRunsAwaitingHITLFiltered(conversationID, 50)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:86 ApproveRun", err)
 		return
 	}
 	runs = filterSlice(runs, func(run *database.WorkflowRun) bool {
@@ -114,7 +114,7 @@ func (h *WorkflowHandler) ResumeRun(c *gin.Context) {
 	}
 	run, err := h.db.GetWorkflowRun(runID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:117 RejectRun", err)
 		return
 	}
 	if run == nil {
@@ -135,7 +135,7 @@ func (h *WorkflowHandler) ResumeRun(c *gin.Context) {
 		return
 	}
 	if err := h.db.RecordWorkflowRunHITLDecision(runID, req.Approved, req.Comment); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:138 ListHistory", err)
 		return
 	}
 	decision := workflowrunner.HITLDecision{
@@ -171,7 +171,7 @@ func (h *WorkflowHandler) ResumeRun(c *gin.Context) {
 		ProjectID:      run.ProjectID,
 	}, runID, req.Approved, req.Comment)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "workflow_run.go:174 GetHistoryDetail", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

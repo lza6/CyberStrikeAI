@@ -849,20 +849,20 @@ func (h *AgentHandler) ListHITLPending(c *gin.Context) {
 	q, args = appendConversationAccessSQL(q, args, "conversation_id", notificationAccessFromContext(c))
 	total, err := h.countHitlQuery(q, args)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:852 ListHits-count", err)
 		return
 	}
 	q += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
 	rows, err := h.db.Query(q, args...)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:859 ListHits-rows", err)
 		return
 	}
 	defer rows.Close()
 	items, err := h.scanHitlInterruptRows(rows)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:865 ListHits-query", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items, "page": page, "pageSize": pageSize, "total": total})
@@ -921,7 +921,7 @@ func (h *AgentHandler) DismissHITLInterrupt(c *gin.Context) {
 		decision_comment='dismissed by user', decided_at=CURRENT_TIMESTAMP, decided_by='human'
 		WHERE id=? AND status='pending'`, req.InterruptID)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:924 DismissInterrupt-exec", err)
 		return
 	}
 	n, _ := res.RowsAffected()
@@ -989,7 +989,7 @@ func (h *AgentHandler) GetHITLConversationConfig(c *gin.Context) {
 	}
 	cfg, err := h.loadHITLConversationConfig(conversationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:992 SaveConfig", err)
 		return
 	}
 	if !hitlStoredConfigEffective(cfg) {
@@ -1029,7 +1029,7 @@ func (h *AgentHandler) UpsertHITLConversationConfig(c *gin.Context) {
 		req.Reviewer = h.hitlEffectiveDefaultReviewer()
 	}
 	if err := h.hitlManager.SaveConversationConfig(req.ConversationID, &req.HITLRequest); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:1032 SetGlobalWhitelist", err)
 		return
 	}
 	if h.hitlWhitelistSaver != nil && len(req.SensitiveTools) > 0 {
@@ -1104,7 +1104,7 @@ func (h *AgentHandler) UpdateHITLDefaultConfig(c *gin.Context) {
 	}
 	if err := h.hitlDefaultReviewerSaver.UpdateHitlDefaultConfig(mode, reviewer, timeoutSeconds); err != nil {
 		h.logger.Warn("写入 HITL 默认配置到 config.yaml 失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:1107 MergeGlobalWhitelist", err)
 		return
 	}
 	if h.config != nil {
@@ -1139,7 +1139,7 @@ func (h *AgentHandler) UpdateHITLDefaultReviewer(c *gin.Context) {
 	reviewer := normalizeHitlReviewer(req.Reviewer)
 	if err := h.hitlDefaultReviewerSaver.UpdateHitlDefaultReviewer(reviewer); err != nil {
 		h.logger.Warn("写入 HITL 默认审批方到 config.yaml 失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:1142 SetDefaultReviewer", err)
 		return
 	}
 	if h.config != nil {
@@ -1166,7 +1166,7 @@ func (h *AgentHandler) SetHITLGlobalToolWhitelist(c *gin.Context) {
 	}
 	if err := h.hitlWhitelistSaver.SetHitlToolWhitelist(req.ToolWhitelist); err != nil {
 		h.logger.Warn("写入 HITL 工具白名单到 config.yaml 失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:1169 SetDefaultConfig", err)
 		return
 	}
 	if h.audit != nil {
@@ -1201,7 +1201,7 @@ func (h *AgentHandler) MergeHITLGlobalToolWhitelist(c *gin.Context) {
 	}
 	if err := h.hitlWhitelistSaver.MergeHitlToolWhitelistIntoConfig(req.SensitiveTools); err != nil {
 		h.logger.Warn("合并 HITL 工具白名单到 config.yaml 失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl.go:1204 SaveWhitelist", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

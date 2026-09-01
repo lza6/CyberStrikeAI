@@ -327,6 +327,9 @@ type WebShellHandler struct {
 	client *http.Client
 	db     *database.DB
 	audit  *audit.Service
+	// allowPrivateTarget 为 true 时允许对私有/保留网段建 WebShell 连接（本地授权内网渗透场景）。
+	// 默认 false：所有出口在发请求前拦截私有 IP，防 SSRF 打内网。
+	allowPrivateTarget bool
 }
 
 // SetAudit wires platform audit logging.
@@ -334,8 +337,9 @@ func (h *WebShellHandler) SetAudit(s *audit.Service) {
 	h.audit = s
 }
 
-// NewWebShellHandler 创建 WebShell 处理器，db 可为 nil（连接配置接口将不可用）
-func NewWebShellHandler(logger *zap.Logger, db *database.DB) *WebShellHandler {
+// NewWebShellHandler 创建 WebShell 处理器，db 可为 nil（连接配置接口将不可用）。
+// allowPrivateTarget 来自 security.webshell_allow_private_ip 配置。
+func NewWebShellHandler(logger *zap.Logger, db *database.DB, allowPrivateTarget bool) *WebShellHandler {
 	return &WebShellHandler{
 		logger: logger,
 		client: &http.Client{
@@ -346,8 +350,24 @@ func NewWebShellHandler(logger *zap.Logger, db *database.DB) *WebShellHandler {
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // intentional for webshell proxy
 			},
 		},
-		db: db,
+		db:                 db,
+		allowPrivateTarget: allowPrivateTarget,
 	}
+}
+
+// guardWebshellTarget 校验目标 URL 是否允许发起 WebShell 连接（SSRF 防护）。
+// 返回 false 时已向客户端写入错误响应。
+func (h *WebShellHandler) guardWebshellTarget(c *gin.Context, rawURL string) bool {
+	if h.allowPrivateTarget {
+		return true
+	}
+	if private, why := security.IsPrivateOrReservedURL(rawURL); private {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "目标地址为私有/保留网段（" + why + "），已拦截（防 SSRF）。授权内网场景请在 security.webshell_allow_private_ip 开启",
+		})
+		return false
+	}
+	return true
 }
 
 // CreateConnectionRequest 创建连接请求
@@ -385,7 +405,7 @@ func (h *WebShellHandler) ListConnections(c *gin.Context) {
 	session, _ := security.CurrentSession(c)
 	list, err := h.db.ListWebshellConnectionsForAccess(session.UserID, session.Scope, c.Query("project_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:388 ListConnections", err)
 		return
 	}
 	if list == nil {
@@ -412,6 +432,9 @@ func (h *WebShellHandler) CreateConnection(c *gin.Context) {
 	}
 	if _, err := url.Parse(req.URL); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url"})
+		return
+	}
+	if !h.guardWebshellTarget(c, req.URL) {
 		return
 	}
 	projectID := strings.TrimSpace(req.ProjectID)
@@ -441,7 +464,7 @@ func (h *WebShellHandler) CreateConnection(c *gin.Context) {
 		CreatedAt: time.Now(),
 	}
 	if err := h.db.CreateWebshellConnection(conn); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:444 CreateConnection", err)
 		return
 	}
 	if session, ok := security.CurrentSession(c); ok {
@@ -485,6 +508,9 @@ func (h *WebShellHandler) UpdateConnection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url"})
 		return
 	}
+	if !h.guardWebshellTarget(c, req.URL) {
+		return
+	}
 	projectID := strings.TrimSpace(req.ProjectID)
 	if !h.canAccessProject(c, projectID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "project access denied"})
@@ -515,7 +541,7 @@ func (h *WebShellHandler) UpdateConnection(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "connection not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:518 UpdateConnection", err)
 		return
 	}
 	updated, _ := h.db.GetWebshellConnection(id)
@@ -542,7 +568,7 @@ func (h *WebShellHandler) DeleteConnection(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "connection not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:545 DeleteConnection", err)
 		return
 	}
 	if h.audit != nil {
@@ -564,7 +590,7 @@ func (h *WebShellHandler) GetConnectionState(c *gin.Context) {
 	}
 	conn, err := h.db.GetWebshellConnection(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:567 BatchDelete", err)
 		return
 	}
 	if conn == nil {
@@ -573,7 +599,7 @@ func (h *WebShellHandler) GetConnectionState(c *gin.Context) {
 	}
 	stateJSON, err := h.db.GetWebshellConnectionState(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:576 GetConnection", err)
 		return
 	}
 	var state interface{}
@@ -596,7 +622,7 @@ func (h *WebShellHandler) SaveConnectionState(c *gin.Context) {
 	}
 	conn, err := h.db.GetWebshellConnection(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:599 TestConnection", err)
 		return
 	}
 	if conn == nil {
@@ -624,7 +650,7 @@ func (h *WebShellHandler) SaveConnectionState(c *gin.Context) {
 		return
 	}
 	if err := h.db.UpsertWebshellConnectionState(id, string(raw)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "webshell.go:627 ListConnections2", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -757,6 +783,9 @@ func (h *WebShellHandler) Exec(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url: only http(s) allowed"})
 		return
 	}
+	if !h.guardWebshellTarget(c, req.URL) {
+		return
+	}
 
 	useGET := strings.ToUpper(strings.TrimSpace(req.Method)) == "GET"
 	cmdParam := strings.TrimSpace(req.CmdParam)
@@ -860,6 +889,9 @@ func (h *WebShellHandler) FileOp(c *gin.Context) {
 	parsed, err := url.Parse(req.URL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url: only http(s) allowed"})
+		return
+	}
+	if !h.guardWebshellTarget(c, req.URL) {
 		return
 	}
 
@@ -974,6 +1006,9 @@ func (h *WebShellHandler) ExecWithConnection(conn *database.WebShellConnection, 
 	if conn == nil {
 		return "", false, "connection is nil"
 	}
+	if private, why := security.IsPrivateOrReservedURL(conn.URL); private && !h.allowPrivateTarget {
+		return "", false, "目标地址为私有/保留网段（" + why + "），已拦截（防 SSRF）"
+	}
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return "", false, "command is required"
@@ -1013,6 +1048,9 @@ func (h *WebShellHandler) ExecWithConnection(conn *database.WebShellConnection, 
 func (h *WebShellHandler) FileOpWithConnection(conn *database.WebShellConnection, action, path, content, targetPath string) (output string, ok bool, errMsg string) {
 	if conn == nil {
 		return "", false, "connection is nil"
+	}
+	if private, why := security.IsPrivateOrReservedURL(conn.URL); private && !h.allowPrivateTarget {
+		return "", false, "目标地址为私有/保留网段（" + why + "），已拦截（防 SSRF）"
 	}
 	action = strings.ToLower(strings.TrimSpace(action))
 	// MCP 入口仅开放 list / read / write 三种动作，与工具文档的承诺保持一致

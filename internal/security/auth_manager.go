@@ -35,23 +35,36 @@ type AuthManager struct {
 	sessionDuration time.Duration
 	db              *database.DB
 
-	mu       sync.RWMutex
-	sessions map[string]Session
+	mu          sync.RWMutex
+	sessions    map[string]Session
+	maxSessions int // 会话数上限，超限时驱逐最早过期会话，防内存耗尽
 
 	// localMode 为 true 时，所有请求以内置 admin 全权限身份执行，免登录免 RBAC。
 	// 仅供桌面版/本地单机部署使用，暴露到公网前必须关闭。
 	localMode bool
 }
 
+// defaultMaxSessions 默认会话数上限。
+const defaultMaxSessions = 1000
+
 // NewAuthManager creates a new AuthManager instance.
 func NewAuthManager(sessionDurationHours int) *AuthManager {
+	return NewAuthManagerWithLimit(sessionDurationHours, defaultMaxSessions)
+}
+
+// NewAuthManagerWithLimit creates an AuthManager with an explicit session cap.
+func NewAuthManagerWithLimit(sessionDurationHours, maxSessions int) *AuthManager {
 	if sessionDurationHours <= 0 {
 		sessionDurationHours = 12
+	}
+	if maxSessions <= 0 {
+		maxSessions = defaultMaxSessions
 	}
 
 	return &AuthManager{
 		sessionDuration: time.Duration(sessionDurationHours) * time.Hour,
 		sessions:        make(map[string]Session),
+		maxSessions:     maxSessions,
 	}
 }
 
@@ -134,9 +147,43 @@ func (a *AuthManager) Authenticate(username, password string) (string, time.Time
 		return "", time.Time{}, err
 	}
 	a.mu.Lock()
+	a.evictSessionLocked()
 	a.sessions[session.Token] = session
 	a.mu.Unlock()
 	return session.Token, session.ExpiresAt, nil
+}
+
+// evictSessionLocked 在会话数达到上限时驱逐一条会话，为新会话腾位。
+// 调用方必须已持有 a.mu 写锁。策略：先清已过期会话；没有过期会话时
+// 驱逐 ExpiresAt 最早（最先到期）的一条。每次最多驱逐一条，保证 map 长度不超过 maxSessions。
+func (a *AuthManager) evictSessionLocked() {
+	if len(a.sessions) < a.maxSessions {
+		return
+	}
+	now := time.Now()
+	// 第一遍：清理全部已过期会话
+	evicted := false
+	for token, session := range a.sessions {
+		if now.After(session.ExpiresAt) {
+			delete(a.sessions, token)
+			evicted = true
+		}
+	}
+	if evicted || len(a.sessions) < a.maxSessions {
+		return
+	}
+	// 第二遍：没有过期会话，驱逐最早到期的
+	var earliestToken string
+	var earliest time.Time
+	for token, session := range a.sessions {
+		if earliestToken == "" || session.ExpiresAt.Before(earliest) {
+			earliestToken = token
+			earliest = session.ExpiresAt
+		}
+	}
+	if earliestToken != "" {
+		delete(a.sessions, earliestToken)
+	}
 }
 
 func (a *AuthManager) authenticateSession(username, password string) (Session, error) {

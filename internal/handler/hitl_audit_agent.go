@@ -330,7 +330,7 @@ func (h *AgentHandler) UpdateHITLAuditStrategy(c *gin.Context) {
 	reviewEditPrompt := strings.TrimSpace(req.AuditAgentPromptReviewEdit)
 	if err := h.hitlStrategySaver.UpdateHitlAuditAgentStrategy(approvalPrompt, reviewEditPrompt); err != nil {
 		h.logger.Warn("保存审计 Agent 提示词失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "hitl_audit_agent.go:333 UpdateAuditStrategy", err)
 		return
 	}
 	if h.audit != nil {

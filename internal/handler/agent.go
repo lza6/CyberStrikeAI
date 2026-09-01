@@ -1676,7 +1676,7 @@ func (h *AgentHandler) CancelAgentLoop(c *gin.Context) {
 		ok, err := h.tasks.CancelTask(req.ConversationID, multiagent.ErrInterruptContinue)
 		if err != nil {
 			h.logger.Error("中断并继续（无工具）失败", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "agent.go:1679 CancelTask(interrupt-continue)", err)
 			return
 		}
 		if !ok {
@@ -1705,7 +1705,7 @@ func (h *AgentHandler) CancelAgentLoop(c *gin.Context) {
 	ok, err := h.tasks.CancelTask(req.ConversationID, cause)
 	if err != nil {
 		h.logger.Error("取消任务失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "agent.go:1708 CancelTask", err)
 		return
 	}
 
@@ -2023,7 +2023,7 @@ func (h *AgentHandler) ListBatchQueues(c *gin.Context) {
 	queues, total, err := h.batchTaskManager.ListQueuesForAccess(limit, offset, status, keyword, session.UserID, session.Scope)
 	if err != nil {
 		h.logger.Error("获取批量任务队列列表失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "agent.go:2026 ListBatchQueues", err)
 		return
 	}
 
@@ -2211,7 +2211,7 @@ func (h *AgentHandler) DeleteBatchQueue(c *gin.Context) {
 		case errors.Is(err, ErrBatchQueueStillRunning):
 			c.JSON(http.StatusConflict, gin.H{"error": "队列正在运行中，无法删除"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "agent.go:2214 DeleteBatchQueue", err)
 		}
 		return
 	}

@@ -68,7 +68,7 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	created, err := h.db.CreateProject(p)
 	if err != nil {
 		h.logger.Error("创建项目失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:71 Create", err)
 		return
 	}
 	if session, ok := security.CurrentSession(c); ok {
@@ -91,7 +91,7 @@ func (h *ProjectHandler) GetDashboardSummary(c *gin.Context) {
 	summary, err := h.db.GetProjectDashboardSummaryForAccess(limit, session.UserID, session.Scope)
 	if err != nil {
 		h.logger.Error("获取项目仪表盘摘要失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:94 List", err)
 		return
 	}
 	if summary.RecentFacts == nil {
@@ -115,7 +115,7 @@ func (h *ProjectHandler) ListProjects(c *gin.Context) {
 	session, _ := security.CurrentSession(c)
 	list, err := h.db.ListProjectsForAccess(status, search, limit, offset, session.UserID, session.Scope)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:118 Get", err)
 		return
 	}
 	if list == nil {
@@ -123,7 +123,7 @@ func (h *ProjectHandler) ListProjects(c *gin.Context) {
 	}
 	total, err := h.db.CountProjectsForAccess(status, search, session.UserID, session.Scope)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:126 Update", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -142,7 +142,7 @@ func (h *ProjectHandler) GetProjectStats(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "项目不存在"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:145 Delete", err)
 		return
 	}
 	c.JSON(http.StatusOK, stats)
@@ -159,7 +159,7 @@ func (h *ProjectHandler) ListProjectConversations(c *gin.Context) {
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	list, err := h.db.ListConversationsByProjectID(projectID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:162 Stats", err)
 		return
 	}
 	if list == nil {
@@ -217,7 +217,7 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		p.Pinned = *req.Pinned
 	}
 	if err := h.db.UpdateProject(p); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:220 ListAssets", err)
 		return
 	}
 	c.JSON(http.StatusOK, p)
@@ -226,7 +226,7 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 // DeleteProject DELETE /api/projects/:id
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	if err := h.db.DeleteProject(c.Param("id")); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:229 BindAsset", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -356,7 +356,7 @@ func (h *ProjectHandler) ListFacts(c *gin.Context) {
 	}
 	list, err := h.db.ListProjectFacts(projectID, filter, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:359 Context", err)
 		return
 	}
 	if list == nil {
@@ -378,7 +378,7 @@ func (h *ProjectHandler) ListFacts(c *gin.Context) {
 	}
 	counts, err := project.LoadProjectFactLinkCounts(h.db, projectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:381 Resolve", err)
 		return
 	}
 	out := make([]factWithLinksResponse, 0, len(list))
@@ -407,7 +407,7 @@ func (h *ProjectHandler) GetFactGraph(c *gin.Context) {
 	}
 	graph, err := project.BuildProjectFactGraph(h.db, projectID, view, excludeDeprecated)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:410 Overview", err)
 		return
 	}
 	if graph.Nodes == nil {
@@ -497,7 +497,7 @@ func (h *ProjectHandler) UpdateFact(c *gin.Context) {
 	}
 	if oldFactKey != updated.FactKey {
 		if err := h.db.RenameProjectFactKeyEdges(projectID, oldFactKey, updated.FactKey); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, h.logger, "project.go:500 MemberAdd", err)
 			return
 		}
 	}
@@ -528,7 +528,7 @@ func (h *ProjectHandler) DeleteFact(c *gin.Context) {
 		return
 	}
 	if err := h.db.DeleteProjectFact(existing.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:531 MemberRemove", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -583,7 +583,7 @@ func (h *ProjectHandler) ListFactEdges(c *gin.Context) {
 	projectID := c.Param("id")
 	edges, err := h.db.ListProjectFactEdgesByProject(projectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:586 ListMembers", err)
 		return
 	}
 	if edges == nil {
@@ -627,7 +627,7 @@ func (h *ProjectHandler) DeleteFactEdge(c *gin.Context) {
 		return
 	}
 	if err := h.db.DeleteProjectFactEdge(edgeID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "project.go:630 TransferOwner", err)
 		return
 	}
 	if f, err := h.db.GetProjectFactByKey(projectID, edge.TargetFactKey); err == nil {

@@ -356,6 +356,10 @@ security:
   #   short - 优先使用 short_description（简短描述，省 token），为空时用 description
   #   full  - 使用 description（详细描述）
   tool_description_mode: full
+  # 是否允许 WebShell 连接私有/保留网段地址（10/8、172.16/12、192.168/16、127/8、169.254/16、
+  # fc00::/7、fe80::/10 等）。默认 false：所有 WebShell 出口（HTTP exec/file 与 MCP 入口）都会
+  # 拦截私有 IP，防止 SSRF 攻击内网。本地授权内网渗透场景可显式开启为 true。
+  webshell_allow_private_ip: false
 # ============================================
 # MCP 相关配置
 # ============================================

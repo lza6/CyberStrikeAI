@@ -6333,7 +6333,7 @@ func (h *OpenAPIHandler) GetConversationResults(c *gin.Context) {
 	messages, err := h.db.GetMessages(conversationID)
 	if err != nil {
 		h.logger.Error("获取消息失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "openapi.go:6336 OpenAPI-endpoint", err)
 		return
 	}
 

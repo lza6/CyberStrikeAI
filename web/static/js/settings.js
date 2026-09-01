@@ -767,6 +767,8 @@ async function loadConfig(loadTools = true, options = {}) {
 
         fillVisionConfigFromCurrent(currentConfig.vision || {});
         initModelListControls();
+        renderAIChannelActiveBadge();
+        refreshVersionBadge();
 
         // 填充FOFA配置
         const fofa = currentConfig.fofa || {};
@@ -2957,7 +2959,82 @@ async function refreshAIChannelsFromServer(preferredId, preferredPayload) {
     if (typeof populateChatAIChannelSelect === 'function') {
         populateChatAIChannelSelect(currentConfig.ai);
     }
+    renderAIChannelActiveBadge();
     return true;
+}
+
+// AI_PROVIDER_PRESETS 常用提供商默认 Base URL 模板；选中 preset 时自动填入（可手动修改）。
+const AI_PROVIDER_PRESETS = {
+    openai_compatible: 'https://api.openai.com/v1',
+    claude: 'https://api.anthropic.com',
+    deepseek: 'https://api.deepseek.com/v1',
+    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    glm: 'https://open.bigmodel.cn/api/paas/v4',
+    ollama: 'http://127.0.0.1:11434/v1'
+};
+
+// onAIChannelProviderPresetChange provider 切换时自动填入默认 Base URL（仅当当前 Base URL 为空或等于其它 preset 时覆盖，避免抹掉用户自定义地址）。
+function onAIChannelProviderPresetChange() {
+    const providerEl = document.getElementById('openai-provider');
+    if (!providerEl) return;
+    const provider = (providerEl.value || '').trim();
+    const baseEl = document.getElementById('openai-base-url');
+    if (!baseEl) return;
+    const current = (baseEl.value || '').trim();
+    const preset = AI_PROVIDER_PRESETS[provider];
+    if (!preset) return;
+    // 空值或当前值命中任一 preset（用户在切换预设）才自动覆盖
+    const isPresetValue = Object.values(AI_PROVIDER_PRESETS).some((v) => v === current);
+    if (!current || isPresetValue) {
+        baseEl.value = preset;
+    }
+    if (typeof syncModelListFetchButtons === 'function') {
+        syncModelListFetchButtons();
+    }
+}
+
+// renderAIChannelActiveBadge 顶部显示当前默认通道生效信息（名称 + provider + model）。
+function renderAIChannelActiveBadge() {
+    const badge = document.getElementById('ai-channel-active-badge');
+    if (!badge) return;
+    const ai = currentConfig && currentConfig.ai ? currentConfig.ai : null;
+    if (!ai || !ai.channels) {
+        badge.textContent = settingsT('settingsBasic.aiChannelActiveLoading', '加载中...');
+        return;
+    }
+    const id = ai.default_channel;
+    const ch = ai.channels[id] || {};
+    const name = (ch.name || id || '-').trim();
+    const provider = (ch.provider || 'openai').trim();
+    const model = (ch.model || '-').trim();
+    const text = settingsT('settingsBasic.aiChannelActiveText', '{name} · {provider} · {model}')
+        .replace('{name}', name)
+        .replace('{provider}', provider)
+        .replace('{model}', model);
+    badge.textContent = text;
+    badge.title = text;
+}
+
+// refreshVersionBadge 读取页头 version-badge 或 /api/config 的 version 回填版本与更新区块徽章。
+async function refreshVersionBadge() {
+    const badge = document.getElementById('version-update-current-badge');
+    if (!badge) return;
+    // 页头已有渲染好的版本号，优先复用
+    const headerBadge = document.querySelector('.version-badge');
+    let version = headerBadge ? (headerBadge.textContent || '').trim() : '';
+    if (!version && currentConfig && currentConfig.version) {
+        version = currentConfig.version;
+    }
+    if (!version) {
+        try {
+            const response = await apiFetch('/api/config');
+            if (response.ok) {
+                const cfg = await response.json();
+                version = cfg && cfg.version ? cfg.version : '';
+            }
+        } catch (e) { /* ignore */ }
+    }
+    badge.textContent = settingsT('versionUpdate.currentLabel', '当前版本') + ': ' + (version || '-');
 }
 
 async function persistAIChannelsToServer(successMessage, options = {}) {

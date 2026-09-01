@@ -1174,7 +1174,7 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 	// 保存配置到文件
 	if err := h.saveConfig(); err != nil {
 		h.logger.Error("保存配置失败", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败: " + err.Error()})
+		internalError(c, h.logger, "config.go:1177 SaveConfig", err)
 		return
 	}
 
@@ -1503,7 +1503,7 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 			if h.audit != nil {
 				h.audit.RecordFail(c, "config", "apply", "应用配置失败：初始化知识库", map[string]interface{}{"error": err.Error()})
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "初始化知识库失败: " + err.Error()})
+			internalError(c, h.logger, "config.go:1506 InitKnowledgeBase", err)
 			return
 		}
 		h.logger.Debug("知识库动态初始化完成，工具已注册")
@@ -1540,7 +1540,7 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 			if h.audit != nil {
 				h.audit.RecordFail(c, "config", "apply", "应用配置失败：重新初始化知识库", map[string]interface{}{"error": err.Error()})
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "重新初始化知识库失败: " + err.Error()})
+			internalError(c, h.logger, "config.go:1543 ReinitKnowledgeBase", err)
 			return
 		}
 		h.logger.Info("知识库组件重新初始化完成")
@@ -1556,7 +1556,7 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 			if h.audit != nil {
 				h.audit.RecordFail(c, "config", "apply", "应用配置失败：C2", map[string]interface{}{"error": err.Error()})
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "C2 启动失败: " + err.Error()})
+			internalError(c, h.logger, "config.go:1559 StartC2", err)
 			return
 		}
 	}
@@ -1582,7 +1582,7 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 		if h.audit != nil {
 			h.audit.RecordFail(c, "config", "apply", "应用配置失败：重新加载工具", map[string]interface{}{"error": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "重新加载工具配置失败: " + err.Error()})
+		internalError(c, h.logger, "config.go:1585 ReloadTools", err)
 		return
 	}
 	h.logger.Debug("已从 tools 目录重新加载工具配置", zap.Int("tools_count", len(h.config.Security.Tools)))
