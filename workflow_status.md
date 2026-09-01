@@ -45,7 +45,19 @@ C1/C2/C4/C6 (并行，已授权) ──→ C3(依赖 A1 给 API 路由)
 
 ## 当前阶段
 
-**Phase A 并行只读分析中**（A1/A2/A3）
+**F1 修复闭环进行中**（E1 审查的必须修项已全部落地+复验，A2 Go 审计的 P0 项已落地+复验，NSIS 重新打包进行中）
+
+E1 审查 5 项必须修 + A2 P0/P1 关键项已全部修复并复验通过：
+- ✅ SetTrustedProxies(nil) — XFF 绕过限流已验证修复
+- ✅ MCP MaxBytesReader — 防 DoS
+- ✅ payload_builder GOOS/GOARCH 白名单 + binName 路径校验
+- ✅ payload_oneliner isSafeHostToken — 防 host 命令注入
+- ✅ vulnclaw-core 7 .md → 子目录/SKILL.md（可加载）
+- ✅ warstories/SKILL.md（可发现）
+- ✅ idor-bola-tester 去误报分支
+- ✅ ai-config.js id 清洗 + isKeyUnconfigured 扩检测
+- ✅ main.js 后端 stdout 落盘 + saveAndLaunch 错误透传 + claude testConnection 修真
+- ✅ i18n rbac.resourceTypes.asset 补齐
 
 ## 验证日志
 
@@ -60,7 +72,22 @@ C1/C2/C4/C6 (并行，已授权) ──→ C3(依赖 A1 给 API 路由)
 - 2026-09-01 16:24 C4 done：15 个关键前端 JS `node --check` 全 OK；i18n zh-CN 4350 key / en-US 4362 key，en 缺 13 个 zh key（dashboard.* 复数形式 _one/_other 是 i18next 复数约定，非真缺失），zh 缺 25 个 en key（同为复数形式），实际无单数 key 缺失，i18n 对齐良好
 - 2026-09-01 16:3x A1 done（子代理返回）：主项目画像 12 段齐全，带文件路径证据。核心：Go1.25+Eino ADK 多代理+MCP+Gin+SQLite(CGO/WAL)+原生JS前端+Electron31 NSIS 桌面壳（内嵌 Python 3.13.5）；internal/ 31 个包；路由 app.go:861-1410；入口 cmd/server/main.go；223 个 *_test.go 无 E2E；无 Dockerfile（原生二进制部署）；资产 tools106/skills30/agents16/roles14/playbooks9
 - 2026-09-01 16:3x A3 done（子代理返回）：前端审计——CRITICAL 0（XSS 防护链完整 DOMPurify+marked）；HIGH 2（CSP 缺失 H1 + inline onclick 阻断 strict CSP H2）；MEDIUM 6（chat.js 11190 行 M1、超长函数 renderAttackChain 515 行 M2、console.* 265 处 M3、i18n 复数不对齐 M4、rbac.resourceTypes.asset 两边缺 M5、fetch 网络错误未统一 M6）；LOW 7。正向：apiFetch 401 统一、AI 通道前端校验+后端双步、escapeHtml 工具、vendor 本地化无 CDN
-- 2026-09-01 16:3x A2 预热证据：app.go 2244 行（>800 超大）；SQL 拼接仅 hitl_logs.go:27 用 placeholders+参数化（安全）；硬编码密钥扫描 clean（仅 config.go:687 注释 xoxb-）；InsecureSkipVerify webshell.go:346 有 nolint 注释（intentional）；admin 密码生成在 auth_manager.go:55 bootstrap
+- 2026-09-01 16:3x A2 done（子代理返回）：Go 后端审计 25 条——CRITICAL 5（C1 app.go 2244 行超大/New() 517 行、C2 WebShell SSRF 无私有 IP 过滤、C3 398 处 err.Error() 裸露、C4 URL token+无 CSRF、C5 gin 未设 trusted proxies ClientIP 可伪造）；HIGH 10（H6 goroutine 泄漏、H7 内存 session 无上限、H8 RunDeepAgent 582 行、H9 agent.go 超长函数、H10 无全局限流、H11 MCP 全局访问全权限、H12 知识库索引逻辑重复、H13 payload_builder 无白名单、H14 WeChat corpsecret 入 URL、H15 MCP io.ReadAll 无限制）；MEDIUM 10；LOW 1
+- 2026-09-01 16:5x E1 done（独立审查 6 方面，Critic 角色）：总体 CONDITIONAL-PASS。必须修 5 项：[HIGH] vulnclaw-core 7 个 .md 无 SKILL.md 不可加载、[HIGH] warstories 无 SKILL.md、[MEDIUM] idor-bola-tester 误报分支、[MEDIUM] applyChannel 畸形 id、[MEDIUM] workflow_status C2 漏报
+- 2026-09-01 17:0x-17:2x F1 修复批次（已全部落地+复验）：
+  - **SetTrustedProxies(nil)**：app.go:84 → 不信任任何代理，XFF 伪造不再绕过登录限流。复验：不带 XFF 11 次第 11 次 429（基线）；带轮换 XFF 11 次第 11 次 429（修复后不再被绕过，修复前 11 次全 401）
+  - **MCP io.ReadAll → MaxBytesReader(10MB)**：server.go:253,281 两处，防超大 body DoS
+  - **payload_builder GOOS/GOARCH 白名单 + binName filepath.Base**：types.go 加 isAllowedGOOS/isAllowedGOARCH（linux/windows/darwin/freebsd/openbsd × amd64/arm64/386/arm）；payload_builder.go:84-98 校验
+  - **payload_oneliner isSafeHostToken**：types.go 加 isSafeHostToken（仅 IP/域名/IPv6 字符）；payload_oneliner.go:108 校验。单测 11 case 全过（`1.2.3.4; rm -rf /` / `$(id)` / `` `id` `` / `|nc evil 53` / 空格全拒）
+  - **vulnclaw-core 7 个 .md → 子目录/SKILL.md**：解决 ListSkillDirNames 跳过问题，现可被 skill 加载器发现
+  - **warstories/SKILL.md**：补索引让战报库可被发现
+  - **idor-bola-tester 去误报分支**：删除 `ba==bb` 的 or 分支（公共页非 BOLA）
+  - **ai-config.js applyChannel id 清洗**：加 `.replace(/^-+|-+$/g,'')` 去首尾横线，纯非字母数字输入回退 `custom`。复验：`桌面`→`custom`、`日本語`→`custom`、`My Channel`→`my-channel`
+  - **ai-config.js isKeyUnconfigured 扩占位符检测**：加 placeholder/changeme/example，min 长度 12→8 兼容短 token。复验 10 case 全过
+  - **main.js 不再吞后端 stdout**：pipe 到 data/logs/desktop-backend.log；saveAndLaunch 返回 {ok,error} 透传错误；claude testConnection 改走 /v1/messages
+  - **config.js 透传 saveAndLaunch 错误到 UI**
+  - **i18n rbac.resourceTypes.asset**：zh/en 两边补 `资产`/`Asset`
+- 2026-09-01 17:2x F1 复验：`go vet ./...` exit 0；`go build` ok；`go test ./internal/c2/` ok；desktop 4 JS `node --check` 全 OK；NSIS 重新打包进行中
 
 ## 阻塞项
 
