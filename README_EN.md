@@ -196,7 +196,7 @@ See [tools/README_EN.md](tools/README_EN.md) for tool definitions, customization
 
 **One-Command Deployment:**
 ```bash
-git clone https://github.com/Ed1s0nZ/CyberStrikeAI.git
+git clone https://github.com/lza6/CyberStrikeAI.git
 cd CyberStrikeAI
 chmod +x run.sh && ./run.sh
 ```
@@ -377,15 +377,6 @@ CyberStrikeAI has joined [404Starlink](https://github.com/knownsec/404StarLink)
 <summary><strong>WeChat group</strong></summary>
 
 <img src="./images/wechat-group-cyberstrikeai-qr.jpg" alt="CyberStrikeAI WeChat group QR code" width="280">
-
-</details>
-
-<details>
-<summary><strong>Sponsorship via WeChat Pay or Alipay</strong></summary>
-
-<div align="center">
-  <img src="./images/sponsor-wechat-alipay-qr.jpg" alt="WeChat Pay and Alipay sponsorship QR codes" width="480">
-</div>
 
 </details>
 

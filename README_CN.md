@@ -195,7 +195,7 @@ CyberStrikeAI 将规划、执行、人工监督、证据与复盘连接在同一
 
 **一条命令部署：**
 ```bash
-git clone https://github.com/Ed1s0nZ/CyberStrikeAI.git
+git clone https://github.com/lza6/CyberStrikeAI.git
 cd CyberStrikeAI
 chmod +x run.sh && ./run.sh
 ```
@@ -373,15 +373,6 @@ CyberStrikeAI 现已加入 [404星链计划](https://github.com/knownsec/404Star
 <summary><strong>微信群</strong></summary>
 
 <img src="./images/wechat-group-cyberstrikeai-qr.jpg" alt="CyberStrikeAI 微信群二维码" width="280">
-
-</details>
-
-<details>
-<summary><strong>通过微信支付或支付宝赞助</strong></summary>
-
-<div align="center">
-  <img src="./images/sponsor-wechat-alipay-qr.jpg" alt="微信与支付宝赞助二维码" width="480">
-</div>
 
 </details>
 
