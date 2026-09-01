@@ -1,0 +1,34 @@
+name: "aireplay-ng"
+command: "aireplay-ng"
+args: []
+enabled: true
+short_description: "无线注入：去认证/伪造握手，触发 WPA 握手重抓；需 root + monitor+injection 网卡"
+description: |
+  802.11 帧注入工具，用于主动触发 WPA 四路握手（去认证已连接客户端使其重连）
+  或伪造 ARP 注入（WEP 场景加速 IV 生成）。
+
+  **前置依赖：** 支持 injection 的 monitor 网卡，root 权限。
+  **授权要求：** 去认证是破坏性操作，仅限授权无线测试。
+
+  **常用参数：**
+  - `interface`：monitor+injection 网卡（必填）
+  - `bssid`：`-a` 目标 AP BSSID
+  - `client_mac`：`-c` 目标客户端 MAC（去认证特定客户端）
+  - `deauth_count`：`-0 <n>` 去认证次数（如 5）
+
+  **注意：** 部分国家/地区主动去认证可能违反电信法规，使用前确认合规。
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "monitor+injection 网卡名"
+    required: true
+  - name: "bssid"
+    type: "string"
+    description: "目标 AP BSSID（-a）"
+  - name: "client_mac"
+    type: "string"
+    description: "目标客户端 MAC（-c）"
+  - name: "deauth_count"
+    type: "integer"
+    description: "去认证次数（-0）"
+arg_mapping: "auto"

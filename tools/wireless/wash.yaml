@@ -1,0 +1,25 @@
+name: "wash"
+command: "wash"
+args: []
+enabled: true
+short_description: "WPS 探测：扫描开启 WPS 的 AP 及其锁定状态"
+description: |
+  被动扫描 802.11 AP 是否开启 WPS（Wi-Fi Protected Setup）及其锁定状态，
+  为 reaver 暴力 PIN 破解做侦察。
+
+  **授权要求：** 仅限授权无线测试。
+
+  **常用参数：**
+  - `interface`：monitor 网卡（必填）
+  - `channel`：锁定信道
+
+  **链路：** wash 探测 → reaver -b <BSSID> 暴力 PIN
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "monitor 网卡名"
+    required: true
+  - name: "channel"
+    type: "integer"
+    description: "锁定信道（-c）"
+arg_mapping: "auto"

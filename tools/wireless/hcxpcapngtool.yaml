@@ -1,0 +1,26 @@
+name: "hcxpcapngtool"
+command: "hcxpcapngtool"
+args: []
+enabled: true
+short_description: "抓包→hash 转换（PMKID/握手包→hashcat 22000 格式）"
+description: |
+  把 hcxdumptool/airodump-ng 抓的 .pcap/.cap 转换为 hashcat 可破解的 hash 格式
+  （mode 22000：WPA-PBKDF2-PMKID+EAPOL）。
+
+  **链路：** hcxdumptool 抓包 → hcxpcapngtool 转换 → hashcat -m 22000 破解。
+  **授权要求：** 仅限授权无线测试。
+
+  **常用参数：**
+  - `pcap_file`：抓包文件（必填）
+  - `output_hash`：输出 hash 文件路径（-o）
+
+  **无网络依赖：** 纯离线转换。
+parameters:
+  - name: "pcap_file"
+    type: "string"
+    description: "抓包文件路径"
+    required: true
+  - name: "output_hash"
+    type: "string"
+    description: "输出 hash 文件路径（-o）"
+arg_mapping: "auto"

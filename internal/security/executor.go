@@ -41,19 +41,26 @@ type Executor struct {
 	shellNoOutputTimeoutSec int // execute/exec 无新输出空闲秒数；0=默认 300；-1=关闭（见 SetShellNoOutputTimeoutSeconds）
 	toolOutputMaxBytes      int
 	spillRootDir            string
+	shellSafeEnabled        bool // shellsafe 元字符拒绝开关（默认 true）；详见 ShellSafeParse
 }
 
 // NewExecutor 创建新的执行器
 func NewExecutor(cfg *config.SecurityConfig, mcpServer *mcp.Server, logger *zap.Logger) *Executor {
 	executor := &Executor{
-		config:    cfg,
-		toolIndex: make(map[string]*config.ToolConfig),
-		mcpServer: mcpServer,
-		logger:    logger,
+		config:           cfg,
+		toolIndex:        make(map[string]*config.ToolConfig),
+		mcpServer:        mcpServer,
+		logger:           logger,
+		shellSafeEnabled: true, // shellsafe 默认开启；可经 SetShellSafeEnabled(false) 关停
 	}
 	// 构建工具索引
 	executor.buildToolIndex()
 	return executor
+}
+
+// SetShellSafeEnabled 启用或关闭 shellsafe 命令元字符拒绝。运行态热可调。
+func (e *Executor) SetShellSafeEnabled(enabled bool) {
+	e.shellSafeEnabled = enabled
 }
 
 // SetShellNoOutputTimeoutSeconds 配置 exec 工具无输出空闲终止（与 agent.shell_no_output_timeout_seconds 一致）。
@@ -813,6 +820,16 @@ func (e *Executor) executeSystemCommand(ctx context.Context, args map[string]int
 	workDir := ""
 	if wd, ok := args["workdir"].(string); ok && wd != "" {
 		workDir = wd
+	}
+
+	// shellsafe 纵深防御：拒绝引号外的 shell 元字符（| > < & ; ` $( 换行）。
+	// 确实需要这些字符的调用方必须用 `sh -c "..."` 作为单引号参数显式包裹。
+	// 可经 security.shell_safe_enabled 关停（默认 true）。
+	if e.shellSafeEnabled {
+		if _, err := ShellSafeParse(command); err != nil {
+			e.logger.Warn("shellsafe 拒绝命令", zap.String("command", command), zap.Error(err))
+			return nil, fmt.Errorf("命令被 shellsafe 拒绝: %w", err)
+		}
 	}
 
 	// 检测是否为后台命令（包含 & 符号，但不在引号内）

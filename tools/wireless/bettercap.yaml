@@ -1,0 +1,29 @@
+name: "bettercap"
+command: "bettercap"
+args: ["-eval", "net.probe on; ticker on"]
+enabled: true
+short_description: "中间人/SNIFF/ARP 欺骗/无线探测多合一；需 root"
+description: |
+  Go 编写的综合网络攻击工具，支持 ARP/DNS/UDP 欺骗、凭证嗅探（HTTP/HTTPS/自定义）、
+  无线探测、主机发现、端口扫描、CAPITAL portal 等。
+
+  **前置依赖：** root 权限（raw socket）。
+  **授权要求：** 欺骗/嗅探属破坏性操作，仅限授权网络测试环境。
+
+  **常用参数：**
+  - `interface`：`-iface` 网卡
+  - `eval_commands`：`-eval` 启动即执行的命令（如 `net.probe on; net.show`）
+  - `caplet`：`-caplet` 加载 .cap 脚本文件（复杂场景）
+
+  **交互模式：** 不传参数进交互式 REPL，可逐条输入命令查看模块状态。
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "网卡名（-iface）"
+  - name: "eval_commands"
+    type: "string"
+    description: "启动即执行的命令（-eval，分号分隔）"
+  - name: "caplet"
+    type: "string"
+    description: "加载 .cap 脚本文件（-caplet）"
+arg_mapping: "auto"

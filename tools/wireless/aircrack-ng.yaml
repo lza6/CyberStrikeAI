@@ -1,0 +1,29 @@
+name: "aircrack-ng"
+command: "aircrack-ng"
+args: []
+enabled: true
+short_description: "WPA/WEP 握手包离线破解（字典/暴力）；需抓包文件 + 字典"
+description: |
+  802.11 WPA/WPA2-PSK 与 WEP 离线密码破解。对 airodump-ng 抓到的
+  .cap 握手包用字典攻击恢复预共享密钥。
+
+  **授权要求：** 仅限授权无线安全评估。
+
+  **常用参数：**
+  - `capture_file`：抓包文件路径（必填）
+  - `wordlist`：字典文件路径（如 /usr/share/wordlists/rockyou.txt）
+  - `bssid`：`-b` 指定目标 BSSID（多 AP 抓包时筛选）
+
+  **性能提示：** 大字典耗时长，建议配合 hashcat 走 GPU 加速（见 hashcat 工具）。
+parameters:
+  - name: "capture_file"
+    type: "string"
+    description: "airodump-ng 抓包文件路径（.cap/.pcap）"
+    required: true
+  - name: "wordlist"
+    type: "string"
+    description: "字典文件路径"
+  - name: "bssid"
+    type: "string"
+    description: "目标 BSSID（-b 筛选）"
+arg_mapping: "auto"

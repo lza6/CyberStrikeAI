@@ -1,0 +1,35 @@
+name: "reaver"
+command: "reaver"
+args: []
+enabled: true
+short_description: "WPS PIN 暴力破解（Pixie-Dust/online）；需 root + monitor 网卡"
+description: |
+  针对 WPS（Wi-Fi Protected Setup）的暴力 PIN 破解，支持 Pixie-Dust 离线攻击
+  （部分 AP 固件漏洞，无需在线交互）和在线 PIN 暴力。
+
+  **前置依赖：** monitor 网卡 + root。
+  **授权要求：** 破坏性操作，仅限授权无线测试。锁定 AP 会触发 rate-limit。
+
+  **常用参数：**
+  - `interface`：monitor 网卡（必填）
+  - `bssid`：`-b` 目标 AP BSSID（必填）
+  - `pixie_dust`：`-K 1` Pixie-Dust 离线攻击
+  - `channel`：`-c` 信道
+
+  **注意：** 在线 PIN 暴力耗时长且易触发 AP 锁定，优先尝试 Pixie-Dust。
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "monitor 网卡名"
+    required: true
+  - name: "bssid"
+    type: "string"
+    description: "目标 AP BSSID（-b）"
+    required: true
+  - name: "pixie_dust"
+    type: "boolean"
+    description: "Pixie-Dust 离线攻击（-K 1）"
+  - name: "channel"
+    type: "integer"
+    description: "信道（-c）"
+arg_mapping: "auto"

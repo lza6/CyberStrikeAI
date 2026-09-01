@@ -49,6 +49,23 @@
 | H13 提交推送+发行版 | main 提交 + Release 更新 | 4 提交推送 origin(main)；Release v1.7.17 asset 165513295 state=uploaded | done |
 | H14 Critic 审查闭环 | R1/R2/R3 + S1/S3/S4 修复 | R1 SSRF重定向绕过→CheckRedirect 逐跳校验（回归 PASS）；R2 激活切面失效→prompts/ 前缀+E2E 实证（agent 回复 E2E-PROMPT-OK-12345）；R3 环境变量旁路→专用 ALLOW 变量；S1 fofa/wechat 9 处 502 脱敏；S3 限流移入 /api 组；S4 预发布版本比较+4 回归 case。提交 c63de9b 推送 main；最终安装包 165512972 uploaded | done |
 
+## I 批次（参考项目设计迁移落地，Spec: spec.md）
+
+用户裁决：授权实施全部剩余 P1/P2；Redis 可选引入；Python 作为工具进程可用；无线攻击模块集成；Electron 外壳增强；glm-5.2 本地代理可用于 LLM 验证。
+
+| 节点 | 内容 | 执行者 | 状态 |
+|------|------|--------|------|
+| I0 | spec.md 契约落盘（spec-driven workflow） | 主代理 | done |
+| I1 | shellsafe + HIGH_IMPACT + scope + TurnLimiter/tool_call_ids（确定性安全五闸） | i1-security | in_progress |
+| I2 | skills-lock.json + verbs-gate 漂移门（skill 供应链双闸） | i2-skills | in_progress |
+| I3 | Cache-Aside（memory 默认+Redis 可选）+ 8 无线攻击工具 yaml | i3-infra | in_progress |
+| I4 | Electron 托盘+启动画面+错误对话框+单实例锁 | i4-electron | in_progress |
+| I5 | ADR×6 + SOP + ONBOARDING + README 门面 | i5-docs | in_progress |
+| I6 | chat.js/settings.js 模块化拆分（前端可维护性） | 待派 | pending |
+| I7 | 全链路 E2E 复验 + 独立 Critic 审查 + 修复循环 | 主代理+独立子代理 | pending |
+| I8 | 提交推送 + NSIS 打包 + Release 更新 | 主代理 | pending |
+| I9 | 变更 HTML 报告（含测验）+ 记忆/规则沉淀（复用知识台账） | 主代理 | pending |
+
 ## 任务图（依赖）
 
 ```

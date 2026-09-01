@@ -1,0 +1,28 @@
+name: "kismet"
+command: "kismet"
+args: []
+enabled: true
+short_description: "无线 IDS/被动发现（802.11/BLE/SDR）；无注入，隐蔽性好"
+description: |
+  被动式无线发现与 IDS，不发送任何帧，仅监听。支持 802.11/BLE/Z-Wave/USB/SDR，
+  适合不允许主动注入的隐蔽侦察场景。
+
+  **授权要求：** 被动监听仍受无线电法规约束，确认合规。
+
+  **常用参数：**
+  - `interface`：监听网卡（如 wlan0）
+  - `source_name`：自定义数据源名
+  - `log_prefix`：日志文件前缀
+
+  **特性：** Web UI（默认 http://127.0.0.1:2501），REST API，可远程查看。
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "监听网卡名"
+  - name: "source_name"
+    type: "string"
+    description: "自定义数据源名"
+  - name: "log_prefix"
+    type: "string"
+    description: "日志文件前缀"
+arg_mapping: "auto"

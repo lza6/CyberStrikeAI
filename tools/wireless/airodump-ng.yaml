@@ -1,0 +1,35 @@
+name: "airodump-ng"
+command: "airodump-ng"
+# 默认参数需显式传入 interface（不给默认 wlan0mon 直接跑，防误触发）
+args: []
+enabled: true
+short_description: "无线网络扫描：发现 AP/客户端/抓握手包；需 root + monitor 网卡"
+description: |
+  802.11 无线网络发现与数据包捕获。扫描周围 AP 与已连接客户端，
+  可定位目标 ESSID/BSSID/信道/加密类型，并抓取 WPA 握手包用于离线破解。
+
+  **前置依赖：** monitor 模式网卡（如 wlan0mon），root 权限。
+  **授权要求：** 仅限授权无线安全评估目标环境使用。
+
+  **常用参数：**
+  - `interface`：monitor 网卡名（必填，如 wlan0mon）
+  - `channel`：`-c` 锁定信道
+  - `bssid`：`--bssid` 锁定目标 AP
+  - `write`：`-w` 抓包输出文件前缀（配合 aircrack-ng 离线破解）
+
+  **典型链路：** airodump-ng 抓包 → aireplay-ng 去认证触发握手 → aircrack-ng 破解
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "monitor 模式网卡名（如 wlan0mon）"
+    required: true
+  - name: "channel"
+    type: "integer"
+    description: "锁定信道（-c）"
+  - name: "bssid"
+    type: "string"
+    description: "锁定目标 AP BSSID（--bssid）"
+  - name: "write"
+    type: "string"
+    description: "抓包输出文件前缀（-w）"
+arg_mapping: "auto"

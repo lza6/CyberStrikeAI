@@ -46,6 +46,17 @@ type Config struct {
 	MultiAgent  MultiAgentConfig      `yaml:"multi_agent,omitempty" json:"multi_agent,omitempty"`
 	Project     ProjectConfig         `yaml:"project,omitempty" json:"project,omitempty"`
 	Vision      VisionConfig          `yaml:"vision,omitempty" json:"vision,omitempty"`
+	Cache       CacheConfig           `yaml:"cache,omitempty" json:"cache,omitempty"`
+}
+
+// CacheConfig 可选缓存层：memory（默认，进程内 TTL map）与 redis（可选）。
+// driver 省略或 memory 时零外部依赖；driver=redis 且连接失败自动降级 memory + Warn。
+type CacheConfig struct {
+	Driver            string `yaml:"driver,omitempty" json:"driver,omitempty"`                         // memory(默认) | redis
+	RedisAddr         string `yaml:"redis_addr,omitempty" json:"redis_addr,omitempty"`                 // 如 127.0.0.1:6379
+	RedisPassword    string `yaml:"redis_password,omitempty" json:"redis_password,omitempty"`
+	RedisDB          int    `yaml:"redis_db,omitempty" json:"redis_db,omitempty"`
+	DefaultTTLSeconds int    `yaml:"default_ttl_seconds,omitempty" json:"default_ttl_seconds,omitempty"` // 0=用包内默认
 }
 
 type EnsureLocalConfigResult struct {
@@ -1801,11 +1812,19 @@ func LoadToolsFromDir(dir string) ([]ToolConfig, error) {
 	}
 
 	for _, entry := range entries {
+		name := entry.Name()
 		if entry.IsDir() {
+			// 支持子目录分类（如 tools/wireless/）：递归加载子目录下的 yaml
+			subDir := filepath.Join(dir, name)
+			subTools, subErr := LoadToolsFromDir(subDir)
+			if subErr != nil {
+				fmt.Printf("警告: 加载工具子目录 %s 失败: %v\n", subDir, subErr)
+				continue
+			}
+			tools = append(tools, subTools...)
 			continue
 		}
 
-		name := entry.Name()
 		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
 			continue
 		}

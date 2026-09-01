@@ -3,16 +3,21 @@
 //   1. 启动前检查 AI 通道是否已配置（否则弹出配置窗口引导小白填 Key）
 //   2. 拉起内嵌后端 cyberstrike-ai.exe，等待 ONLINE
 //   3. 打开主 BrowserWindow 指向 http://127.0.0.1:8080
-const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const { spawn } = require('child_process');
 const ai = require('./ai-config');
+const tray = require('./tray');
 
 let backendProc = null;
 let mainWindow = null;
 let configWindow = null;
+let splashWindow = null;
+let backendExitedUnexpectedly = false;
+let backendExitDialogShown = false;
+let backendStartedAt = 0;
 
 function rootDir() {
   return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..', '..');
@@ -29,6 +34,8 @@ function startBackend() {
   const cfg = cfgPath();
   const cfgExample = path.join(root, 'config.example.yaml');
   const dataDir = path.join(root, 'data');
+  backendStartedAt = Date.now();
+  backendExitedUnexpectedly = false;
 
   if (!fs.existsSync(exe)) throw new Error('cyberstrike-ai.exe 不存在，请重新安装或从 Release 下载完整包。');
   if (!fs.existsSync(cfg) && fs.existsSync(cfgExample)) fs.copyFileSync(cfgExample, cfg);
@@ -55,6 +62,15 @@ function startBackend() {
   } catch {}
   backendProc.on('exit', (code) => {
     // 进程退出时若主窗口已关闭则不影响；若未关闭，可在此提示
+    if (code !== 0 && code !== null && !backendExitDialogShown) {
+      backendExitedUnexpectedly = true;
+      // 启动后 30 秒内异常退出才弹原生错误框（避免正常退出/重启误弹）
+      if (Date.now() - backendStartedAt < 30000 && mainWindow && !mainWindow.isDestroyed()) {
+        backendExitDialogShown = true;
+        dialog.showErrorBox('后端服务异常退出',
+          '详情见 data/logs/desktop-backend.log，可从托盘菜单"重启后端"恢复。');
+      }
+    }
   });
 }
 
@@ -94,6 +110,16 @@ async function createMainWindow() {
     title: 'CyberStrikeAI', icon: iconPath(),
     backgroundColor: '#0b0f14', autoHideMenuBar: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false }
+  });
+  // 主窗关闭 = 最小化到托盘（有托盘时），而非退出
+  mainWindow.on('close', (e) => {
+    if (tray.hasTray()) {
+      e.preventDefault();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.hide();
+        tray.showBalloon('CyberStrikeAI', '已最小化到托盘，点击托盘图标恢复。');
+      }
+    }
   });
   // 原生应用菜单：保留「在浏览器中打开」「重新加载」「开发者工具」「退出」等桌面原生入口
   const webURL = 'http://127.0.0.1:8080/';
@@ -192,14 +218,62 @@ function setupIPC() {
   ipcMain.handle('ext:openExternal', async (_e, url) => { shell.openExternal(url); });
 }
 
+// ---- 启动画面 ----
+function createSplash() {
+  splashWindow = new BrowserWindow({
+    width: 600, height: 400, frame: false, resizable: false,
+    transparent: true, alwaysOnTop: true, skipTaskbar: true,
+    icon: iconPath(), backgroundColor: '#00000000'
+  });
+  splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  splashWindow.on('closed', () => { splashWindow = null; });
+}
+
+function updateSplashStatus(text) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    try { splashWindow.webContents.executeJavaScript(`updateStatus(${JSON.stringify(text)})`, true); } catch {}
+  }
+}
+
+function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    // 淡出后关闭：简单实现直接 destroy
+    try { splashWindow.close(); } catch {}
+    splashWindow = null;
+  }
+}
+
 app.whenReady().then(async () => {
   setupIPC();
+
+  // 单实例锁：防双开导致 8080 端口冲突
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    return;
+  }
+  app.on('second-instance', () => {
+    // 已在运行：恢复并聚焦主窗/配置窗
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (configWindow && !configWindow.isDestroyed()) {
+      configWindow.show();
+      configWindow.focus();
+    }
+  });
+
+  // 启动画面先行
+  createSplash();
+  updateSplashStatus('启动后端服务…');
 
   // 检查 AI 通道是否已配置
   const cfg = ai.loadConfig(cfgPath());
   const { needSetup } = cfg ? ai.inspectAIChannel(cfg) : { needSetup: true };
 
   if (needSetup) {
+    updateSplashStatus('检测 AI 通道配置…');
+    closeSplash();
     createConfigWindow();
     return;
   }
@@ -207,20 +281,42 @@ app.whenReady().then(async () => {
   // 已配置 → 直接启动
   try {
     startBackend();
+    updateSplashStatus('等待服务就绪…');
     await waitForOnline();
+    updateSplashStatus('加载界面…');
     await createMainWindow();
+    // 托盘常驻（关窗最小化到托盘，不退出）
+    tray.createTray({
+      getMainWindow: () => mainWindow,
+      getConfigWindow: () => configWindow,
+      restartBackend: async () => { try { startBackend(); await waitForOnline(); if (mainWindow) mainWindow.reload(); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } },
+      quitApp: () => app.quit()
+    });
+    closeSplash();
   } catch (e) {
-    const { dialog } = require('electron');
-    dialog.showErrorBox('CyberStrikeAI 启动失败', e.message);
+    closeSplash();
+    const choice = dialog.showMessageBoxSync({
+      type: 'error', title: 'CyberStrikeAI 启动失败',
+      buttons: ['重试启动', '打开日志目录', '退出'], defaultId: 0, cancelId: 2,
+      message: '后端启动超时或失败', detail: e.message + '\n\n可查看 data/logs/desktop-backend.log 排查。'
+    });
+    if (choice === 0) { startBackend(); }
+    else if (choice === 1) { shell.openPath(path.join(rootDir(), 'data', 'logs')); }
     app.quit();
   }
 });
 
 app.on('window-all-closed', () => {
+  // 有托盘时关窗最小化到托盘，不退出（macOS 同样行为）
+  if (tray.hasTray()) {
+    // 不退出，主窗已关；托盘菜单可重新显示
+    return;
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
+  tray.destroyTray();
   if (backendProc) {
     try { backendProc.kill(); } catch {}
     try { require('child_process').execSync('taskkill /F /IM cyberstrike-ai.exe', { stdio: 'ignore' }); } catch {}

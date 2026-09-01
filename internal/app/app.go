@@ -381,6 +381,17 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	skillsDir := skillpackage.SkillsRootFromConfig(cfg.SkillsDir, configPath)
 	log.Logger.Debug("Skills 目录（Eino ADK skill 中间件 + Web 管理 API）", zap.String("skillsDir", skillsDir))
 	configDir := filepath.Dir(configPath)
+	// skill 供应链双闸：skills-lock.json 存在则 Verify（篡改/缺失/未锁定只 Warn 不阻断启动）
+	lockPath := filepath.Join(configDir, "skills-lock.json")
+	if tampered, missing, unlocked, err := skillpackage.VerifyLock(skillsDir, lockPath); err == nil {
+		if n := len(tampered) + len(missing) + len(unlocked); n > 0 {
+			log.Logger.Warn("skill 供应链锁校验发现违规（不阻断启动，请运行 make skills-lock 刷新）",
+				zap.String("锁文件", lockPath),
+				zap.String("违规", skillpackage.FormatViolations(tampered, missing, unlocked)))
+		}
+	} else if !os.IsNotExist(err) { // 锁文件读不了/格式坏才 Warn；不存在视为首装无锁
+		log.Logger.Warn("skill 供应链锁校验失败", zap.String("锁文件", lockPath), zap.Error(err))
+	}
 	plantaskRel := strings.TrimSpace(cfg.MultiAgent.EinoMiddleware.PlantaskRelDir)
 	if plantaskRel == "" {
 		plantaskRel = ".eino/plantask"

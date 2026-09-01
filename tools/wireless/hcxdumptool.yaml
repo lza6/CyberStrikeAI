@@ -1,0 +1,27 @@
+name: "hcxdumptool"
+command: "hcxdumptool"
+args: []
+enabled: true
+short_description: "PMKID/握手包被动抓取（无需客户端重连）；需 root + monitor 网卡"
+description: |
+  针对 WPA2-PSK 的被动握手抓取，无需依赖客户端重连（clientless attack）。
+  比 airodump-ng 更轻量，可直接抓 PMKID（AP 开启 PMKID 时无需客户端在线即可破解）。
+
+  **前置依赖：** monitor 网卡 + root。
+  **授权要求：** 仅限授权无线测试。
+
+  **常用参数：**
+  - `interface`：monitor 网卡（如 wlan0mon，必填）
+  - `filterlist_ap`：目标 AP BSSID 过滤文件
+  - `do_rc_scan`：扫描前 channel hopping
+
+  **链路：** hcxdumptool 抓包 → hcxpcapngtool 转 hash → hashcat 破解（-m 22000）
+parameters:
+  - name: "interface"
+    type: "string"
+    description: "monitor 网卡名"
+    required: true
+  - name: "filterlist_ap"
+    type: "string"
+    description: "目标 AP BSSID 过滤文件"
+arg_mapping: "auto"
