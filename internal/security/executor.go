@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"cyberstrike-ai/internal/authctx"
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/mcp"
 	"cyberstrike-ai/internal/tooloutput"
@@ -32,6 +33,20 @@ type toolOutputCallbackCtxKey struct{}
 // ToolOutputCallbackCtxKey 是 context 中的 key，供 Agent 写入回调，Executor 读取并流式回调。
 var ToolOutputCallbackCtxKey = toolOutputCallbackCtxKey{}
 
+// highImpactAuditRecorder 由上层（app.go）注入，用于在 HIGH_IMPACT 工具执行时
+// 写一条 platform audit 记录。第二道"标记闸"：不阻断执行，仅审计留痕。
+// 不依赖 audit 包类型，避免 security→audit→security 循环依赖。
+type highImpactAuditRecorder interface {
+	RecordHighImpactTool(executor, conversationID, toolName, risk string)
+}
+
+// hitlWhitelistChecker 由上层（handler）注入，回答"该工具是否在 HITL 免审批白名单"。
+// 用于 HIGH_IMPACT 标记闸判定：白名单内的工具（如 tool_search/exit 等元工具）不打 high_impact 标。
+// 返回 (inWhitelist, available)：available=false 表示未注入 checker，此时保守地标记。
+type hitlWhitelistChecker interface {
+	IsToolWhitelisted(conversationID, toolName string) bool
+}
+
 // Executor 安全工具执行器
 type Executor struct {
 	config                  *config.SecurityConfig
@@ -42,6 +57,22 @@ type Executor struct {
 	toolOutputMaxBytes      int
 	spillRootDir            string
 	shellSafeEnabled        bool // shellsafe 元字符拒绝开关（默认 true）；详见 ShellSafeParse
+	// hitlWhitelist 判定 HIGH_IMPACT 工具是否在 HITL 免审批白名单（白名单内不打标）。
+	// nil 时保守标记所有 HIGH_IMPACT 工具。
+	hitlWhitelist hitlWhitelistChecker
+	// auditRecorder 在 HIGH_IMPACT 工具执行时写一条 platform audit 记录；nil 时仅日志。
+	auditRecorder highImpactAuditRecorder
+}
+
+// SetHITLWhitelist 注入 HITL 免审批白名单判定器；用于 HIGH_IMPACT 标记闸。
+// 由 app.go 在 NewExecutor 后调用，传入 AgentHandler 的 NeedsToolApproval 反查能力。
+func (e *Executor) SetHITLWhitelist(c hitlWhitelistChecker) {
+	e.hitlWhitelist = c
+}
+
+// SetHighImpactAuditRecorder 注入审计记录器，HIGH_IMPACT 工具执行时记一条 audit。
+func (e *Executor) SetHighImpactAuditRecorder(r highImpactAuditRecorder) {
+	e.auditRecorder = r
 }
 
 // NewExecutor 创建新的执行器
@@ -134,22 +165,32 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		zap.Any("args", args),
 	)
 
-	// HIGH_IMPACT 审批集第二道标记闸：破坏性工具执行前记录风险标记（不阻断，
-	// 真正阻断走 HITL 审批流程；此处只把 high_impact 元数据塞进结果 + 记审计日志）。
-	highImpactRisk := ""
-	if risk, risky := IsHighImpactTool(toolName); risky {
-		highImpactRisk = risk
-		e.logger.Info("HIGH_IMPACT 工具即将执行（第二道标记闸）",
-			zap.String("toolName", toolName),
-			zap.String("risk", risk),
-		)
+	// HIGH_IMPACT 第二道标记闸：破坏性工具集命中时，在执行前先记一条 audit，
+	// 并在返回的 ToolResult 上打 high_impact=true 标记。不阻断执行——真正阻断
+	// 走 HITL 审批流程（已有机制）。白名单内工具（如元工具）不打标，避免噪音。
+	highImpactRisk, highImpactHit := IsHighImpactTool(toolName)
+	if highImpactHit {
+		convID := mcp.MCPConversationIDFromContext(ctx)
+		whitelisted := e.isToolWhitelisted(convID, toolName)
+		if !whitelisted {
+			e.logger.Warn("HIGH_IMPACT 工具执行（第二道标记闸）",
+				zap.String("toolName", toolName),
+				zap.String("risk", highImpactRisk),
+				zap.String("conversationId", convID),
+				zap.Bool("hitlWhitelisted", false),
+			)
+			if e.auditRecorder != nil {
+				e.auditRecorder.RecordHighImpactTool(e.currentActor(ctx), convID, toolName, highImpactRisk)
+			}
+		}
 	}
-	_ = highImpactRisk // 结果元数据注入见下方 return 处（若 ToolResult 有 Meta 字段则塞入）
 
 	// 特殊处理：exec工具直接执行系统命令
 	if toolName == "exec" {
 		e.logger.Debug("执行exec工具")
-		return e.executeSystemCommand(ctx, args)
+		result, err := e.executeSystemCommand(ctx, args)
+		e.markHighImpact(result, highImpactHit, highImpactRisk)
+		return result, err
 	}
 
 	// 使用索引查找工具配置（O(1) 查找）
@@ -175,7 +216,9 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 			zap.String("toolName", toolName),
 			zap.String("command", toolConfig.Command),
 		)
-		return e.executeInternalTool(ctx, toolName, toolConfig.Command, args)
+		result, err := e.executeInternalTool(ctx, toolName, toolConfig.Command, args)
+		e.markHighImpact(result, highImpactHit, highImpactRisk)
+		return result, err
 	}
 
 	// 构建命令 - 根据工具类型使用不同的参数格式
@@ -255,7 +298,7 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 						zap.Int("exitCode", *exitCode),
 						zap.String("output", string(output)),
 					)
-					return &mcp.ToolResult{
+					return e.markHighImpact(&mcp.ToolResult{
 						Content: []mcp.Content{
 							{
 								Type: "text",
@@ -263,7 +306,7 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 							},
 						},
 						IsError: false,
-					}, nil
+					}, highImpactHit, highImpactRisk), nil
 				}
 			}
 		}
@@ -274,7 +317,7 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 			zap.Int("exitCode", getExitCodeValue(err)),
 			zap.String("output", string(output)),
 		)
-		return &mcp.ToolResult{
+		return e.markHighImpact(&mcp.ToolResult{
 			Content: []mcp.Content{
 				{
 					Type: "text",
@@ -282,7 +325,7 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 				},
 			},
 			IsError: true,
-		}, nil
+		}, highImpactHit, highImpactRisk), nil
 	}
 
 	e.logger.Debug("工具执行成功",
@@ -290,7 +333,7 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		zap.String("output", string(output)),
 	)
 
-	return &mcp.ToolResult{
+	return e.markHighImpact(&mcp.ToolResult{
 		Content: []mcp.Content{
 			{
 				Type: "text",
@@ -298,7 +341,37 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 			},
 		},
 		IsError: false,
-	}, nil
+	}, highImpactHit, highImpactRisk), nil
+}
+
+// markHighImpact 在 ToolResult 上打 HIGH_IMPACT 标记（元数据，不阻断）。
+// 仅当工具命中 HighImpactTools 且非白名单时打标；否则原样返回 result。
+// nil-safe：result 为 nil 时返回 nil。
+func (e *Executor) markHighImpact(result *mcp.ToolResult, hit bool, risk string) *mcp.ToolResult {
+	if result == nil || !hit {
+		return result
+	}
+	result.HighImpact = true
+	result.RiskNote = risk
+	return result
+}
+
+// isToolWhitelisted 判断工具是否在 HITL 免审批白名单内（白名单内不打标）。
+// 未注入 checker 时保守返回 false（即标记为非白名单 → 打标）。
+func (e *Executor) isToolWhitelisted(conversationID, toolName string) bool {
+	if e == nil || e.hitlWhitelist == nil {
+		return false
+	}
+	return e.hitlWhitelist.IsToolWhitelisted(conversationID, toolName)
+}
+
+// currentActor 从 ctx 中提取当前操作者（principal username），用于审计记录。
+// 无 principal 时返回空串，由 audit.RecordSystem 兜底为 "admin"。
+func (e *Executor) currentActor(ctx context.Context) string {
+	if p, ok := authctx.PrincipalFromContext(ctx); ok {
+		return p.Username
+	}
+	return ""
 }
 
 // RegisterTools 注册工具到MCP服务器

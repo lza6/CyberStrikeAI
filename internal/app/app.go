@@ -503,6 +503,11 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	agentHandler.SetHitlToolWhitelistSaver(configHandler)
 	agentHandler.SetHitlAuditStrategySaver(configHandler)
 	agentHandler.SetHitlDefaultReviewerSaver(configHandler)
+	// HIGH_IMPACT 第二道标记闸：把 HITL 白名单判定 + 审计记录器注入 executor。
+	// executor 命中 HighImpactTools 时调 IsToolWhitelisted 反查免审批白名单，
+	// 非白名单则记一条 platform audit（不阻断执行）。
+	executor.SetHITLWhitelist(securityHighImpactWhitelistAdapter{handler: agentHandler})
+	executor.SetHighImpactAuditRecorder(securityHighImpactAuditAdapter{svc: auditSvc})
 	externalMCPHandler := handler.NewExternalMCPHandler(externalMCPMgr, cfg, configPath, log.Logger)
 	externalMCPHandler.SetAudit(auditSvc)
 	roleHandler := handler.NewRoleHandler(cfg, configPath, log.Logger)
@@ -681,6 +686,61 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 
 	return app, nil
 
+}
+
+// securityHighImpactWhitelistAdapter 把 AgentHandler 的 HITL 免审批判定
+// 适配为 executor 期望的 hitlWhitelistChecker 接口，避免 security 包反向
+// 依赖 handler 包（循环导入）。NeedsToolApproval 与会话侧 HITL 判定一致：
+// 仅当该会话开启人机协同且工具不在白名单时返回 true；executor 用它判定
+// 是否对 HIGH_IMPACT 工具打标（白名单内 → 不打标）。
+//
+// 注意：IsToolWhitelisted 语义为"是否免审批"，与会话是否启用 HITL 解耦——
+// 未启用 HITL 时 NeedsToolApproval 恒为 false，此时 executor 仍会对
+// HIGH_IMPACT 工具打标（保守策略，符合"第二道标记闸"定位）。
+func (a securityHighImpactWhitelistAdapter) IsToolWhitelisted(conversationID, toolName string) bool {
+	if a.handler == nil {
+		return false
+	}
+	// NeedsToolApproval 返回 true 表示"需要审批"=未在白名单；
+	// 反查得到"是否在白名单"。
+	return !a.handler.HITLNeedsToolApproval(conversationID, toolName)
+}
+
+// securityHighImpactAuditAdapter 把 audit.Service 适配为 executor 期望的
+// highImpactAuditRecorder 接口，避免 security 包反向依赖 audit 包
+// （audit 已依赖 security 的 RBAC，会构成循环）。走 RecordSystem 以
+// 系统身份写一条 platform audit，ClientIP/SessionHint 留空。
+func (a securityHighImpactAuditAdapter) RecordHighImpactTool(actor, conversationID, toolName, risk string) {
+	if a.svc == nil {
+		return
+	}
+	detail := map[string]interface{}{
+		"toolName":       toolName,
+		"risk":           risk,
+		"conversationId": conversationID,
+	}
+	a.svc.RecordSystem(audit.Entry{
+		Level:        "warn",
+		Category:     "security",
+		Action:       "high_impact_tool",
+		Result:       "success",
+		Actor:        actor,
+		ResourceType: "tool",
+		ResourceID:   toolName,
+		Message:      fmt.Sprintf("HIGH_IMPACT 工具执行: %s（%s）", toolName, risk),
+		Detail:       detail,
+	})
+}
+
+// securityHighImpactWhitelistAdapter / securityHighImpactAuditAdapter 类型定义
+// 紧随 New 之后；放在文件末尾会破坏 package 顶层声明顺序，故与相关注入点
+// 同段维护。下面是它们的 struct 声明（方法已见上方）。
+type securityHighImpactWhitelistAdapter struct {
+	handler *handler.AgentHandler
+}
+
+type securityHighImpactAuditAdapter struct {
+	svc *audit.Service
 }
 
 // mcpHandlerWithAuth 在鉴权通过后转发到 MCP 处理；若配置了 auth_header 则校验请求头，否则直接放行

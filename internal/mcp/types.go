@@ -116,6 +116,11 @@ type ToolCall struct {
 type ToolResult struct {
 	Content []Content `json:"content"`
 	IsError bool      `json:"isError,omitempty"`
+	// HighImpact 标记本结果来自 HIGH_IMPACT 工具集（exec/sqlmap/...）。
+	// 仅作为 Go 侧元数据（不序列化到 MCP 线协议），供审计/UI 二次标记闸使用。
+	HighImpact bool `json:"-"`
+	// RiskNote 命中 HIGH_IMPACT 时的风险描述（见 security.HighImpactTools）。
+	RiskNote string `json:"-"`
 }
 
 // Content 表示内容

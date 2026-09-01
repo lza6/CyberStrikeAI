@@ -10,6 +10,7 @@ func TestIsHighImpactTool_Hit(t *testing.T) {
 		{"exec lowercase", "exec"},
 		{"exec uppercase", "EXEC"},
 		{"exec mixed case with spaces", "  Exec  "},
+		{"execute long form", "execute"},
 		{"sqlmap", "sqlmap"},
 		{"metasploit", "metasploit"},
 		{"hydra", "hydra"},

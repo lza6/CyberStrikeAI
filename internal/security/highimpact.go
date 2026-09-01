@@ -6,8 +6,12 @@ import "strings"
 // 移植自 mcpstrike HIGH_IMPACT_TOOLS frozenset 思想：确定性，无 LLM 在环，
 // 命中即标记。真正阻断走 HITL 审批流程（已有机制），此处仅作为第二道"标记闸"
 // 把 high_impact=true + risk 描述塞进执行结果元数据与审计日志，便于追溯。
+//
+// 命名口径：含 CyberStrikeAI 内置 exec（短形式）与 Eino ADK filesystem 的
+// execute（长形式）两种 shell 工具名，二者均代表"任意命令执行"，一并纳入。
 var HighImpactTools = map[string]string{
 	"exec":         "任意命令执行（含删除/修改文件）",
+	"execute":      "任意命令执行（Eino ADK filesystem execute，含删除/修改文件）",
 	"delete-file":  "删除文件",
 	"modify-file":  "修改文件内容",
 	"create-file":  "创建/覆盖文件",
