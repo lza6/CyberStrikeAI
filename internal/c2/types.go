@@ -256,6 +256,48 @@ func SafeBindPort(port int) error {
 	return nil
 }
 
+// isSafeHostToken 判断 host 是否只含 IP / 主机名字符，拒绝 shell 元字符与空格。
+// payload_oneliner 会把 host 原样插入 bash/nc/perl/python 单行命令，未校验会导致命令注入。
+// 允许：IPv4（含十进制/十六进制点分）、IPv6（含 [::ffff:x]、::1）、域名（a-z A-Z 0-9 . -）。
+// 拒绝：空格、;|&$`(){}<>'"\# 等任何 shell 元字符。
+func isSafeHostToken(host string) bool {
+	if host == "" {
+		return false
+	}
+	// IPv6 形如 [::1] 去掉外层方括号后校验
+	h := host
+	if len(h) >= 2 && h[0] == '[' && h[len(h)-1] == ']' {
+		h = h[1 : len(h)-1]
+	}
+	for _, r := range h {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.', r == '-', r == ':':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// isAllowedGOOS 限定交叉编译目标系统白名单，防止恶意 GOOS 触发 go 工具链异常。
+func isAllowedGOOS(goos string) bool {
+	switch goos {
+	case "linux", "windows", "darwin", "freebsd", "openbsd":
+		return true
+	}
+	return false
+}
+
+// isAllowedGOARCH 限定交叉编译目标架构白名单。
+func isAllowedGOARCH(goarch string) bool {
+	switch goarch {
+	case "amd64", "arm64", "386", "arm":
+		return true
+	}
+	return false
+}
+
 // NowUnixMillis 统一时间戳工具
 func NowUnixMillis() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)

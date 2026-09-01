@@ -4465,7 +4465,8 @@
       "vulnerability": "Vulnerability",
       "webshell": "WebShell Connection",
       "batch_task": "Batch Task",
-      "c2_listener": "C2 Listener"
+      "c2_listener": "C2 Listener",
+      "asset": "Asset"
     },
     "scopes": {
       "all": {

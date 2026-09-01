@@ -27,10 +27,11 @@ args:
         url = tmpl.replace("{id}", urllib.parse.quote(cid))
         sa, ba = fetch(url, tok_a)
         sb, bb = fetch(url, tok_b)
-        # BOLA 信号：B 的 token 能拿到 A 的资源（200 且 body 相似），或两者都 200 但 body 不同却含对方数据
-        diff = (sa != sb) or (ba[:200] != bb[:200])
+        # BOLA 信号：两个不同用户的 token 对同一资源端点都返回 200，且响应体不同
+        # （B 能看到 A 的数据，或 A 能看到 B 的数据）。body 相同（如公共首页/相同 404 页/相同错误页）
+        # 不构成 BOLA —— 那只是公共资源或统一兜底页，需人工确认是否为公共资源。
         access = (sa == 200 and sb == 200 and ba and bb and ba != bb)
-        if access or (sa == 200 and sb == 200 and ba == bb and ba):
+        if access:
             findings.append({"id": cid, "status_a": sa, "status_b": sb, "body_a_len": len(ba), "body_b_len": len(bb), "bola_suspected": access, "snippet_a": ba[:120], "snippet_b": bb[:120]})
     print(json.dumps({"findings": findings}, ensure_ascii=False, indent=2))
     sys.exit(0 if findings else 1)

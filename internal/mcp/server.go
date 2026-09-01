@@ -250,7 +250,8 @@ func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 简单 POST：请求体为 JSON-RPC，响应在 body 中返回
-	body, err := io.ReadAll(r.Body)
+	// 限制请求体大小（默认 10MB），防止超大 body 耗尽内存。
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 10<<20))
 	if err != nil {
 		s.sendError(w, nil, -32700, "Parse error", err.Error())
 		return
@@ -277,7 +278,7 @@ func (s *Server) serveSSESessionMessage(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 10<<20))
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return

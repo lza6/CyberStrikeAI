@@ -109,6 +109,11 @@ func GenerateOneliner(in OnelinerInput) (string, error) {
 	if host == "" {
 		return "", fmt.Errorf("host is required")
 	}
+	// host 会原样插入 bash/nc/perl/python/powershell 单行命令，必须拒绝含 shell 元字符
+	// 或空格的输入，防止 host 字段被注入额外命令。仅允许 IP / 主机名字符。
+	if !isSafeHostToken(host) {
+		return "", fmt.Errorf("host contains invalid characters; only IP/hostname characters are allowed")
+	}
 	switch in.Kind {
 	case OnelinerBash:
 		if err := SafeBindPort(in.Port); err != nil {

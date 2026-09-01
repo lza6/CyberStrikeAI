@@ -39,9 +39,19 @@ function startBackend() {
   env.CYBERSTRIKE_HTTPS = '0';
 
   backendProc = spawn(exe, ['-config', cfg, '--http'], { cwd: root, env, windowsHide: false });
-  backendProc.stdout.on('data', () => {});
-  backendProc.stderr.on('data', () => {});
-  backendProc.on('exit', () => {});
+  // 把后端 stdout/stderr 落盘到 data/logs/desktop-backend.log，便于启动失败排查
+  const fs2 = require('fs');
+  const logDir = path.join(root, 'data', 'logs');
+  try { fs2.mkdirSync(logDir, { recursive: true }); } catch {}
+  const backendLog = path.join(logDir, 'desktop-backend.log');
+  try {
+    const out = fs2.createWriteStream(backendLog, { flags: 'a' });
+    backendProc.stdout.pipe(out);
+    backendProc.stderr.pipe(out);
+  } catch {}
+  backendProc.on('exit', (code) => {
+    // 进程退出时若主窗口已关闭则不影响；若未关闭，可在此提示
+  });
 }
 
 function waitForOnline(port = 8080, timeoutMs = 60000) {
@@ -93,15 +103,26 @@ async function createMainWindow() {
 function setupIPC() {
   ipcMain.handle('ai:testConnection', async (_e, payload) => {
     const { provider, base_url, api_key, model } = payload;
-    const url = base_url.replace(/\/+$/, '') + (base_url.endsWith('/chat/completions') ? '' : '/chat/completions');
     const headers = { 'Content-Type': 'application/json' };
     if (provider === 'claude') {
+      // Claude 走 Anthropic Messages API /v1/messages
       headers['x-api-key'] = api_key;
       headers['anthropic-version'] = '2023-06-01';
-      // Claude 端点走 /v1/messages，这里简化：直接用 OpenAI 兼容路径探活，claude 通道留给后端处理
-    } else {
-      headers['Authorization'] = 'Bearer ' + api_key;
+      const url = base_url.replace(/\/+$/, '').replace(/\/v1\/messages$/, '') + '/v1/messages';
+      try {
+        const res = await fetch(url, {
+          method: 'POST', headers,
+          body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }),
+          signal: AbortSignal.timeout(15000)
+        });
+        if (res.ok || res.status === 400 || res.status === 409 || res.status === 429) return { ok: true, model };
+        const txt = await res.text().catch(() => '');
+        return { ok: false, error: 'HTTP ' + res.status + (txt ? ' · ' + txt.slice(0, 120) : '') };
+      } catch (e) { return { ok: false, error: e.message }; }
     }
+    // OpenAI 兼容：POST /chat/completions
+    const url = base_url.replace(/\/+$/, '') + (base_url.endsWith('/chat/completions') ? '' : '/chat/completions');
+    headers['Authorization'] = 'Bearer ' + api_key;
     try {
       const res = await fetch(url, {
         method: 'POST', headers,
@@ -132,9 +153,9 @@ function setupIPC() {
       startBackend();
       await waitForOnline();
       await createMainWindow();
-      return true;
+      return { ok: true };
     } catch (e) {
-      return false;
+      return { ok: false, error: e.message || String(e) };
     }
   });
 

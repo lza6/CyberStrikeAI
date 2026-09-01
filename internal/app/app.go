@@ -83,6 +83,11 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
+	// 默认不信任任何代理，ClientIP() 直接用 TCP RemoteAddr，忽略 X-Forwarded-For。
+	// 这样伪造 XFF 无法绕过登录限流，审计 IP 也可信。
+	// 若部署在已知反向代理后，应在配置里显式声明该反代 IP（见 server.trusted_proxies）。
+	_ = router.SetTrustedProxies(nil)
+
 	// CORS中间件
 	router.Use(corsMiddleware(cfg.Server.CORSAllowedOrigins))
 

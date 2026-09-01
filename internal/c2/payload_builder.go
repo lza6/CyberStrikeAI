@@ -89,6 +89,19 @@ func (b *PayloadBuilder) BuildBeacon(in PayloadBuilderInput) (*BuildResult, erro
 	if goarch == "" {
 		goarch = "amd64"
 	}
+	// 白名单校验 GOOS/GOARCH，防止恶意输入触发 go 工具链异常或写路径逃逸。
+	// GOOS/GOARCH 会写入 cmd.Env 并由 `go build` 解析，未校验可能导致非预期交叉编译目标。
+	if !isAllowedGOOS(goos) {
+		return nil, fmt.Errorf("unsupported GOOS %q (allowed: linux/windows/darwin)", goos)
+	}
+	if !isAllowedGOARCH(goarch) {
+		return nil, fmt.Errorf("unsupported GOARCH %q (allowed: amd64/arm64/386/arm)", goarch)
+	}
+	// binName 来自 API 入参，校验不含路径分隔符/目录穿越，避免写路径逃逸。
+	cleanBinName := filepath.Base(strings.TrimSpace(in.OutputName))
+	if cleanBinName == "" || cleanBinName == "." || cleanBinName == ".." || strings.ContainsAny(cleanBinName, `/\`) {
+		return nil, fmt.Errorf("invalid output name %q", in.OutputName)
+	}
 
 	// 读取模板
 	tmplPath := filepath.Join(b.tmplDir, "beacon.go.tmpl")
@@ -174,7 +187,7 @@ func (b *PayloadBuilder) BuildBeacon(in PayloadBuilderInput) (*BuildResult, erro
 
 	// 交叉编译
 	payloadID := "p_" + strings.ReplaceAll(uuid.New().String(), "-", "")[:14]
-	binName := strings.TrimSpace(in.OutputName)
+	binName := cleanBinName
 	if binName == "" {
 		binName = fmt.Sprintf("beacon_%s_%s_%s", goos, goarch, payloadID)
 	}

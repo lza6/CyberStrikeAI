@@ -41,18 +41,21 @@ $('test-btn').addEventListener('click', async () => {
   finally { $('test-btn').disabled = false; }
 });
 
-$('save-btn').addEventListener('click', () => {
+$('save-btn').addEventListener('click', async () => {
   const base = $('base_url').value.trim();
   const key = $('api_key').value.trim();
   const model = $('model').value.trim();
   if (!base || !key || !model) { show('err', '请填写所有必填项（*）'); return; }
   $('save-btn').disabled = true;
   show('ok', '保存中...');
-  const ok = window.__api.saveAndLaunch({
+  const r = await window.__api.saveAndLaunch({
     provider: $('provider').value,
     base_url: base, api_key: key, model,
     max_total_tokens: parseInt($('max_total_tokens').value, 10) || 120000,
     max_completion_tokens: parseInt($('max_completion_tokens').value, 10) || 16384
   });
-  if (!ok) { $('save-btn').disabled = false; show('err', '保存失败，请检查写入权限'); }
+  if (!r || !r.ok) {
+    $('save-btn').disabled = false;
+    show('err', '保存失败：' + (r && r.error ? r.error : '未知错误（请查看 data/logs/desktop-backend.log）'));
+  }
 });

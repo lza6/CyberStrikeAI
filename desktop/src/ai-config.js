@@ -12,8 +12,8 @@ function isKeyUnconfigured(k) {
   const low = s.toLowerCase();
   if (low === 'proxy_managed') return true;       // 本机 Claude 代理占位，对小白无效
   if (low.startsWith('sk-xxxx')) return true;     // example 占位
-  if (low.includes('your_') || low.includes('xxxx')) return true;
-  if (s.length < 12) return true;                 // 太短，多半不是真 key
+  if (low.includes('your_') || low.includes('xxxx') || low.includes('placeholder') || low.includes('changeme') || low.includes('example')) return true;
+  if (s.length < 8) return true;                  // 太短，多半不是真 key（保守阈值，兼容短 token 服务商）
   return false;
 }
 
@@ -50,7 +50,10 @@ function applyChannel(cfgPath, { id, name, provider, base_url, api_key, model, m
   const cfg = loadConfig(cfgPath) || {};
   if (!cfg.ai) cfg.ai = {};
   if (!cfg.ai.channels) cfg.ai.channels = {};
-  const cleanId = (id || 'custom').replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase() || 'custom';
+  const cleanId = (id || 'custom')
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'custom';
   cfg.ai.channels[cleanId] = {
     name: name || 'Custom Channel',
     provider: provider || 'openai_compatible',
