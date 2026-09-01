@@ -1,53 +1,50 @@
 // CyberStrikeAI 桌面启动器主进程
-// 职责：定位/启动内嵌的后端二进制，等待 ONLINE，打开内嵌 BrowserWindow 指向 http://127.0.0.1:8080
-const { app, BrowserWindow, shell, Menu } = require('electron');
+// 职责：
+//   1. 启动前检查 AI 通道是否已配置（否则弹出配置窗口引导小白填 Key）
+//   2. 拉起内嵌后端 cyberstrike-ai.exe，等待 ONLINE
+//   3. 打开主 BrowserWindow 指向 http://127.0.0.1:8080
+const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
 const { spawn } = require('child_process');
+const ai = require('./ai-config');
 
 let backendProc = null;
 let mainWindow = null;
+let configWindow = null;
 
-// 生产环境：app.isPackaged 时资源在 process.resourcesPath；开发时用项目根
 function rootDir() {
-  if (app.isPackaged) return process.resourcesPath;
-  return path.join(__dirname, '..', '..');
+  return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..', '..');
 }
 
+function cfgPath() { return path.join(rootDir(), 'config.yaml'); }
+function iconPath() { return path.join(__dirname, '..', 'icons', 'icon.png'); }
+
+// ---- 启动后端 ----
 function startBackend() {
   const root = rootDir();
   const exe = path.join(root, 'cyberstrike-ai.exe');
   const pyHome = path.join(root, 'runtime', 'python', 'python-3.13.5');
-  const cfg = path.join(root, 'config.yaml');
+  const cfg = cfgPath();
   const cfgExample = path.join(root, 'config.example.yaml');
   const dataDir = path.join(root, 'data');
 
-  if (!fs.existsSync(exe)) {
-    throw new Error('cyberstrike-ai.exe 不存在，请重新安装或从 Release 下载完整包。');
-  }
-  if (!fs.existsSync(cfg) && fs.existsSync(cfgExample)) {
-    fs.copyFileSync(cfgExample, cfg);
-  }
+  if (!fs.existsSync(exe)) throw new Error('cyberstrike-ai.exe 不存在，请重新安装或从 Release 下载完整包。');
+  if (!fs.existsSync(cfg) && fs.existsSync(cfgExample)) fs.copyFileSync(cfgExample, cfg);
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
   const env = Object.assign({}, process.env);
-  // 内嵌 Python 优先
-  env.PATH = path.join(pyHome) + path.delimiter + path.join(pyHome, 'Scripts') + path.delimiter + (env.PATH || '');
+  env.PATH = pyHome + path.delimiter + path.join(pyHome, 'Scripts') + path.delimiter + (env.PATH || '');
   env.CYBERSTRIKE_HTTPS = '0';
 
-  const args = ['-config', cfg, '--http'];
-  backendProc = spawn(exe, args, { cwd: root, env, windowsHide: false, detached: false });
+  backendProc = spawn(exe, ['-config', cfg, '--http'], { cwd: root, env, windowsHide: false });
   backendProc.stdout.on('data', () => {});
   backendProc.stderr.on('data', () => {});
-  backendProc.on('exit', (code) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      // 进程意外退出时给用户提示
-    }
-  });
+  backendProc.on('exit', () => {});
 }
 
-async function waitForOnline(port = 8080, timeoutMs = 60000) {
-  const net = require('net');
+function waitForOnline(port = 8080, timeoutMs = 60000) {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const tryConnect = () => {
@@ -61,56 +58,111 @@ async function waitForOnline(port = 8080, timeoutMs = 60000) {
   });
 }
 
-async function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 700,
-    title: 'CyberStrikeAI',
-    backgroundColor: '#0b0f14',
-    autoHideMenuBar: true,
+// ---- 配置窗口 ----
+function createConfigWindow() {
+  configWindow = new BrowserWindow({
+    width: 620, height: 720, resizable: false,
+    title: 'CyberStrikeAI · 配置 AI 通道',
+    icon: iconPath(), autoHideMenuBar: true,
     webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false
+      contextIsolation: true, nodeIntegration: false,
+      preload: path.join(__dirname, 'config-preload.js')
     }
   });
-
-  // 隐藏菜单栏（小白不需要）
   Menu.setApplicationMenu(null);
+  configWindow.loadFile(path.join(__dirname, 'config.html'));
+}
 
-  // 加载本地后端
+// ---- 主窗口 ----
+async function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1440, height: 900, minWidth: 1024, minHeight: 700,
+    title: 'CyberStrikeAI', icon: iconPath(),
+    backgroundColor: '#0b0f14', autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false }
+  });
+  Menu.setApplicationMenu(null);
   await mainWindow.loadURL('http://127.0.0.1:8080/');
-
-  // 外链在系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://127.0.0.1:8080') || url.startsWith('http://localhost:8080')) {
-      return { action: 'allow' };
-    }
-    shell.openExternal(url);
-    return { action: 'deny' };
+    if (url.startsWith('http://127.0.0.1:8080') || url.startsWith('http://localhost:8080')) return { action: 'allow' };
+    shell.openExternal(url); return { action: 'deny' };
   });
 }
 
+// ---- IPC：测试连接 / 保存并启动 ----
+function setupIPC() {
+  ipcMain.handle('ai:testConnection', async (_e, payload) => {
+    const { provider, base_url, api_key, model } = payload;
+    const url = base_url.replace(/\/+$/, '') + (base_url.endsWith('/chat/completions') ? '' : '/chat/completions');
+    const headers = { 'Content-Type': 'application/json' };
+    if (provider === 'claude') {
+      headers['x-api-key'] = api_key;
+      headers['anthropic-version'] = '2023-06-01';
+      // Claude 端点走 /v1/messages，这里简化：直接用 OpenAI 兼容路径探活，claude 通道留给后端处理
+    } else {
+      headers['Authorization'] = 'Bearer ' + api_key;
+    }
+    try {
+      const res = await fetch(url, {
+        method: 'POST', headers,
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, stream: false }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (res.ok || res.status === 400 || res.status === 409 || res.status === 429) {
+        return { ok: true, model };
+      }
+      const txt = await res.text().catch(() => '');
+      return { ok: false, error: 'HTTP ' + res.status + (txt ? ' · ' + txt.slice(0, 120) : '') };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('ai:saveAndLaunch', async (_e, payload) => {
+    try {
+      ai.applyChannel(cfgPath(), {
+        id: 'desktop', name: 'Desktop Channel',
+        provider: payload.provider, base_url: payload.base_url,
+        api_key: payload.api_key, model: payload.model,
+        max_total_tokens: payload.max_total_tokens,
+        max_completion_tokens: payload.max_completion_tokens
+      });
+      // 关闭配置窗口，启动后端 + 主窗口
+      if (configWindow && !configWindow.isDestroyed()) configWindow.close();
+      startBackend();
+      await waitForOnline();
+      await createMainWindow();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  ipcMain.handle('ext:openExternal', async (_e, url) => { shell.openExternal(url); });
+}
+
 app.whenReady().then(async () => {
+  setupIPC();
+
+  // 检查 AI 通道是否已配置
+  const cfg = ai.loadConfig(cfgPath());
+  const { needSetup } = cfg ? ai.inspectAIChannel(cfg) : { needSetup: true };
+
+  if (needSetup) {
+    createConfigWindow();
+    return;
+  }
+
+  // 已配置 → 直接启动
   try {
     startBackend();
+    await waitForOnline();
+    await createMainWindow();
   } catch (e) {
     const { dialog } = require('electron');
     dialog.showErrorBox('CyberStrikeAI 启动失败', e.message);
     app.quit();
-    return;
   }
-  try {
-    await waitForOnline();
-    await createWindow();
-  } catch (e) {
-    const { dialog } = require('electron');
-    dialog.showErrorBox('CyberStrikeAI 启动失败', '后端未能在 60 秒内就绪：' + e.message);
-    app.quit();
-  }
-}).catch(err => {
-  console.error('whenReady error:', err);
 });
 
 app.on('window-all-closed', () => {
@@ -120,10 +172,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   if (backendProc) {
     try { backendProc.kill(); } catch {}
-    // Windows 下子进程可能未随父退出，强制结束
-    try {
-      const { execSync } = require('child_process');
-      execSync('taskkill /F /IM cyberstrike-ai.exe', { stdio: 'ignore' });
-    } catch {}
+    try { require('child_process').execSync('taskkill /F /IM cyberstrike-ai.exe', { stdio: 'ignore' }); } catch {}
   }
 });

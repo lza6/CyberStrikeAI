@@ -1,0 +1,57 @@
+name: "naabu"
+command: "naabu"
+# 端口扫描（ProjectDiscovery），比 nmap 快，适合大范围存活端口快速发现
+# 默认 -top-ports 100 扫常见端口
+args: ["-top-ports", "100"]
+enabled: true
+short_description: "端口扫描：快速 SYN/Connect 扫描，支持 -host/-list/-p/-top-ports/-passive(Shodan InternetDB)"
+description: |
+  naabu 端口扫描（ProjectDiscovery）。
+
+  **默认行为：**
+  - `-top-ports 100` 扫描 Top 100 常见端口
+
+  **可选：**
+  - `ports`：`-p` 指定端口（如 `80,443,8080` 或 `1-65535`）
+  - `list_file`：`-list` 批量扫描
+  - `passive`：`-passive` 走 Shodan InternetDB（不直接打目标，更隐蔽）
+
+  注意：SYN 扫描需 root；无 root 自动降级为 Connect 扫描。请确保有权限扫描目标。
+parameters:
+  - name: "target"
+    type: "string"
+    description: |
+      目标 IP/主机/CIDR/域名。示例：`192.168.1.1`、`10.0.0.0/24`、`example.com`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "list_file"
+    type: "string"
+    description: "批量目标文件，每行一个。示例：`/tmp/hosts.txt`"
+    required: false
+    flag: "-list"
+    format: "flag"
+  - name: "ports"
+    type: "string"
+    description: "指定端口（覆盖默认 top-100）。示例：`80,443,8080` 或 `1-65535`"
+    required: false
+    flag: "-p"
+    format: "flag"
+  - name: "top_ports"
+    type: "string"
+    description: "Top N 常见端口（与 ports 二选一）。示例：`1000`"
+    required: false
+    flag: "-top-ports"
+    format: "flag"
+  - name: "passive"
+    type: "bool"
+    description: "走 Shodan InternetDB 被动端口查询（不直接打目标）"
+    required: false
+    flag: "-passive"
+    format: "flag"
+    default: false
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数，按空格追加。示例：`-rate 1000`（限速）"
+    required: false
+    format: "positional"

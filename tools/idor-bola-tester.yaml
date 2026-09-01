@@ -1,0 +1,63 @@
+name: "idor-bola-tester"
+command: "python3"
+args:
+  - "-c"
+  - |
+    import sys, json, urllib.request, urllib.error, urllib.parse
+    # IDOR/BOLA 测试：用两个用户的 token 对同一资源端点重放，比对响应差异
+    # 用法：python3 -c '<script>' "<url_template_with_{id}>" "<token_a>" "<token_b>" "<additional_args>"
+    tmpl = sys.argv[1] if len(sys.argv) > 1 else ""
+    tok_a = sys.argv[2] if len(sys.argv) > 2 else ""
+    tok_b = sys.argv[3] if len(sys.argv) > 3 else ""
+    if not tmpl or not tok_a or not tok_b:
+        print(json.dumps({"error": "url_template (with {id}), token_a, token_b required"}, ensure_ascii=False)); sys.exit(1)
+    # 试一组常见顺序/UUID ID
+    candidates = ["1","2","100","123","1000","a","admin"]
+    def fetch(url, tok):
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                return r.status, r.read(2048).decode("utf-8","ignore")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read(2048).decode("utf-8","ignore") if hasattr(e,"read") else ""
+        except Exception as e:
+            return 0, str(e)[:120]
+    findings = []
+    for cid in candidates:
+        url = tmpl.replace("{id}", urllib.parse.quote(cid))
+        sa, ba = fetch(url, tok_a)
+        sb, bb = fetch(url, tok_b)
+        # BOLA 信号：B 的 token 能拿到 A 的资源（200 且 body 相似），或两者都 200 但 body 不同却含对方数据
+        diff = (sa != sb) or (ba[:200] != bb[:200])
+        access = (sa == 200 and sb == 200 and ba and bb and ba != bb)
+        if access or (sa == 200 and sb == 200 and ba == bb and ba):
+            findings.append({"id": cid, "status_a": sa, "status_b": sb, "body_a_len": len(ba), "body_b_len": len(bb), "bola_suspected": access, "snippet_a": ba[:120], "snippet_b": bb[:120]})
+    print(json.dumps({"findings": findings}, ensure_ascii=False, indent=2))
+    sys.exit(0 if findings else 1)
+parameters:
+  - name: "url_template"
+    type: "string"
+    description: |
+      资源端点模板，用 `{id}` 占位资源标识。示例：`https://api.example.com/orders/{id}`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "token_a"
+    type: "string"
+    description: "用户 A 的 Bearer token"
+    required: true
+    position: 2
+    format: "positional"
+  - name: "token_b"
+    type: "string"
+    description: "用户 B 的 Bearer token（用于重放测 IDOR/BOLA）"
+    required: true
+    position: 3
+    format: "positional"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数"
+    required: false
+    format: "positional"
+enabled: true
+short_description: "IDOR/BOLA 测试：双 token 重放同一资源端点，比对响应差异定位越权"

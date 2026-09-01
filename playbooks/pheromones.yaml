@@ -1,0 +1,83 @@
+# Per-finding-type pheromone tuning for the stigmergic swarm.
+#
+# Every finding written to the blackboard starts with `base` weight and
+# decays with a half-life of `half_life_sec` seconds. Downstream agents'
+# Predicate.MinPheromone filters out decayed findings automatically.
+#
+# Tuning intent:
+#  - Higher `base`  = downstream agents act on this finding type sooner
+#  - Shorter `half_life_sec` = drop stale findings faster; good for
+#    high-volatility state (sessions, tokens, probe results)
+#  - Longer `half_life_sec` = keep durable discoveries hot (open ports,
+#    tech stacks, CVE matches persist across multi-hour campaigns)
+#
+# The --exploration-bias CLI flag multiplies these base weights at write
+# time:  low => 0.7,  med => 1.0 (default),  high => 1.3. High bias
+# steers the swarm toward covering breadth first; low toward depth.
+
+types:
+  TARGET_REGISTERED:
+    base: 1.0
+    half_life_sec: 86400    # 24h: the root target stays hot for an entire engagement
+
+  SUBDOMAIN:
+    base: 0.7
+    half_life_sec: 7200     # 2h: newly-discovered subdomains are interesting but not urgent
+
+  PORT_OPEN:
+    base: 0.8
+    half_life_sec: 3600     # 1h
+
+  SERVICE:
+    base: 0.8
+    half_life_sec: 3600
+
+  HTTP_ENDPOINT:
+    base: 0.6
+    half_life_sec: 7200
+  # "Interesting" endpoints (flagged by katana heuristics) get a bonus
+  # applied at write time by the recon agent.
+  HTTP_ENDPOINT_INTERESTING:
+    base: 0.9
+    half_life_sec: 7200
+
+  TECHNOLOGY:
+    base: 0.5
+    half_life_sec: 7200     # tech fingerprints durable but low urgency
+
+  # Classifier outputs — severity-aware.
+  CVE_MATCH:
+    base: 1.0               # overridden by severity via ClassifierAgent
+    half_life_sec: 10800    # 3h default
+  MISCONFIGURATION:
+    base: 0.6
+    half_life_sec: 3600
+
+  # Exploit outputs.
+  EXPLOIT_CHAIN:
+    base: 0.9
+    half_life_sec: 3600
+  EXPLOIT_RESULT:
+    base: 0.7               # bumped to 1.0 on success inside the exploit agent
+    half_life_sec: 1800
+
+  SESSION:
+    base: 0.8
+    half_life_sec: 900      # 15m — session tokens age out fast
+
+  AGENT_ERROR:
+    base: 0.3
+    half_life_sec: 600      # 10m — surface briefly then decay
+
+  CAMPAIGN_COMPLETE:
+    base: 1.0
+    half_life_sec: 300
+
+  NUCLEI_TEMPLATE_DRAFT:
+    base: 0.8
+    half_life_sec: 43200      # 12h — drafts stay interesting for a reviewer's workday
+
+# Optional catch-all used when a type is not listed above.
+default:
+  base: 0.5
+  half_life_sec: 3600

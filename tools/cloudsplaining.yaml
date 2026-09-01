@@ -1,0 +1,45 @@
+name: "cloudsplaining"
+command: "cloudsplaining"
+# AWS IAM 策略审计：识别过度权限（wildcard、资源过宽、降级 Action）
+# 默认 download 下载策略
+args: ["download"]
+enabled: true
+short_description: "AWS IAM 过度权限审计：wildcard/资源过宽/降级 Action 识别，-scan 本地 JSON"
+description: |
+  cloudsplaining AWS IAM 策略审计。
+
+  **工作流程：**
+  1. `download`：从 AWS 下载所有 IAM 策略为 JSON
+  2. `scan`：对下载的 JSON 做过度权限分析，输出 HTML 报告
+
+  **检测项：**
+  - `Action: *` 或 `s3:*` 等 wildcard 权限
+  - 资源过宽（`Resource: *`）
+  - 降级 Action（如 `iam:CreateAccessKey` 在用户策略中）
+
+  仅用于已授权的 AWS 账号审计。
+parameters:
+  - name: "mode"
+    type: "string"
+    description: |
+      模式：`download`（从 AWS 下载策略） | `scan`（扫描本地 JSON）
+    required: true
+    position: 1
+    format: "positional"
+  - name: "input_file"
+    type: "string"
+    description: "scan 模式的本地 IAM 策略 JSON 文件路径"
+    required: false
+    flag: "-input-file"
+    format: "flag"
+  - name: "report_output"
+    type: "string"
+    description: "HTML 报告输出路径"
+    required: false
+    flag: "--report-file"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数"
+    required: false
+    format: "positional"

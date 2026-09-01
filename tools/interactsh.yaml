@@ -1,0 +1,41 @@
+name: "interactsh"
+command: "interactsh"
+# OAST 带外检测（ProjectDiscovery）：启动 client 监听回调，用于盲注类漏洞（SSRF/盲 XSS/OOB RCE/dnslog）
+# 默认 -n 10 生成 10 个交互 payload
+args: ["-n", "10"]
+enabled: true
+short_description: "OAST 带外检测：盲 SSRF/盲 XSS/OOB RCE/dnslog 回调监听，-n 多 payload，支持自托管 -server"
+description: |
+  interactsh 带外交互检测（ProjectDiscovery）。
+
+  **默认行为：**
+  - `-n 10` 生成 10 个交互 payload（子域）
+
+  **工作流程：**
+  1. 启动 client，获取一批 `xxx.oast.site` 子域
+  2. 把这些子域作为 payload 投入目标（SSRF URL、XSS、RCE 回连等）
+  3. client 实时显示哪些子域收到回调（DNS/HTTP/SMTP/TLS）
+
+  **可选：**
+  - `count`：`-n` payload 数量
+  - `server`：`-server` 指定自托管 interactsh-server
+
+  用于盲注类漏洞确认。请确保有授权。
+parameters:
+  - name: "count"
+    type: "string"
+    description: "生成 payload 数量。示例：`20`"
+    required: false
+    flag: "-n"
+    format: "flag"
+  - name: "server"
+    type: "string"
+    description: "自托管 interactsh-server 地址。示例：`https://oast.example.com`"
+    required: false
+    flag: "-server"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数。示例：`-v`（详细）、`-poll-interval 5s`"
+    required: false
+    format: "positional"

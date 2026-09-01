@@ -1,0 +1,62 @@
+name: Bug Bounty Swarm
+description: >
+  End-to-end swarm for bug-bounty programs. Starts from a root domain,
+  enumerates subdomains and endpoints, hunts for low-hanging vulns, then
+  escalates on candidate SQLi/SSRF/IDOR with targeted active tests.
+  Scope-enforced at every step; dedup-ready output for HackerOne / Bugcrowd.
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [bug-bounty, external, web, recon, active]
+
+variables:
+  target_domain:
+    type: string
+    required: true
+  program_slug:
+    type: string
+    required: false
+    description: HackerOne/Bugcrowd program slug, used for dedup and scope hints
+
+phases:
+  - name: subdomain_enumeration
+    tools:
+      - name: subfinder
+        options: { recursive: true, timeout: 300 }
+      - name: dnsx
+    post_analysis: |
+      Catalogue every subdomain, flag wildcards and takeover candidates
+      (dangling CNAMEs pointing to third-party services).
+
+  - name: web_surface
+    tools:
+      - name: httpx
+        options: { follow_redirects: true, threads: 50 }
+      - name: katana
+        options: { depth: 3, js_crawl: true }
+      - name: gau
+    post_analysis: |
+      Map alive hosts, status codes, tech stacks, and deep-link endpoints.
+      Prioritise endpoints with query parameters, admin-ish paths, and
+      old/deprecated versions.
+
+  - name: vulnerability_scan
+    tools:
+      - name: nuclei
+        options:
+          severity: [critical, high, medium]
+          templates: ["http/", "cves/", "exposures/"]
+    post_analysis: |
+      Report-ready findings only — filter duplicates against known
+      program issues when program_slug is provided.
+
+  - name: active_escalation
+    # Opt-in by the swarm: only triggers if nuclei / classifier produce a
+    # POTENTIAL_SQLI, SSRF, or IDOR finding with pheromone >= 0.5.
+    tools:
+      - name: sqlmap
+        options: { risk: 1, level: 2, batch: true }
+    post_analysis: |
+      Confirm exploitability for high-pheromone findings. Cleanup
+      commands must be registered for anything that mutates state.

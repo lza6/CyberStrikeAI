@@ -1,0 +1,61 @@
+name: Internal Network Swarm
+description: >
+  Authorized internal network pentest playbook. Requires a signed scope
+  file (see scope_file variable) — the runner refuses to execute without
+  one. Walks CIDR -> service enumeration -> optional Metasploit post-ex
+  with cleanup always registered.
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [internal, network, authorized-only, high-risk]
+
+variables:
+  scope_file:
+    type: string
+    required: true
+    description: Path to the signed scope YAML authorising this engagement
+  cidr:
+    type: string
+    required: true
+  post_exploitation:
+    type: string
+    default: read-only
+    description: "read-only | active (active requires separate written approval)"
+
+phases:
+  - name: network_sweep
+    tools:
+      - name: nmap
+        options:
+          scan_type: "-sS"
+          top_ports: 1000
+          timing: "-T3"   # quieter on internal networks
+    post_analysis: |
+      Identify live hosts and top-1000 open ports. Skip printer/IoT
+      ranges unless explicitly in scope — they crash easily.
+
+  - name: service_enum
+    tools:
+      - name: nmap
+        options:
+          scan_type: "-sV"
+          top_ports: 100
+          timing: "-T3"
+    post_analysis: |
+      Version-fingerprint the services that matter: SSH, SMB, RDP,
+      WinRM, LDAP, SNMP, databases. Credential hygiene findings
+      are critical-severity by default on internal nets.
+
+  - name: post_exploitation
+    tools:
+      # Metasploit is opt-in and only fires when post_exploitation == "active".
+      # The swarm's exploit agent refuses without cleanup commands registered.
+      - name: metasploit
+        options:
+          post_exploitation: "{{ post_exploitation }}"
+    post_analysis: |
+      Read-only: enumerate users, shares, group memberships.
+      Active: require per-action written approval (the playbook runner
+      will halt and prompt). All sessions must be killed and artefacts
+      removed on exit — cleanup registry enforces this.

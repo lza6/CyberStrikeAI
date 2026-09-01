@@ -1,0 +1,39 @@
+name: API Security Assessment
+description: Focused assessment of REST/GraphQL APIs for common vulnerabilities
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [api, rest, graphql]
+
+variables:
+  target_domain:
+    type: string
+    required: true
+  api_base_path:
+    type: string
+    default: /api
+
+phases:
+  - name: api_discovery
+    tools:
+      - name: katana
+        options: { depth: 5, js_crawl: true }
+      - name: gau
+      - name: httpx
+        options: { follow_redirects: true }
+    post_analysis: |
+      Discover all API endpoints. Look for OpenAPI/Swagger docs,
+      GraphQL introspection endpoints, versioned APIs, and undocumented
+      endpoints in JavaScript bundles.
+
+  - name: api_vulnerabilities
+    tools:
+      - name: nuclei
+        options:
+          templates: ["http/vulnerabilities/", "http/misconfiguration/"]
+          severity: [critical, high, medium]
+    post_analysis: |
+      Test for: broken authentication, BOLA/IDOR, mass assignment,
+      rate limiting bypass, JWT vulnerabilities, SSRF via API parameters,
+      GraphQL injection, and excessive data exposure.

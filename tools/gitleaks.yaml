@@ -1,0 +1,55 @@
+name: "gitleaks"
+command: "gitleaks"
+# 密钥扫描：在 git 仓库/源码/JS bundle 中扫描泄露的云凭据/令牌
+# 默认 detect 模式
+args: ["detect"]
+enabled: true
+short_description: "密钥扫描：git 仓库/源码/JS bundle 中的 AWS/GCP/OpenAI/Stripe/Slack/GitHub 凭据泄露"
+description: |
+  gitleaks 密钥泄露扫描。
+
+  **模式：**
+  - `detect`：`--source <path>` 扫描目录（默认）
+  - `git`：`git -v --source <repo>` 扫描 git 历史
+  - `dir`：`dir --source <path>` 扫描普通目录
+
+  **可选：**
+  - `report_path`：`--report-path <file>` 输出 JSON 报告
+  - `verbose`：`--verbose` 详细输出
+  - `config`：`--config <file>` 自定义规则
+
+  默认规则覆盖 AWS/GCP/Azure/OpenAI/Stripe/Slack/GitHub/Private Key 等 100+ 凭据类型。
+
+  请确保有授权。
+parameters:
+  - name: "source"
+    type: "string"
+    description: |
+      扫描源路径（git 仓库或目录）。示例：`/tmp/target-repo`、`/tmp/web-bundle/`
+    required: true
+    flag: "--source"
+    format: "flag"
+  - name: "report_path"
+    type: "string"
+    description: "JSON 报告输出路径"
+    required: false
+    flag: "--report-path"
+    format: "flag"
+  - name: "verbose"
+    type: "bool"
+    description: "详细输出"
+    required: false
+    flag: "--verbose"
+    format: "flag"
+    default: false
+  - name: "config"
+    type: "string"
+    description: "自定义规则配置文件路径"
+    required: false
+    flag: "--config"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数"
+    required: false
+    format: "positional"

@@ -1,0 +1,37 @@
+name: "crlfuzz"
+command: "crlfuzz"
+# CRLF 注入检测：HTTP 响应拆分/注入、头注入
+args: []
+enabled: true
+short_description: "CRLF 注入检测：HTTP 响应拆分、头注入，支持 -l 批量"
+description: |
+  crlfuzz CRLF 注入检测（ProjectDiscovery）。
+
+  **两种模式：**
+  - 单目标：传 `url`
+  - 批量：传 `list_file`（每行一个 URL）
+
+  **工作流程：**
+  1. 对目标 URL 的每个参数注入 `%0d%0a` / `%0a` / `%0d` 等 CRLF 序列
+  2. 检测响应头/体是否出现注入痕迹
+
+  请确保有授权。
+parameters:
+  - name: "url"
+    type: "string"
+    description: |
+      目标 URL（含参数）。示例：`https://example.com/page?param=1`
+    required: false
+    position: 1
+    format: "positional"
+  - name: "list_file"
+    type: "string"
+    description: "批量 URL 文件，每行一个"
+    required: false
+    flag: "-l"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数。示例：`-H 'Cookie: x=1'`、`-rate 50`"
+    required: false
+    format: "positional"

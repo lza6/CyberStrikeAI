@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>CyberStrikeAI · AI 通道配置</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #0b0f14; color: #e6edf3; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      width: 100%; max-width: 560px; background: #131a22; border: 1px solid #233044;
+      border-radius: 16px; padding: 32px; box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    }
+    .logo { display:flex; align-items:center; gap:10px; margin-bottom: 18px; }
+    .logo img { width: 36px; height: 36px; }
+    .logo h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    .logo .core { color:#e6edf3; } .logo .ai { color:#4d8cff; }
+    .hint { color:#9aa7b4; font-size:13px; line-height:1.6; margin: 0 0 20px; }
+    .field { margin-bottom: 16px; }
+    label { display:block; font-size:13px; color:#c7d2dd; margin-bottom:6px; }
+    label .req { color:#ff6b6b; }
+    input, select {
+      width:100%; padding:10px 12px; background:#0d1117; color:#e6edf3;
+      border:1px solid #2a3a4f; border-radius:8px; font-size:14px; outline:none;
+    }
+    input:focus, select:focus { border-color:#4d8cff; }
+    .row { display:flex; gap:12px; } .row > .field { flex:1; }
+    .btn {
+      padding:10px 16px; border:none; border-radius:8px; font-size:14px; cursor:pointer;
+      font-weight:500;
+    }
+    .btn-primary { background:#4d8cff; color:#fff; }
+    .btn-primary:disabled { background:#2a3a4f; cursor:not-allowed; }
+    .btn-secondary { background:#1f2a37; color:#c7d2dd; border:1px solid #2a3a4f; }
+    .actions { display:flex; gap:10px; margin-top:8px; }
+    .status { margin-top:16px; font-size:13px; padding:10px 12px; border-radius:8px; display:none; }
+    .ok { background:#0f2a1a; color:#3fb950; border:1px solid #1f4a2a; display:block; }
+    .err { background:#2a1212; color:#ff7b72; border:1px solid #4a1f1f; display:block; }
+    .quick { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
+    .quick .chip {
+      padding:6px 10px; background:#1f2a37; border:1px solid #2a3a4f; border-radius:14px;
+      font-size:12px; color:#c7d2dd; cursor:pointer;
+    }
+    .quick .chip:hover { border-color:#4d8cff; color:#e6edf3; }
+    a { color:#4d8cff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <img src="icon.png" alt="logo" />
+      <h1><span class="core">CyberStrike</span><span class="ai">AI</span></h1>
+    </div>
+    <p class="hint">
+      首次使用前，请配置一个 LLM（大模型）API 通道。支持任何 OpenAI 兼容协议的服务商
+      （OpenAI / DeepSeek / 通义千问 / 智谱 GLM / Moonshot / SiliconFlow 等）。<br/>
+      填好后点击「保存并启动」，主窗口会自动打开。
+    </p>
+
+    <div class="quick">
+      <div class="chip" data-preset="openai">OpenAI</div>
+      <div class="chip" data-preset="deepseek">DeepSeek</div>
+      <div class="chip" data-preset="qwen">通义千问</div>
+      <div class="chip" data-preset="glm">智谱 GLM</div>
+      <div class="chip" data-preset="moonshot">Moonshot</div>
+      <div class="chip" data-preset="siliconflow">SiliconFlow</div>
+    </div>
+
+    <div class="field">
+      <label>API 提供商</label>
+      <select id="provider">
+        <option value="openai_compatible">OpenAI 兼容协议（绝大多数服务商）</option>
+        <option value="claude">Claude（Anthropic Messages API）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Base URL <span class="req">*</span></label>
+      <input id="base_url" type="text" placeholder="https://api.openai.com/v1" />
+    </div>
+    <div class="field">
+      <label>API Key <span class="req">*</span></label>
+      <input id="api_key" type="password" placeholder="sk-..." />
+    </div>
+    <div class="field">
+      <label>模型名称 <span class="req">*</span></label>
+      <input id="model" type="text" placeholder="gpt-4o / deepseek-chat / qwen-max ..." />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>最大上下文 Token</label>
+        <input id="max_total_tokens" type="number" value="120000" />
+      </div>
+      <div class="field">
+        <label>最大输出 Token</label>
+        <input id="max_completion_tokens" type="number" value="16384" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary" id="test-btn">测试连接</button>
+      <button class="btn btn-primary" id="save-btn" style="flex:1">保存并启动</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <p class="hint" style="margin-top:16px; font-size:12px;">
+      Key 仅写入本地 config.yaml，不会外发。各服务商获取 Key：<br/>
+      <a href="https://platform.openai.com/api-keys" onclick="return openExt(event)">OpenAI</a> ·
+      <a href="https://platform.deepseek.com/api_keys" onclick="return openExt(event)">DeepSeek</a> ·
+      <a href="https://dashscope.console.aliyun.com/apiKey" onclick="return openExt(event)">通义</a> ·
+      <a href="https://open.bigmodel.cn/usercenter/apikeys" onclick="return openExt(event)">智谱</a>
+    </p>
+  </div>
+
+  <script src="config.js"></script>
+</body>
+</html>

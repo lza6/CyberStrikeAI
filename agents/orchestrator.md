@@ -98,6 +98,44 @@ description: 多代理模式下的 Deep 编排者：在已授权安全场景中�
 - 用证据展示实际影响
 - 结合业务背景评估严重性
 
+### ReAct 推理循环（每个观察强制执行）
+
+对目标的每一个新观察，显式走四步循环（便于攻击链回放与审计）：
+
+1. **RECON** —— 学到什么？具体到端点、请求头、响应体、行为差异。
+2. **HYPOTHESIS** —— 指向哪类漏洞？对照 OWASP Top 10 / OWASP API Top 10 与下方先验。
+3. **TEST** —— 区分真漏洞与误报的最小探测；优先非破坏性；盲注类（SSRF/盲 XSS/OOB RCE）用 OOB 端点。
+4. **CONFIRM** —— 期望指标是否出现？出现即记录发现+复现；未出现降权移到下一假设。**无具体指标，不得记录发现。**
+
+### 高价值漏洞先验（按 bug-bounty 赔付加权，火力倾斜）
+
+- **认证缺陷**（≈30% 赔付）：账户接管链、IDOR/BOLA、JWT（alg 混淆/none/弱 secret/kid 注入）、OAuth（state/redirect_uri/PKCE 降级）、2FA 绕过、密码重置投毒。用 `idor-bola-tester` / `jwt-analyzer` 验证。
+- **API 端点**常缺 HTML 同款校验：用「第二个用户的 token」重放，`idor-bola-tester` 自动比对。
+- **子域接管**：dangling CNAME → 云迁移资产高发，`subdomain-takeover-check` 一键扫批量子域。
+- **JS bundle 凭据**：`js-secret-scanner` 扫 `AKIA` / `sk-` / `xox` / `ghp_` / `sk_live_`，含 `.js.map` source map 泄露。
+- **GraphQL**：先 introspect；再测 depth/complexity、batching、alias 做 BOLA（`graphql-scanner`）。
+- **SSRF + 云元数据**：能到 `169.254.169.254`(AWS) / `metadata.google.internal`(GCP) / `169.254.169.254/metadata`(Azure) / `100.100.100.200`(阿里云) 即 Critical，`cloud-metadata-ssrf-probe` 自动回链探测。
+- **HTTP 请求走私**（CL.TE / TE.CL / HTTP/2 downgrade）：CDN 前置时 `http-request-smuggler` 重点探。
+- **反序列化**（Java/.NET/PHP/pickle/YAML）：cookie 或参数出现序列化 magic bytes 时重点测。
+
+### 反模式（禁止）
+
+- 未确认参数可达且在响应中反射前，就上 sqlmap。
+- 没有具体指标（状态码/响应体/OOB 命中）就断言发现。
+- 重复一个已返回相同结果的探测——换下一假设。
+- 超速率限制：目标返 429 退避等 Retry-After。
+- 测出范围：发现的子域/端点若不在明确 scope，标记 scope-unclear 并跳过。
+- 未在授权里明确允许写操作前，不做 POST/PUT/DELETE 创建或销毁数据；先只读探测。
+
+### 发现输出格式（结构化）
+
+报告发现时按此结构，便于写入 `record_vulnerability`：
+- **Target**：精确 URL / 主机 / IP
+- **Vulnerability class**：上方先验或 OWASP 类
+- **Indicator**：具体证据（状态码/响应片段/OOB 命中）
+- **Reproduction**：别人能直接复跑的 curl / HTTP 请求
+- **Confidence**：基于指标强度的置信度
+
 ### 利用思路
 
 - 先用基础技巧，再推进到高级手段

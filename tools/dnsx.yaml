@@ -1,0 +1,66 @@
+name: "dnsx"
+command: "dnsx"
+# DNS 解析/枚举（ProjectDiscovery）：A/AAAA/CNAME/NS/TXT/MX、反向 PTR、子域爆破
+# 默认 -a -resp 解析 A 记录并显示响应
+args: ["-a", "-resp"]
+enabled: true
+short_description: "DNS 解析/枚举：A/AAAA/CNAME/NS/TXT/MX、反向 PTR、子域爆破 -brute"
+description: |
+  dnsx DNS 解析枚举（ProjectDiscovery）。
+
+  **默认行为：**
+  - `-a` 解析 A 记录
+  - `-resp` 显示响应详情
+
+  **可选：**
+  - `record`：指定记录类型（A/AAAA/CNAME/NS/TXT/MX/ANY）
+  - `reverse`：`-ptr` 反向解析（传 IP）
+  - `brute`：`-d` + `-w` 子域爆破（需 wordlist）
+  - `list_file`：`-l` 批量解析
+
+  请确保有权限操作。
+parameters:
+  - name: "domain"
+    type: "string"
+    description: |
+      目标域名。示例：`example.com`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "list_file"
+    type: "string"
+    description: "批量域名文件，每行一个"
+    required: false
+    flag: "-l"
+    format: "flag"
+  - name: "record"
+    type: "string"
+    description: "记录类型：A / AAAA / CNAME / NS / TXT / MX / ANY"
+    required: false
+    flag: "-resp"
+    format: "flag"
+  - name: "reverse"
+    type: "bool"
+    description: "反向 PTR 解析（需传 IP 而非域名）"
+    required: false
+    flag: "-ptr"
+    format: "flag"
+    default: false
+  - name: "brute"
+    type: "bool"
+    description: "子域爆破（需配合 wordlist）"
+    required: false
+    flag: "-brute"
+    format: "flag"
+    default: false
+  - name: "wordlist"
+    type: "string"
+    description: "爆破用 wordlist 路径（brute=true 时必填）"
+    required: false
+    flag: "-w"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数。示例：`-rate 100`"
+    required: false
+    format: "positional"

@@ -1,0 +1,84 @@
+# Likely PostgREST table names to probe when the OpenAPI spec at /rest/v1/
+# is unavailable. Probe each with: GET /rest/v1/<name>?select=*&limit=1
+# (headers: apikey + Authorization: Bearer). 200+rows = readable; 403/42501
+# = RLS-protected; 404 = not exposed. Names implying trust are flagged.
+
+# --- identity / users ---
+users
+profiles
+accounts
+account
+members
+member
+customers
+customer
+people
+contacts
+
+# --- trust / forgery targets (RLS WRITE = record forgery) ---
+certificates
+certificate
+certifications
+verifications
+verification
+credentials
+licenses
+license
+badges
+diplomas
+attestations
+entitlements
+subscriptions
+subscription
+plans
+memberships
+roles
+permissions
+admins
+kyc
+documents
+document
+signatures
+audit_log
+
+# --- money / commerce ---
+orders
+order
+payments
+payment
+invoices
+invoice
+transactions
+transaction
+carts
+wallets
+balances
+coupons
+discounts
+refunds
+
+# --- content / app ---
+posts
+comments
+messages
+message
+notifications
+files
+uploads
+media
+images
+projects
+teams
+organizations
+orgs
+workspaces
+settings
+config
+api_keys
+tokens
+secrets
+sessions
+invites
+waitlist
+feedback
+support_tickets

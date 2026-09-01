@@ -1,0 +1,104 @@
+{"service":"GitHub Pages","cname":".github.io","fingerprint":"There isn't a GitHub Pages site here.","http_status":404,"status":"vulnerable","notes":"Create a Pages repo under your account, add a CNAME file with the victim host, push an index.html. The Pages CNAME claim is per-domain, not per-user."}
+{"service":"Heroku","cname":".herokuapp.com","fingerprint":"No such app","http_status":404,"status":"vulnerable","notes":"Also: 'There's nothing here, yet.' Run `heroku create <name>` matching the missing app. SSL on custom domains requires the *.herokudns.com variant."}
+{"service":"Heroku","cname":".herokudns.com","fingerprint":"No such app","http_status":404,"status":"vulnerable","notes":"SSL endpoint variant. Custom domain config inside the matching Heroku app."}
+{"service":"AWS S3","cname":".s3.amazonaws.com","fingerprint":"NoSuchBucket","http_status":404,"status":"vulnerable","notes":"Create the bucket with the same name in any region, enable static website hosting. Region-restricted accounts may not be able to claim certain bucket names."}
+{"service":"AWS S3 (website endpoint)","cname":".s3-website","fingerprint":"NoSuchBucket","http_status":404,"status":"vulnerable","notes":"Matches *.s3-website-<region>.amazonaws.com and *.s3-website.<region>.amazonaws.com."}
+{"service":"AWS S3 (dualstack)","cname":".s3.dualstack.","fingerprint":"NoSuchBucket","http_status":404,"status":"vulnerable","notes":""}
+{"service":"AWS Elastic Beanstalk","cname":".elasticbeanstalk.com","fingerprint":"NXDOMAIN on the CNAME target","http_status":0,"status":"edge-case","notes":"Reclaiming an EB environment name in the same region works; AWS has tightened name reuse since 2020 — confirm with a probe registration."}
+{"service":"AWS CloudFront","cname":".cloudfront.net","fingerprint":"The request could not be satisfied","http_status":403,"status":"edge-case","notes":"Mostly patched. Some custom-origin misconfigurations still allow takeover via the CNAME alias pointing at a distribution someone else can create."}
+{"service":"Azure App Service","cname":".azurewebsites.net","fingerprint":"404 Web Site not found","http_status":404,"status":"vulnerable","notes":"Create an Azure App Service with the matching name in the same region. Multi-region: try each."}
+{"service":"Azure App Service (P)","cname":".p.azurewebsites.net","fingerprint":"404 Web Site not found","http_status":404,"status":"vulnerable","notes":"Premium variant."}
+{"service":"Azure Cloud Services","cname":".cloudapp.net","fingerprint":"404 Web Site not found","http_status":404,"status":"vulnerable","notes":"Classic Cloud Service deployment slot — naming is per-region."}
+{"service":"Azure Cloud Services (RM)","cname":".cloudapp.azure.com","fingerprint":"404 Web Site not found","http_status":404,"status":"vulnerable","notes":"Resource Manager variant."}
+{"service":"Azure Traffic Manager","cname":".trafficmanager.net","fingerprint":"","http_status":0,"status":"vulnerable","notes":"Detect via NXDOMAIN on the profile hostname. Create a Traffic Manager profile with the matching name."}
+{"service":"Azure Storage (blob)","cname":".blob.core.windows.net","fingerprint":"","http_status":0,"status":"vulnerable","notes":"NXDOMAIN signal. Create a storage account with the same name (globally unique)."}
+{"service":"Azure Storage (file)","cname":".file.core.windows.net","fingerprint":"","http_status":0,"status":"vulnerable","notes":"NXDOMAIN signal."}
+{"service":"Azure Storage (queue)","cname":".queue.core.windows.net","fingerprint":"","http_status":0,"status":"vulnerable","notes":"NXDOMAIN signal."}
+{"service":"Azure Storage (table)","cname":".table.core.windows.net","fingerprint":"","http_status":0,"status":"vulnerable","notes":"NXDOMAIN signal."}
+{"service":"Azure CDN","cname":".azureedge.net","fingerprint":"","http_status":400,"status":"edge-case","notes":"Azure Front Door / CDN endpoints. Microsoft requires custom domain validation since 2022 — confirm by attempting registration."}
+{"service":"Azure CDN (Front Door)","cname":".azurefd.net","fingerprint":"","http_status":400,"status":"edge-case","notes":"Same Front Door class; needs domain ownership token now."}
+{"service":"Azure API Management","cname":".azure-api.net","fingerprint":"","http_status":0,"status":"edge-case","notes":"NXDOMAIN on the API gateway name. Reusable globally."}
+{"service":"Google Cloud Storage","cname":".storage.googleapis.com","fingerprint":"NoSuchBucket","http_status":404,"status":"vulnerable","notes":"Bucket names are global; create a bucket with the same name."}
+{"service":"Google App Engine","cname":".appspot.com","fingerprint":"","http_status":0,"status":"edge-case","notes":"Old project IDs are reserved by Google and cannot be reclaimed."}
+{"service":"Firebase Hosting","cname":".firebaseapp.com","fingerprint":"","http_status":0,"status":"edge-case","notes":"Project IDs are reserved like App Engine."}
+{"service":"Netlify","cname":".netlify.app","fingerprint":"Not Found - Request ID","http_status":404,"status":"vulnerable","notes":"Create a Netlify site with the matching name (sites are first-come)."}
+{"service":"Netlify (legacy)","cname":".netlify.com","fingerprint":"Not Found - Request ID","http_status":404,"status":"vulnerable","notes":"Same flow as .netlify.app."}
+{"service":"Vercel","cname":"cname.vercel-dns.com","fingerprint":"The deployment could not be found","http_status":404,"status":"edge-case","notes":"Also: '404: NOT_FOUND DEPLOYMENT_NOT_FOUND'. Custom domain reclaim needs ownership-token verification."}
+{"service":"Vercel","cname":".vercel.app","fingerprint":"The deployment could not be found","http_status":404,"status":"edge-case","notes":"Same provider as cname.vercel-dns.com."}
+{"service":"Shopify","cname":".myshopify.com","fingerprint":"Sorry, this shop is currently unavailable.","http_status":404,"status":"vulnerable","notes":"Create a Shopify store with the matching subdomain (trial). Add the custom domain in admin."}
+{"service":"Tumblr","cname":".domains.tumblr.com","fingerprint":"Whatever you were looking for doesn't currently exist at this address.","http_status":404,"status":"vulnerable","notes":"Add the custom domain in your blog's settings."}
+{"service":"Surge.sh","cname":".surge.sh","fingerprint":"project not found","http_status":404,"status":"vulnerable","notes":"`surge` CLI: deploy any directory with --domain <victim host>."}
+{"service":"Ghost","cname":".ghost.io","fingerprint":"The thing you were looking for is no longer here, or never was","http_status":404,"status":"vulnerable","notes":"Ghost-Pro hosted. Sign up + use the matching subdomain."}
+{"service":"Pantheon","cname":".pantheonsite.io","fingerprint":"The gods are wise, but do not know of the site which you seek.","http_status":404,"status":"vulnerable","notes":"Drush-managed; create a Pantheon site of the matching slug."}
+{"service":"Squarespace","cname":".squarespace.com","fingerprint":"No Such Account","http_status":404,"status":"edge-case","notes":"Squarespace blocks subdomain reuse; usually only takeover-able when the CNAME points at a domain Squarespace itself doesn't claim."}
+{"service":"Tilda","cname":".tilda.ws","fingerprint":"Please renew your subscription","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Unbounce","cname":".unbouncepages.com","fingerprint":"The requested URL was not found on this server.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"UserVoice","cname":".uservoice.com","fingerprint":"This UserVoice subdomain is currently available!","http_status":404,"status":"vulnerable","notes":"Defunct as of 2023 for new accounts; legacy domains still test."}
+{"service":"Strikingly","cname":".s.strikinglydns.com","fingerprint":"PAGE NOT FOUND.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Helpjuice","cname":".helpjuice.com","fingerprint":"We could not find what you're looking for.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"HelpScout","cname":".helpscoutdocs.com","fingerprint":"No settings were found for this company","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Bitbucket","cname":".bitbucket.io","fingerprint":"Repository not found","http_status":404,"status":"vulnerable","notes":"Create a Bitbucket repo + Pages-style hosting under your account."}
+{"service":"Cargo Collective","cname":".cargocollective.com","fingerprint":"If you're moving your domain away from Cargo","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Statuspage","cname":".statuspage.io","fingerprint":"You are being redirected","http_status":302,"status":"edge-case","notes":"Sign-up requires email verification with the target domain in some flows — depends on Atlassian's policy at time of test."}
+{"service":"Acquia","cname":".acquia-sites.com","fingerprint":"The site you are looking for could not be found.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Agile CRM","cname":".agilecrm.com","fingerprint":"Sorry, this page is no longer available.","http_status":404,"status":"edge-case","notes":""}
+{"service":"Aha","cname":".aha.io","fingerprint":"There is no portal here ... sending you back to Aha!","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Anima","cname":".animaapp.io","fingerprint":"If this is your website and you've just created it","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Brightcove","cname":".brightcovegallery.com","fingerprint":"<p class=\"bc-gallery-error-code\">Error Code: 404</p>","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Campaign Monitor","cname":"createsend.com","fingerprint":"Trying to access your account?","http_status":404,"status":"vulnerable","notes":"Resolves via createsend.com — claim the matching client."}
+{"service":"Canny","cname":".canny.io","fingerprint":"Company Not Found","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Cargo Collective (cargo.site)","cname":".cargo.site","fingerprint":"404 Not Found","http_status":404,"status":"edge-case","notes":""}
+{"service":"DigitalOcean App Platform","cname":".ondigitalocean.app","fingerprint":"","http_status":404,"status":"edge-case","notes":"DO App Platform; reuse of app slug requires the org to match in most cases."}
+{"service":"DigitalOcean Spaces","cname":".digitaloceanspaces.com","fingerprint":"<Code>NoSuchBucket</Code>","http_status":404,"status":"vulnerable","notes":""}
+{"service":"DreamHost","cname":".dreamhosters.com","fingerprint":"Site Not Found","http_status":404,"status":"edge-case","notes":""}
+{"service":"Fastly","cname":".fastly.net","fingerprint":"Fastly error: unknown domain","http_status":500,"status":"edge-case","notes":"Fastly requires the customer to add the domain themselves; rarely takeover-able anonymously."}
+{"service":"Fly.io","cname":".fly.dev","fingerprint":"","http_status":404,"status":"edge-case","notes":"App-name reservation policy varies."}
+{"service":"Frontify","cname":".frontify.com","fingerprint":"Brand not found","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Gemfury","cname":".fury.site","fingerprint":"404: This page could not be found.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"GetResponse","cname":".gr8.com","fingerprint":"With GetResponse Landing Pages, lead generation has never been easier","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Hatena Blog","cname":"hatenablog.com","fingerprint":"404 Blog is not found","http_status":404,"status":"vulnerable","notes":"Japanese provider; fingerprint may also appear translated."}
+{"service":"HelpRescue","cname":".helprace.com","fingerprint":"Help Center Closed","http_status":404,"status":"edge-case","notes":""}
+{"service":"Intercom","cname":".custom.intercom.help","fingerprint":"This page is reserved for artistic dogs.","http_status":404,"status":"edge-case","notes":"Custom-help-center domains; depends on workspace existence."}
+{"service":"JetBrains","cname":".myjetbrains.com","fingerprint":"is not a registered InCloud YouTrack","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Kajabi","cname":".endpoint.mykajabi.com","fingerprint":"The page you were looking for doesn't exist.","http_status":404,"status":"edge-case","notes":""}
+{"service":"Kinsta","cname":".kinsta.cloud","fingerprint":"No Site For Domain","http_status":404,"status":"edge-case","notes":""}
+{"service":"LaunchRock","cname":".launchrock.com","fingerprint":"It looks like you may have taken a wrong turn somewhere.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Mashery","cname":".mashery.com","fingerprint":"Unrecognized domain","http_status":404,"status":"edge-case","notes":"TIBCO-owned; requires account linking with the domain."}
+{"service":"Mailerlite","cname":".mailerlite.com","fingerprint":"","http_status":404,"status":"edge-case","notes":""}
+{"service":"Pingdom","cname":".stats.pingdom.com","fingerprint":"public report page, powered by Pingdom Monitoring","http_status":200,"status":"edge-case","notes":""}
+{"service":"Proposify","cname":".proposify.biz","fingerprint":"If you need immediate assistance, please contact","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Readme","cname":".readme.io","fingerprint":"Project doesnt exist... yet!","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Refined Wiki","cname":".refined.site","fingerprint":"","http_status":404,"status":"edge-case","notes":""}
+{"service":"SendGrid","cname":"sendgrid.net","fingerprint":"","http_status":0,"status":"edge-case","notes":"Marketing landing-page subdomain feature; pattern varies per account."}
+{"service":"ShortIO","cname":".shortio.app","fingerprint":"404, please check the URL.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"SimpleBooklet","cname":".simplebooklet.com","fingerprint":"We can't find that booklet","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Smartling","cname":".smartling.com","fingerprint":"Domain is not configured","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Smugmug","cname":".smugmug.com","fingerprint":"","http_status":0,"status":"edge-case","notes":"Empty body on unclaimed; cross-check with account-name probe."}
+{"service":"SquareSpace (alt)","cname":".squarespace-cdn.com","fingerprint":"","http_status":404,"status":"edge-case","notes":""}
+{"service":"Sprintful","cname":".sprintful.com","fingerprint":"","http_status":404,"status":"edge-case","notes":""}
+{"service":"Surveygizmo (Alchemer)","cname":".surveygizmo.com","fingerprint":"Domain is not yet set up","http_status":404,"status":"vulnerable","notes":""}
+{"service":"TeamWork","cname":".teamwork.com","fingerprint":"Oops - We didn't find your site","http_status":404,"status":"edge-case","notes":""}
+{"service":"Thinkific","cname":".thinkific.com","fingerprint":"You may have mistyped the address or the page may have moved.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Tictail","cname":".tictail.com","fingerprint":"to target URL","http_status":301,"status":"not-vulnerable","notes":"Service shut down; included for historical reports."}
+{"service":"Uberflip","cname":".uberflip.com","fingerprint":"The page you are looking for is not found","http_status":404,"status":"vulnerable","notes":""}
+{"service":"UltimateMember","cname":".readyhosting.com","fingerprint":"","http_status":404,"status":"edge-case","notes":""}
+{"service":"Vend","cname":".vendecommerce.com","fingerprint":"Looks like you've traveled too far into cyberspace.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Webflow","cname":"proxy-ssl.webflow.com","fingerprint":"The page you are looking for doesn't exist or has been moved.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Webflow (proxy)","cname":".proxy.webflow.com","fingerprint":"The page you are looking for doesn't exist or has been moved.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Wishpond","cname":".wishpond.com","fingerprint":"https://www.wishpond.com/404?campaign=","http_status":302,"status":"vulnerable","notes":""}
+{"service":"Wix","cname":".wixsite.com","fingerprint":"","http_status":404,"status":"not-vulnerable","notes":"Wix verifies domain ownership; included so the agent doesn't waste time."}
+{"service":"WordPress.com","cname":".wordpress.com","fingerprint":"Do you want to register","http_status":404,"status":"edge-case","notes":""}
+{"service":"WP Engine","cname":".wpengine.com","fingerprint":"The site you were looking for couldn't be found.","http_status":404,"status":"edge-case","notes":"WPEngine ties domains to install IDs; takeover only when the install is deleted."}
+{"service":"Worksites","cname":".worksites.net","fingerprint":"Hello! Sorry, but the website you’re looking for doesn’t exist.","http_status":404,"status":"vulnerable","notes":""}
+{"service":"Zendesk","cname":".zendesk.com","fingerprint":"Help Center Closed","http_status":404,"status":"edge-case","notes":"Zendesk now enforces domain verification — rarely takeover-able since 2018."}
+{"service":"Tave","cname":".tavehq.com","fingerprint":"<h1>Error 404: Page Not Found</h1>","http_status":404,"status":"edge-case","notes":""}
+{"service":"Bizland (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover. Subdomain delegates to *.bizland.com nameservers but the zone doesn't exist there."}
+{"service":"DNSMadeEasy (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"edge-case","notes":"NS takeover. Provider has tightened account-creation; confirm with a probe."}
+{"service":"EasyDNS (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover candidate. Zone-create on a fresh EasyDNS account."}
+{"service":"Hurricane Electric (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover. Free DNS at he.net — anyone can create the matching zone."}
+{"service":"MyDomain (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover."}
+{"service":"NS1 (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"edge-case","notes":"NS takeover. NS1 requires team-account creation; commercial gating."}
+{"service":"Yahoo Small Business (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover."}
+{"service":"Domain.com (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover."}
+{"service":"Dotster (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover."}
+{"service":"Reg.ru (NS)","cname":"NS","fingerprint":"REFUSED","http_status":0,"status":"vulnerable","notes":"NS takeover. Russian provider."}

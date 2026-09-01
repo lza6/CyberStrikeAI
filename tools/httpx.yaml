@@ -1,0 +1,59 @@
+name: "httpx"
+command: "httpx"
+# HTTP 探测：批量验证存活 Web 服务、状态码、标题、服务器、技术栈、内容长度
+# 默认 -sc -title -server 显示状态码/标题/服务器
+args: ["-sc", "-title", "-server", "-td", "-cl"]
+enabled: true
+short_description: "HTTP 探测：批量存活/状态码/标题/服务器/技术栈/内容长度；支持 -l 文件批量"
+description: |
+  httpx 批量 HTTP 探测（ProjectDiscovery）。
+
+  **默认行为：**
+  - `-sc` 状态码
+  - `-title` 页面标题
+  - `-server` Web 服务器
+  - `-td` 技术栈检测（Wappalyzer）
+  - `-cl` 内容长度
+
+  **两种模式：**
+  - 单目标：传 `target`
+  - 批量：传 `list_file`（每行一个 host/URL）
+
+  **可选过滤：**
+  - `match_codes`：`-mc` 只显示指定状态码（如 200,301,302）
+  - `filter_codes`：`-fc` 排除状态码（如 404,400）
+
+  请确保有权限探测目标。
+parameters:
+  - name: "target"
+    type: "string"
+    description: |
+      单个目标 host/URL（与 list_file 二选一）。示例：`example.com`、`https://10.0.0.1`
+    required: false
+    position: 1
+    format: "positional"
+  - name: "list_file"
+    type: "string"
+    description: |
+      批量目标文件路径，每行一个 host/URL。示例：`/tmp/subdomains.txt`
+    required: false
+    flag: "-l"
+    format: "flag"
+  - name: "match_codes"
+    type: "string"
+    description: "只显示指定状态码，逗号分隔。示例：`200,301,302`"
+    required: false
+    flag: "-mc"
+    format: "flag"
+  - name: "filter_codes"
+    type: "string"
+    description: "排除指定状态码，逗号分隔。示例：`404,400`"
+    required: false
+    flag: "-fc"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: |
+      额外参数，按空格追加到命令末尾。示例：`-rt`（响应时间）、`-follow-redirects`
+    required: false
+    format: "positional"

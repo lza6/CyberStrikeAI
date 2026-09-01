@@ -1,0 +1,50 @@
+# Single-character "field doesn't exist" probes for Apollo-style "Did you mean ...?" enumeration.
+# POST as `{ "query": "{ <root> { x } }" }` and harvest the suggested names from `errors[].message`.
+{ a }
+{ b }
+{ c }
+{ d }
+{ e }
+{ f }
+{ g }
+{ h }
+{ i }
+{ j }
+{ k }
+{ l }
+{ m }
+{ n }
+{ o }
+{ p }
+{ q }
+{ r }
+{ s }
+{ t }
+{ u }
+{ v }
+{ w }
+{ x }
+{ y }
+{ z }
+# Common roots to probe inside (replace `Foo` with discovered type names from initial errors)
+{ user { x } }
+{ users { x } }
+{ admin { x } }
+{ me { x } }
+{ profile { x } }
+{ order { x } }
+{ orders { x } }
+{ product { x } }
+{ products { x } }
+{ secret { x } }
+{ secrets { x } }
+{ token { x } }
+{ tokens { x } }
+{ session { x } }
+{ key { x } }
+{ apiKey { x } }
+{ flag { x } }
+{ internal { x } }
+{ debug { x } }
+{ config { x } }
+{ env { x } }

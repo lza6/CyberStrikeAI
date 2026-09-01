@@ -1,0 +1,78 @@
+name: "subdomain-takeover-check"
+command: "python3"
+args:
+  - "-c"
+  - |
+    import sys, json, socket, urllib.request, urllib.error
+    # 子域接管检测：对一组子域做 DNS 解析 + HTTP 探测，识别 dangling CNAME 指向已释放的云服务
+    # 用法：python3 -c '<script>' "<subdomains 逗号分隔或文件路径>" "<additional_args>"
+    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if arg.startswith("http"): arg = arg.split("://",1)[-1].split("/",1)[0]
+    subs = []
+    if arg.startswith("/") or "\\" in arg:
+        try: subs = [l.strip() for l in open(arg, encoding="utf-8") if l.strip() and not l.startswith("#")]
+        except: pass
+    subs = subs or [s.strip() for s in arg.split(",") if s.strip()]
+    if not subs:
+        print(json.dumps({"error": "subdomains required (csv or file path)"}, ensure_ascii=False)); sys.exit(1)
+    # 已知可被接管的云服务指纹（CNAME 后缀 -> 服务）
+    fingerprints = {
+        "s3.amazonaws.com": "AWS S3 (bucket takeover)",
+        "elasticbeanstalk.com": "AWS Elastic Beanstalk",
+        "cloudfront.net": "AWS CloudFront",
+        "herokuapp.com": "Heroku",
+        "github.io": "GitHub Pages",
+        "azureedge.net": "Azure CDN",
+        "azurewebsites.net": "Azure Web Apps",
+        "blob.core.windows.net": "Azure Blob (container takeover)",
+        "storage.googleapis.com": "GCS",
+        "cargocollective.com": "Cargo Collective",
+        "surge.sh": "Surge",
+        "netlify.app": "Netlify",
+        "vercel.app": "Vercel",
+        "fastly.net": "Fastly",
+    }
+    takeover_signals = ["NoSuchBucket", "NoSuchKey", "The specified bucket does not exist", "There isn't a GitHub Pages site here",
+                        "Repository not found", "No such app", "404 Not Found", "The site is no longer available", "Not Found"]
+    results = []
+    for s in subs:
+        try:
+            cname = socket.gethostbyname_ex(s)
+            resolved = cname[2] if cname and len(cname) > 2 else []
+            cn = resolved[0].lower() if resolved else ""
+            service = next((srv for p, srv in fingerprints.items() if cn.endswith(p)), None)
+            entry = {"subdomain": s, "resolved": resolved, "cname": cn, "service": service}
+            if service:
+                try:
+                    req = urllib.request.Request("http://" + s + "/", method="GET")
+                    with urllib.request.urlopen(req, timeout=8) as r:
+                        body = r.read(1024).decode("utf-8", "ignore")
+                    entry["status"] = r.status
+                    entry["takeover_signal"] = any(sig in body for sig in takeover_signals)
+                except urllib.error.HTTPError as e:
+                    entry["status"] = e.code
+                    body = e.read(1024).decode("utf-8","ignore") if hasattr(e, "read") else ""
+                    entry["takeover_signal"] = any(sig in body for sig in takeover_signals)
+                except Exception as e:
+                    entry["http_error"] = str(e)[:120]
+            results.append(entry)
+        except socket.gaierror as e:
+            results.append({"subdomain": s, "error": "DNS NXDOMAIN (可能 dangling)", "detail": str(e)[:80]})
+    print(json.dumps({"results": results}, ensure_ascii=False, indent=2))
+    sys.exit(0 if any(r.get("takeover_signal") for r in results if isinstance(r, dict)) else 1)
+parameters:
+  - name: "subdomains"
+    type: "string"
+    description: |
+      子域列表，逗号分隔；或指向一个文件路径（每行一个子域）。
+      示例：`blog.example.com,api.example.com` 或 `/tmp/subs.txt`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数"
+    required: false
+    format: "positional"
+enabled: true
+short_description: "子域接管检测：DNS dangling CNAME + HTTP 指纹，识别 AWS S3/Heroku/GitHub Pages/Azure 等可接管子域"

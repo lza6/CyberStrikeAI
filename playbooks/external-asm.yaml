@@ -1,0 +1,65 @@
+name: External Attack Surface Monitoring
+description: >
+  Scheduled external ASM playbook. Discovers and fingerprints the perimeter
+  (subdomains, ports, services, tech), takes screenshots, and diffs against
+  the previous run so the swarm only surfaces NEW exposures. Meant for cron.
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [asm, external, monitoring, passive-first]
+
+variables:
+  target_domain:
+    type: string
+    required: true
+  diff_against_run:
+    type: string
+    required: false
+    description: Campaign ID of a prior run to diff against (default = most recent)
+
+phases:
+  - name: passive_osint
+    tools:
+      - name: subfinder
+        options: { recursive: true }
+      - name: gau
+    post_analysis: |
+      Passive collection first — no packets to target infrastructure.
+      Pull historical URLs and passive DNS to enrich the picture.
+
+  - name: resolution
+    tools:
+      - name: dnsx
+    post_analysis: |
+      Resolve every candidate to A/AAAA/CNAME. Flag cloud-ranges
+      (AWS, GCP, Azure) separately — owner attribution changes by range.
+
+  - name: port_and_service
+    tools:
+      - name: naabu
+        options: { ports: top-1000, rate: 1000 }
+      - name: nmap
+        options: { scan_type: "-sV", top_ports: 1000, timing: "-T4" }
+    post_analysis: |
+      Concentrate on unexpected-open ports on production assets.
+      Cross-reference product + version against CVE database for
+      known-bad versions.
+
+  - name: web_fingerprint
+    tools:
+      - name: httpx
+        options: { follow_redirects: true, threads: 100 }
+    post_analysis: |
+      Note tech stack, TLS certs (flag expiring < 30d), HTTP headers
+      (missing HSTS, CSP, X-Frame-Options).
+
+  - name: quick_vuln_sweep
+    tools:
+      - name: nuclei
+        options:
+          severity: [critical, high]
+          templates: ["cves/", "exposures/", "misconfiguration/"]
+    post_analysis: |
+      Critical + high severity only — ASM noise at lower severities
+      swamps the signal. Everything else becomes follow-up campaigns.

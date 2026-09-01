@@ -1,0 +1,45 @@
+name: "gxss"
+command: "gxss"
+# 批量反射点探测：对一组 URL/参数列表注入测试 payload，探测哪些参数会反射（XSS 前置）
+args: []
+enabled: true
+short_description: "批量反射点探测：XSS 前置，-l 文件注入 payload 找反射参数"
+description: |
+  gxss 批量反射点探测（XSS 前置步骤）。
+
+  **工作流程：**
+  1. 从 URL 列表提取所有参数
+  2. 对每个参数注入测试 payload（如 `gxss`）
+  3. 检测响应中哪些参数反射了 payload
+  4. 反射点即为潜在 XSS 点，交由 XSS 验证工具（xsser/dalfox）深入
+
+  **两种模式：**
+  - 单目标：传 `url`
+  - 批量：传 `list_file`（每行一个 URL）
+
+  请确保有授权。
+parameters:
+  - name: "url"
+    type: "string"
+    description: |
+      目标 URL（含参数）。示例：`https://example.com/search?q=test`
+    required: false
+    position: 1
+    format: "positional"
+  - name: "list_file"
+    type: "string"
+    description: "批量 URL 文件，每行一个"
+    required: false
+    flag: "-l"
+    format: "flag"
+  - name: "payload"
+    type: "string"
+    description: "测试 payload（默认 gxss）。示例：`abc123\"'<>()`"
+    required: false
+    flag: "-p"
+    format: "flag"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数。示例：`-c 50`（并发）"
+    required: false
+    format: "positional"

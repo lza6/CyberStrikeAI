@@ -1,0 +1,58 @@
+name: OWASP Top 10 Assessment
+description: Comprehensive assessment targeting the OWASP Top 10 vulnerability categories
+author:
+  name: Armur AI
+  github: Armur-Ai
+version: 1.0.0
+tags: [web, owasp, comprehensive]
+
+variables:
+  target_domain:
+    type: string
+    required: true
+
+phases:
+  - name: reconnaissance
+    tools:
+      - name: subfinder
+        options: { recursive: true }
+      - name: httpx
+        options: { follow_redirects: true }
+      - name: katana
+        options: { depth: 3 }
+      - name: gau
+    post_analysis: |
+      Map the full attack surface. Identify all web endpoints, parameters,
+      forms, API routes, and authentication mechanisms. Note technology
+      stack for targeted vulnerability checks.
+
+  - name: injection_testing
+    tools:
+      - name: nuclei
+        options:
+          templates: ["cves/", "vulnerabilities/sqli/", "vulnerabilities/xss/"]
+          severity: [critical, high]
+    post_analysis: |
+      Focus on A03:2021 Injection. Test all input points for SQL injection,
+      XSS, command injection, LDAP injection, and template injection.
+      Verify findings and assess exploitability.
+
+  - name: auth_and_access
+    tools:
+      - name: nuclei
+        options:
+          templates: ["vulnerabilities/auth-bypass/", "misconfiguration/"]
+    post_analysis: |
+      Cover A01:2021 Broken Access Control, A02:2021 Cryptographic Failures,
+      and A07:2021 Identification and Authentication Failures.
+      Check for IDOR, privilege escalation, weak passwords, exposed tokens.
+
+  - name: misconfig_and_components
+    tools:
+      - name: nuclei
+        options:
+          templates: ["exposures/", "technologies/", "misconfiguration/"]
+    post_analysis: |
+      Cover A05:2021 Security Misconfiguration and A06:2021 Vulnerable
+      and Outdated Components. Check for default credentials, unnecessary
+      features, outdated libraries, exposed admin panels.

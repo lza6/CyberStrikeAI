@@ -1,0 +1,37 @@
+name: "testssl"
+command: "testssl"
+# TLS/SSL 配置检测：协议版本/加密套件/漏洞（Heartbleed/POODLE/CRIME/FREAK/Logjam 等）
+# 默认基础检测
+args: []
+enabled: true
+short_description: "TLS 配置检测：协议/加密套件/Heartbleed/POODLE/CRIME/FREAK/Logjam/BREACH 等漏洞"
+description: |
+  testssl.sh TLS/SSL 配置与漏洞检测。
+
+  **默认：** 对目标做全量 TLS 检测（协议、套件、证书、已知漏洞）。
+
+  **常见漏洞检测项：**
+  - Heartbleed（CVE-2014-0160）
+  - POODLE（SSLv3降级）
+  - CRIME（压缩信息泄露）
+  - FREAK（弱 RSA 导出套件）
+  - Logjam（弱 DH 导出套件）
+  - BREACH（HTTP 压缩泄露）
+  - ROBOT（Bleichenbacher）
+  - Sweet32（3DES）
+
+  请确保有授权。
+parameters:
+  - name: "target"
+    type: "string"
+    description: |
+      目标 host:port 或 URL。示例：`example.com:443`、`https://example.com`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "additional_args"
+    type: "string"
+    description: |
+      额外参数。示例：`-E`（只测漏洞）、`-S`（只测套件）、`--quiet`
+    required: false
+    format: "positional"

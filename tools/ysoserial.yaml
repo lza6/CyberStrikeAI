@@ -1,0 +1,46 @@
+name: "ysoserial"
+command: "ysoserial"
+# Java 反序列化 gadget 链生成（CommonsCollections/BeanShell/Groovy/Spring 等）
+# 默认 CommonsCollections1 链
+args: ["CommonsCollections1"]
+enabled: true
+short_description: "Java 反序列化 gadget 生成：CommonsCollections/BeanShell/Groovy/Spring，URLDNS confirm-first"
+description: |
+  ysoserial Java 反序列化 gadget 链生成。
+
+  **常见 gadget 链：**
+  - `CommonsCollections1~7`（Apache CC）
+  - `CommonsBeanutils1`
+  - `Groovy1`
+  - `Spring1`/`Spring2`
+  - `Jdk7u21`
+  - `URLDNS`（DNS 回连确认，最轻量，先试它）
+
+  **工作流程：**
+  1. 先用 `URLDNS` 链 + interactsh 子域，确认目标确实会反序列化外部输入
+  2. 命中后再换 RCE 链（`CommonsCollections1` + `Runtime.exec` payload）
+
+  参数：`gadget`（链名）、`command`（执行的命令）
+
+  仅用于已授权测试。生成的 payload 不要在未授权环境使用。
+parameters:
+  - name: "gadget"
+    type: "string"
+    description: |
+      gadget 链名。示例：`URLDNS`、`CommonsCollections1`、`CommonsBeanutils1`、`Groovy1`
+    required: true
+    position: 1
+    format: "positional"
+  - name: "command"
+    type: "string"
+    description: |
+      要执行的命令。示例：`curl http://xxx.oast.site`、`id`
+      URLDNS 链时填 interactsh 子域 URL
+    required: true
+    position: 2
+    format: "positional"
+  - name: "additional_args"
+    type: "string"
+    description: "额外参数。示例：`--output /tmp/payload.bin`（二进制输出）"
+    required: false
+    format: "positional"
