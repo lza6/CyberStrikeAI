@@ -69,6 +69,31 @@
 | I7-E2E | 9 项 E2E 全链路复验 | 主代理 | done |
 | I8 | 提交推送 + NSIS 打包 + Release 更新 | 主代理 | done |
 
+## J 批次（架构增强+测试补齐+工程化，用户明确"所有都完整落地"）
+
+| 节点 | 内容 | 执行者 | 状态 |
+|------|------|--------|------|
+| J1 blackboard | MemoryBoard+SQLite，/api/blackboard/findings | j1-arch | done |
+| J2 SARIF | sarif.go + CWE 归一化 + /api/vulnerabilities/export?format=sarif | j1-arch | done |
+| J3 Prometheus | /metrics + HTTP/Tool/Agent/LLM 指标 | j1-arch | done |
+| J6 HIGH_IMPACT | highimpact.go 17 工具 + executor 标记闸 | j2-safety | done |
+| J15 测试补齐 | audit/robot/skillpackage frontmatter | j3-test | done |
+| J17 Dockerfile | 多阶段构建 + .dockerignore | j3-test | done |
+| J18 统一 home | storage/migrate.go + StorageConfig | j3-test | done |
+| J4 scope 全接入 | campaign 级配置（P2，范围裁剪） | — | partial |
+| J5 Capability Provider | plan/validate/rollback（P2，改动面大） | — | partial |
+| J7 TurnLimiter | Eino 中间件形态待定（j2 未完成） | — | partial |
+| J8 app.go 拆分 | 2316 行（拆分会破坏路由顺序，保持不拆） | — | skipped(有意) |
+| J9 RunDeepAgent 拆分 | 582 行（同上） | — | skipped(有意) |
+| J10 chat.js 拆分 | 11190 行（P2 单独批次） | — | pending |
+| J11 CSP nonce | 265 处 inline onclick 迁移（P2） | — | pending |
+| J12 console.* 清理 | 265 处（P2） | — | pending |
+| J13 前端 Playwright E2E | P2 | — | pending |
+| J14 三层 evals | P2 | — | pending |
+| J16 RunModelTurn 单入口 | 先审计重复（P2） | — | pending |
+| J-E2E | 6 项全链路（探活/metrics/blackboard/sarif/shellsafe/对话） | 主代理 | done |
+| J-push | 提交推送 cbc35dd + NSIS 打包 | 主代理 | done |
+
 ## 任务图（依赖）
 
 ```
