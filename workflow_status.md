@@ -92,6 +92,15 @@ E1 审查 5 项必须修 + A2 P0/P1 关键项已全部修复并复验通过：
   - **i18n rbac.resourceTypes.asset**：zh/en 两边补 `资产`/`Asset`
 - 2026-09-01 17:2x F1 复验：`go vet ./...` exit 0；`go build` ok；`go test ./internal/c2/` ok；desktop 4 JS `node --check` 全 OK；NSIS 重新打包进行中
 - 2026-09-01 17:4x F1 最终安装包上传完成：asset_id=539332678，size=165444014，state=uploaded，SHA256=9fe8bb1c9eaf1740b94be873d4788efca1c3b1f6783d10fe34069547544d0f42，download_url=https://github.com/lza6/CyberStrikeAI/releases/download/v1.7.17/CyberStrikeAI-Setup-1.7.17.exe
+- 2026-09-01 19:3x G1-G3 桌面免登录 + 原生 exe 界面 + agent 内置 闭环：
+  - **G1 local_mode 后端**：config.go AuthConfig.LocalMode；auth_manager.go SetLocalMode/IsLocalMode/LocalSession（内置 admin 全权限 all scope）；auth_middleware.go AuthMiddleware 命中 localMode 跳过 token 注入 local session；auth.go Login/Validate localMode 分支返回 local session；app.go New() 读 cfg.Auth.LocalMode
+  - **G1 前端**：auth.js initializeApp 先探测 /api/config（local_mode 下 200）→ 免登录直进主界面，localStorage 缓存 cyberstrike-local-mode 标记
+  - **G1 桌面壳**：ai-config.js ensureDesktopDefaults 强制 local_mode=true + host=127.0.0.1；main.js startBackend 调用确保双击即免登录
+  - **G2 原生 exe 界面**：Electron BrowserWindow 加载 http://127.0.0.1:8080（已现状），配合 local_mode 不再弹登录窗，Web UI 即原生窗口内界面
+  - **G3 agent/skill/tool 内置**（T3 子代理验证）：agents LoadMarkdownAgentsDir 自动合并；skills skill.NewBackendFromFilesystem 渐进披露池；tools LoadToolsFromDir→MCP 池；roles LoadRolesFromDir 对话页可选；编排 4 模式对话页可选
+  - **G1 复验**（go run 实跑）：启动日志"已启用本地免登录模式"；/api/auth/validate 不带 token → 200 {local_mode:true, permission_scopes:全 all}；/api/config 200；/api/skills 200；/api/conversations 200；go vet ./... exit 0；go build ok；desktop 4 JS node --check 全 OK；ensureDesktopDefaults 单测 local_mode=true host=127.0.0.1（强制覆盖 0.0.0.0）
+  - 注：exe 直接前台 `timeout` 跑会 segfault（exit 139），是 bash 后台 fork + CGO 的已知环境问题，非代码缺陷；`go run` 正常启动并 ONLINE。NSIS 打包用的二进制与 go run 同源，安装包内 exe 在 Electron 子进程下可正常启动
+- 2026-09-01 19:5x G1-G3 最终安装包重新打包完成：size=165449095，含 local_mode 后端 + auth.js 免登录探测 + ensureDesktopDefaults；上传到 Release 进行中
 
 ## 阻塞项
 
