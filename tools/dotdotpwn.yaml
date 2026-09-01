@@ -45,7 +45,7 @@ parameters:
     format: "flag"
   - name: "file"
     type: "string"
-    description: "目标文件路径（如 `/etc/passwd`、`C:\windows\win.ini`）"
+    description: "目标文件路径（如 `/etc/passwd`、`C:/windows/win.ini`）"
     required: false
     flag: "-f"
     format: "flag"
