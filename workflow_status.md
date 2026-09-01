@@ -25,7 +25,7 @@
 | C5 桌面配置窗口逻辑 | 逻辑验证 | ai-config.js 读写 + needSetup 判定 + 4 JS 文件 node --check | done(上轮) |
 | C6 dotdotpwn 修复 | 加载日志 | 后端启动无 dotdotpwn 加载警告 | done |
 | E1 独立审查 | 6 方面报告 | 只读，不改代码，输出 PASS/FAIL/待验证 | done |
-| F1 修复审查发现 | 修复 + 复验 | 按 P0/P1 优先级修，复验通过 | in-progress |
+| F1 修复审查发现 | 修复 + 复验 | 按 P0/P1 优先级修，复验通过 | done |
 
 ## 任务图（依赖）
 
@@ -88,6 +88,7 @@ E1 审查 5 项必须修 + A2 P0/P1 关键项已全部修复并复验通过：
   - **config.js 透传 saveAndLaunch 错误到 UI**
   - **i18n rbac.resourceTypes.asset**：zh/en 两边补 `资产`/`Asset`
 - 2026-09-01 17:2x F1 复验：`go vet ./...` exit 0；`go build` ok；`go test ./internal/c2/` ok；desktop 4 JS `node --check` 全 OK；NSIS 重新打包进行中
+- 2026-09-01 17:4x F1 最终安装包上传完成：asset_id=539332678，size=165444014，state=uploaded，SHA256=9fe8bb1c9eaf1740b94be873d4788efca1c3b1f6783d10fe34069547544d0f42，download_url=https://github.com/lza6/CyberStrikeAI/releases/download/v1.7.17/CyberStrikeAI-Setup-1.7.17.exe
 
 ## 阻塞项
 
