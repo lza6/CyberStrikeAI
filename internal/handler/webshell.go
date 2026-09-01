@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -348,6 +349,19 @@ func NewWebShellHandler(logger *zap.Logger, db *database.DB, allowPrivateTarget 
 				DisableKeepAlives: false,
 				// WebShell 场景常见自签证书或 IP 访问（证书无 IP SAN）；默认跳过校验，与蚁剑等客户端一致。
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // intentional for webshell proxy
+			},
+			// SSRF 防重定向绕过：初始 URL 已过 guardWebshellTarget 私有网段校验，
+			// 但服务端可 302 跳转到内部地址；这里对每次重定向目标再做校验，阻止跳进内网/回环。
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 5 {
+					return errors.New("too many redirects")
+				}
+				if !allowPrivateTarget {
+					if private, _ := security.IsPrivateOrReservedURL(req.URL.String()); private {
+						return errors.New("redirect target is private/reserved, blocked (SSRF)")
+					}
+				}
+				return nil
 			},
 		},
 		db:                 db,
