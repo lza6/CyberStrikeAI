@@ -82,7 +82,7 @@
 | J18 统一 home | storage/migrate.go + StorageConfig | j3-test | done |
 | J4 scope 全接入 | campaign 级配置（P2，范围裁剪） | — | partial |
 | J5 Capability Provider | plan/validate/rollback（P2，改动面大） | — | partial |
-| J7 TurnLimiter | Eino 中间件形态待定（j2 未完成） | — | partial |
+| J7 TurnLimiter | eino_turn_limiter.go 6 case PASS + tool_call_sanitizer + executor 完善版（HITL 白名单判定+audit 记录） | j2-safety | done |
 | J8 app.go 拆分 | 2316 行（拆分会破坏路由顺序，保持不拆） | — | skipped(有意) |
 | J9 RunDeepAgent 拆分 | 582 行（同上） | — | skipped(有意) |
 | J10 chat.js 拆分 | 11190 行（P2 单独批次） | — | pending |
