@@ -33,6 +33,20 @@
 | G5 独立 exe 双击即开界面 | 后端 auto-open + 桌面壳原生菜单 | 独立 `cyberstrike-ai.exe` 启动后自动打开默认浏览器到 Web UI；桌面壳有原生菜单（视图/在浏览器中打开/退出） | done |
 | G6 桌面版关闭 TLS | ensureDesktopDefaults 关 TLS | 桌面版 http://127.0.0.1:8080 纯 HTTP，Electron BrowserWindow 正常加载（无自签证书拦截） | done |
 | G7 仓库文档中文化 | README/docs 主入口中文优先 | 根 README.md 改为中文（英文转 README_EN.md）；mcp-servers/README.md 中文优先；docs/README.md 中文段在前 | done |
+| H0 文档去上游化 | 赞助段删除 + 地址换 lza6 + git remote | README×3 赞助二维码段删除、clone/页面 GitHub 地址全换 lza6；git remote 只剩 origin=lza6 | done |
+| H1 WebShell SSRF 过滤 | urlguard + 全出口拦截 | 19 case 单测 PASS；实测明文内网 URL 400 拦截；302 重定向跳内网被 CheckRedirect 拦（回归测试 PASS） | done |
+| H2 sessions LRU 上限 | maxSessions=1000 | TestSessionLimitEviction PASS | done |
+| H3 全局 API 限流 | 600/min SSE 豁免 | TestGlobalRateLimit PASS | done |
+| H4 安全响应头 | CSP/DENY/nosniff/Referrer/Permissions + HTTPS HSTS | TestSecureHeaders PASS；curl -I 实测 5 头全齐 | done |
+| H5 handler 5xx err 脱敏 | errresp.go internalError | 5xx err.Error() 裸露清零（212 处替换，4xx 校验型 147 处保留）；30 文件 | done |
+| H6 local_mode 公网防护 | 强制回环 | 日志 warn + 改绑 127.0.0.1；netstat 实测只听回环 | done |
+| H7 CI/Makefile/golangci | .github/workflows/ci.yml + Makefile + .golangci.yml | 文件落盘，CI 配置 CGO_ENABLED=1 | done |
+| H8 提供商管理增强 | provider 预设+徽章+一键模型 | settings.js onAIChannelProviderPresetChange + ai-channel-active-badge + list-models 已通 | done |
+| H9 系统提示词全栈 | prompts/ yaml CRUD/激活 | TestSystemPrompts 5 case PASS；/api/system-prompts 200；内置提示兜底；激活热生效 | done |
+| H10 版本更新检查 | /api/update/check → lza6 releases | TestUpdate 4 case PASS；实测 200 current=latest=1.7.17；release_url scheme 白名单防 javascript: 注入 | done |
+| H11 独立 Critic 审计 | 6 方面审查 + 修复闭环 | 主代理 self-review 发现并修复 2 项：webshell SSRF 302 重定向绕过（CheckRedirect + 回归 PASS）、version-update.js href scheme 注入；其余抽查通过 | done |
+| H12 真实 E2E | 启动→免登录→配置→对话→拦截 | go run 实跑 10 项全过：探活/免登录/安全头/system-prompts/update/SSRF拦截/playbooks/对话SSE(271 delta)/中文回复"在的"/限流未误伤 | done |
+| H13 提交推送+发行版 | main 提交 + Release 更新 | 4 提交推送 origin(main)；Release v1.7.17 asset 165513295 state=uploaded | done |
 
 ## 任务图（依赖）
 
