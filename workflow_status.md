@@ -47,6 +47,7 @@
 | H11 独立 Critic 审计 | 6 方面审查 + 修复闭环 | 主代理 self-review 发现并修复 2 项：webshell SSRF 302 重定向绕过（CheckRedirect + 回归 PASS）、version-update.js href scheme 注入；其余抽查通过 | done |
 | H12 真实 E2E | 启动→免登录→配置→对话→拦截 | go run 实跑 10 项全过：探活/免登录/安全头/system-prompts/update/SSRF拦截/playbooks/对话SSE(271 delta)/中文回复"在的"/限流未误伤 | done |
 | H13 提交推送+发行版 | main 提交 + Release 更新 | 4 提交推送 origin(main)；Release v1.7.17 asset 165513295 state=uploaded | done |
+| H14 Critic 审查闭环 | R1/R2/R3 + S1/S3/S4 修复 | R1 SSRF重定向绕过→CheckRedirect 逐跳校验（回归 PASS）；R2 激活切面失效→prompts/ 前缀+E2E 实证（agent 回复 E2E-PROMPT-OK-12345）；R3 环境变量旁路→专用 ALLOW 变量；S1 fofa/wechat 9 处 502 脱敏；S3 限流移入 /api 组；S4 预发布版本比较+4 回归 case。提交 c63de9b 推送 main；最终安装包 165512972 uploaded | done |
 
 ## 任务图（依赖）
 
