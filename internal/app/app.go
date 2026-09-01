@@ -92,10 +92,6 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	// CORS中间件
 	router.Use(corsMiddleware(cfg.Server.CORSAllowedOrigins))
 
-	// 全局 API 限流：600 req/min/IP；流式/长连接端点（/stream、/sse、/ws、/mcp）豁免
-	globalRateLimiter := security.NewRateLimiter(600, time.Minute)
-	router.Use(security.GlobalRateLimitMiddleware(globalRateLimiter))
-
 	// 安全响应头：nosniff / DENY / Referrer-Policy / Permissions-Policy / CSP；HTTPS 时附加 HSTS
 	router.Use(security.SecureHeaders(config.MainWebUIUsesHTTPS(&cfg.Server)))
 
@@ -121,13 +117,21 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	if cfg.Auth.LocalMode {
 		authManager.SetLocalMode(true)
 		log.Logger.Info("已启用本地免登录模式（local_mode），所有 API 以内置 admin 全权限身份执行；暴露到公网前请关闭")
-		// G1 防护：local_mode 绑定非回环地址且非桌面壳环境时，强制改绑 127.0.0.1，
-		// 防止免登录的 admin 全权限 API 意外暴露到局域网/公网。
+		// G1 防护：local_mode 绑定非回环地址时强制改绑 127.0.0.1，防止免登录的
+		// admin 全权限 API 意外暴露到局域网/公网。
+		// 显式逃生口 = CYBERSTRIKE_ALLOW_NONLOOPBACK_LOCALMODE=1（语义明确的白名单变量，
+		// 而非复用桌面壳的 NO_AUTO_OPEN——后者任何进程都可设，等于解除防护）。
 		host := strings.ToLower(strings.TrimSpace(cfg.Server.Host))
 		loopback := map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true, "[::1]": true}
-		if host != "" && !loopback[host] && os.Getenv("CYBERSTRIKE_NO_AUTO_OPEN") != "1" {
-			log.Logger.Warn("local_mode 已开启但服务绑定到非回环地址，存在公网暴露风险！将强制改绑 127.0.0.1",
-				zap.String("original_host", cfg.Server.Host))
+		explicitAllow := os.Getenv("CYBERSTRIKE_ALLOW_NONLOOPBACK_LOCALMODE") == "1"
+		if host != "" && !loopback[host] && !explicitAllow {
+			if explicitAllow {
+				log.Logger.Warn("local_mode 绑定非回环地址：CYBERSTRIKE_ALLOW_NONLOOPBACK_LOCALMODE=1 已显式放行，请确保有网络层访问控制",
+					zap.String("host", cfg.Server.Host))
+			} else {
+				log.Logger.Warn("local_mode 已开启但服务绑定到非回环地址，存在公网暴露风险！将强制改绑 127.0.0.1",
+					zap.String("original_host", cfg.Server.Host))
+			}
 			cfg.Server.Host = "127.0.0.1"
 		}
 	}
@@ -923,6 +927,10 @@ func setupRoutes(
 ) {
 	// API路由
 	api := router.Group("/api")
+
+	// 全局 API 限流：600 req/min/IP；流式/长连接端点（/stream、/sse、/ws、/mcp）豁免。
+	// 仅作用于 /api 组——静态资源与首页不限流，避免浏览器并发拉取静态文件被 429。
+	api.Use(security.GlobalRateLimitMiddleware(security.NewRateLimiter(600, time.Minute)))
 
 	// 认证相关路由
 	authRoutes := api.Group("/auth")

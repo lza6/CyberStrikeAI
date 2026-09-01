@@ -104,7 +104,7 @@ func (h *WechatRobotHandler) HandleWechatQRCode(c *gin.Context) {
 	qr, err := client.GetBotQRCode(ctx, botType, localTokens)
 	if err != nil {
 		h.logger.Warn("获取微信二维码失败", zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"error": "获取二维码失败: " + err.Error()})
+		internalError(c, h.logger, "wechat_robot.go:107 获取二维码", err)
 		return
 	}
 	if qr.QRCode == "" || qr.QRCodeImgContent == "" {
@@ -177,7 +177,7 @@ func (h *WechatRobotHandler) HandleWechatQRCodeStatus(c *gin.Context) {
 	st, err := client.GetQRCodeStatus(ctx, sess.QRCode, vc)
 	if err != nil {
 		h.logger.Warn("轮询微信二维码状态失败", zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		internalError(c, h.logger, "wechat_robot.go:180 上游请求", err)
 		return
 	}
 

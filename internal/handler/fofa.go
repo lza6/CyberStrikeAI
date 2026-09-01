@@ -441,7 +441,7 @@ Shodan 官方查询语法参考：
 			c.JSON(http.StatusBadGateway, gin.H{"error": "AI 解析失败（上游返回非 200），请检查模型配置或稍后重试"})
 			return
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": "AI 解析失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:444 AI解析", err)
 		return
 	}
 	if len(apiResponse.Choices) == 0 {
@@ -672,7 +672,7 @@ func (h *FofaHandler) Search(c *gin.Context) {
 
 	var apiResp fofaAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "解析 FOFA 响应失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:675 FOFA响应解析", err)
 		return
 	}
 	if apiResp.Error {
@@ -757,7 +757,7 @@ func (h *FofaHandler) searchZoomEye(c *gin.Context, req fofaSearchRequest, apiKe
 	}
 	rows, err := decodeSpaceSearchRows(apiResp.Data)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "解析 ZoomEye 响应失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:760 ZoomEye响应解析", err)
 		return
 	}
 	if zoomEyeRequestFailed(apiResp.Code, apiResp.Message) {
@@ -801,7 +801,7 @@ func (h *FofaHandler) searchQuake(c *gin.Context, req fofaSearchRequest, apiKey 
 	}
 	rows, err := decodeSpaceSearchRows(apiResp.Data)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "解析 Quake 响应失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:804 Quake响应解析", err)
 		return
 	}
 	if !isZeroSpaceSearchCode(apiResp.Code) {
@@ -1004,7 +1004,7 @@ func (h *FofaHandler) searchShodan(c *gin.Context, req fofaSearchRequest, apiKey
 		}
 		pageMatches, err := decodeSpaceSearchRows(apiResp.Matches)
 		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": "解析 Shodan 响应失败: " + err.Error()})
+			internalError(c, h.logger, "fofa.go:1007 Shodan响应解析", err)
 			return
 		}
 		if len(pageMatches) == 0 {
@@ -1095,7 +1095,7 @@ func (h *FofaHandler) doJSONRequest(c *gin.Context, method, endpoint, apiKey, he
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "读取 " + label + " 响应失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:1098 "+label+"响应读取", err)
 		return false
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -1108,7 +1108,7 @@ func (h *FofaHandler) doJSONRequest(c *gin.Context, method, endpoint, apiKey, he
 			c.JSON(http.StatusBadGateway, gin.H{"error": msg})
 			return false
 		}
-		c.JSON(http.StatusBadGateway, gin.H{"error": "解析 " + label + " 响应失败: " + err.Error()})
+		internalError(c, h.logger, "fofa.go:1111 "+label+"响应解析", err)
 		return false
 	}
 	return true

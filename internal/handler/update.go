@@ -168,17 +168,29 @@ func compareVersionStrings(a, b string) int {
 	return 0
 }
 
-// splitVersionSegments 按 "." 分段转 int（非数字前缀段记 0）；空串返回 [0]。
+// splitVersionSegments 按 "." 分段转 int；空串返回 [0]。
+// 预发布标记（-rc.1 / -beta / -alpha 等）单独处理：带预发布标记的版本小于同号正式版
+//（如 1.8.0-rc.1 < 1.8.0），避免把 rc 段误判成更大版本。
 func splitVersionSegments(v string) []int {
 	v = normalizeVersionTag(v)
 	if v == "" {
 		return []int{0}
+	}
+	// 分离预发布标记
+	prerelease := false
+	if idx := strings.IndexAny(v, "-+"); idx >= 0 {
+		prerelease = strings.IndexByte(v[idx:], '-') == 0 // 只有 '-' 是预发布，'+' 是构建元数据（不参与比较，直接忽略）
+		v = v[:idx]
 	}
 	parts := strings.Split(v, ".")
 	out := make([]int, 0, len(parts))
 	for _, p := range parts {
 		n, _ := strconv.Atoi(strings.TrimSpace(p))
 		out = append(out, n)
+	}
+	if prerelease {
+		// 追加一个哨兵段：预发布版本在数字段相等时小于正式版
+		out = append(out, -1)
 	}
 	return out
 }

@@ -31,10 +31,13 @@ type systemPromptFile struct {
 // SystemPromptsHandler 管理单代理系统提示词（prompts/ 目录 yaml 增删改查 + 激活）。
 // 激活 = 更新内存 config.Agent.SystemPromptPath（agent 每轮读取，热生效）；不直接改写 config.yaml（保留用户注释）。
 type SystemPromptsHandler struct {
-	dir    string // prompts/ 绝对路径
-	config ConfigAgentConfigAccessor
-	audit  *audit.Service
-	logger *zap.Logger
+	dir string // prompts/ 绝对路径
+	// relPromptsDir 激活时写入 config.Agent.SystemPromptPath 的相对目录前缀
+	//（相对 config.yaml 所在目录，与 agent.promptBaseDir 对齐），默认 "prompts"。
+	relPromptsDir string
+	config        ConfigAgentConfigAccessor
+	audit         *audit.Service
+	logger        *zap.Logger
 }
 
 // ConfigAgentConfigAccessor 激活提示词所需的最小配置接口（由 *config.Config 满足）。
@@ -46,7 +49,7 @@ type ConfigAgentConfigAccessor interface {
 
 // NewSystemPromptsHandler dir 为 prompts 目录（可为相对 config.yaml 的路径，构造前由调用方解析为绝对路径）。
 func NewSystemPromptsHandler(dir string) *SystemPromptsHandler {
-	return &SystemPromptsHandler{dir: strings.TrimSpace(dir)}
+	return &SystemPromptsHandler{dir: strings.TrimSpace(dir), relPromptsDir: "prompts"}
 }
 
 // SetConfig 注入配置访问器（读写 agent.system_prompt_path）。
@@ -310,6 +313,8 @@ func (h *SystemPromptsHandler) DeleteSystemPrompt(c *gin.Context) {
 // 更新内存 config.Agent.SystemPromptPath（每轮对话读取，热生效）。为持久化到磁盘，
 // 建议在 config.yaml 固化 system_prompt_path；接口返回提示文案。
 // filename = __builtin__ 时激活内置提示（路径置空）。
+// 存储值 = "prompts/<filename>"（相对 config.yaml 所在目录），与 agent.promptBaseDir
+//（= configDir）拼路径约定一致；此前只存文件名会让 agent 去 configDir 根下找文件而读不到。
 func (h *SystemPromptsHandler) ActivateSystemPrompt(c *gin.Context) {
 	filename := c.Param("filename")
 	var target string
@@ -323,7 +328,7 @@ func (h *SystemPromptsHandler) ActivateSystemPrompt(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}
-		target = filepath.Base(path)
+		target = filepath.ToSlash(filepath.Join(h.relPromptsDir, filepath.Base(path)))
 	}
 	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "配置访问器未注入，无法激活"})

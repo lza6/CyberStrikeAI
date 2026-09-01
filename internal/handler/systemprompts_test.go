@@ -130,8 +130,10 @@ func TestSystemPrompts_CreateAndActivate(t *testing.T) {
 	if w3.Code != http.StatusOK {
 		t.Fatalf("激活失败 %d: %s", w3.Code, w3.Body.String())
 	}
-	if got := acc.GetAgentSystemPromptPath(); got != "custom.yaml" {
-		t.Fatalf("激活后路径期望 custom.yaml，实际 %q", got)
+	// 激活写入的是相对 config.yaml 目录的完整路径（prompts/custom.yaml），
+	// 与 agent.promptBaseDir（= configDir）拼路径约定一致，否则 agent 读不到文件。
+	if got := acc.GetAgentSystemPromptPath(); got != "prompts/custom.yaml" {
+		t.Fatalf("激活后路径期望 prompts/custom.yaml，实际 %q", got)
 	}
 
 	// current
@@ -408,6 +410,11 @@ func TestCompareVersionStrings(t *testing.T) {
 		{"1.0.0", "", 1},
 		{"", "1.0.0", -1},
 		{"1.7.17", "v1.7.17", 0},
+		// 预发布标记：rc/beta 版本小于同号正式版（S4 回归）
+		{"1.8.0-rc.1", "1.8.0", -1},
+		{"1.8.0-beta", "1.8.0", -1},
+		{"1.8.0", "1.8.0-rc.1", 1},
+		{"1.8.1", "1.8.0-rc.1", 1},
 	}
 	for _, tc := range cases {
 		got := compareVersionStrings(tc.a, tc.b)
