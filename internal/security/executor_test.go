@@ -24,6 +24,9 @@ func setupTestExecutor(t *testing.T) (*Executor, *mcp.Server) {
 	}
 
 	executor := NewExecutor(cfg, mcpServer, logger)
+	// 历史 executor 测试关注输出/流式/格式行为，不测 shellsafe；
+	// shellsafe 有独立 24 case 单测覆盖，这里关停避免元字符命令被误拒。
+	executor.SetShellSafeEnabled(false)
 	return executor, mcpServer
 }
 
