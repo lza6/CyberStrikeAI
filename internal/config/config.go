@@ -1490,6 +1490,15 @@ func (c ExternalMCPServerConfig) GetTransportType() string {
 	return ""
 }
 
+// ToolScope 工具目标范围限制（与 security.Scope 同构，独立定义避免 config↔security 循环依赖）。
+// executor 在执行前把 ToolScope 转换为 security.Scope 做校验。
+type ToolScope struct {
+	CIDRs    []string `yaml:"cidrs,omitempty" json:"cidrs,omitempty"`
+	Domains  []string `yaml:"domains,omitempty" json:"domains,omitempty"`
+	Ports    []string `yaml:"ports,omitempty" json:"ports,omitempty"`
+	Excluded []string `yaml:"excluded,omitempty" json:"excluded,omitempty"`
+}
+
 type ToolConfig struct {
 	Name             string            `yaml:"name"`
 	Command          string            `yaml:"command"`
@@ -1500,6 +1509,9 @@ type ToolConfig struct {
 	Parameters       []ParameterConfig `yaml:"parameters,omitempty"`         // 参数定义（可选）
 	ArgMapping       string            `yaml:"arg_mapping,omitempty"`        // 参数映射方式: "auto", "manual", "template"（可选）
 	AllowedExitCodes []int             `yaml:"allowed_exit_codes,omitempty"` // 允许的退出码列表（某些工具在成功时也返回非零退出码）
+	// Scope 可选目标范围限制（CIDR/Domain/Port/Excluded 四元）。nil/空=不限制（向后兼容）。
+	// 声明后 executor 在工具执行前校验目标（target/host/url/ip/domain 参数）是否越界。
+	Scope            *ToolScope        `yaml:"scope,omitempty"`
 }
 
 // ParameterConfig 参数配置

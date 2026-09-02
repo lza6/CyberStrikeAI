@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"cyberstrike-ai/internal/authctx"
+	"cyberstrike-ai/internal/capability"
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/mcp"
 	"cyberstrike-ai/internal/tooloutput"
@@ -204,11 +205,51 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		return nil, fmt.Errorf("工具 %s 未找到或未启用", toolName)
 	}
 
+	// scope 全链路接入：工具 yaml 声明了 scope 时，校验目标（target/host/url/ip/domain 参数）是否越界。
+	// 越界返回错误 ToolResult（不执行）。nil scope=不限制（向后兼容，现有 106+ 工具不受影响）。
+	if toolConfig == nil {
+		// exec 路径：toolConfig 为空，scope 不适用（exec 的目标由 shellsafe/HITL 管控）
+	} else if toolConfig.Scope != nil {
+		if host, port, found := ExtractTarget(args); found {
+			ts := &TargetScope{CIDRs: toolConfig.Scope.CIDRs, Domains: toolConfig.Scope.Domains, Ports: toolConfig.Scope.Ports, Excluded: toolConfig.Scope.Excluded}
+			if allowed, reason := ts.Allows(host, port); !allowed {
+				e.logger.Warn("工具目标越界被 scope 拦截", zap.String("toolName", toolName), zap.String("host", host), zap.Int("port", port), zap.String("reason", reason))
+				return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "工具目标越界被 scope 拦截: " + reason}}, IsError: true}, nil
+			}
+		}
+	}
+
+	// 特殊处理：exec工具直接执行系统命令
 	e.logger.Debug("找到工具配置",
 		zap.String("toolName", toolName),
 		zap.String("command", toolConfig.Command),
 		zap.Strings("args", toolConfig.Args),
 	)
+
+	// Capability Provider 生命周期（J5）：破坏性工具 subset（如 modify-file）注册了
+	// provider 时走 plan→validate→execute→rollback→collect_artifacts 完整生命周期；
+	// 其余工具走原路径（向后兼容）。execute 失败自动 Rollback。
+	if cap := capability.GetProvider(toolName); cap != nil && cap.Supports(toolName) {
+		plan, perr := cap.Plan(args)
+		if perr != nil {
+			return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "Capability Plan 失败: " + perr.Error()}}, IsError: true}, nil
+		}
+		if verr := cap.Validate(args); verr != nil {
+			return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "Capability Validate 失败: " + verr.Error()}}, IsError: true}, nil
+		}
+		result, xerr := cap.Execute(ctx, args)
+		if xerr != nil {
+			if rberr := cap.Rollback(ctx, plan); rberr != nil {
+				e.logger.Error("Capability Rollback 失败", zap.Error(rberr))
+			}
+			return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "执行失败已回滚: " + xerr.Error()}}, IsError: true}, nil
+		}
+		if arts, aerr := cap.CollectArtifacts(plan); aerr == nil && len(arts) > 0 {
+			e.logger.Info("Capability Artifacts", zap.Int("count", len(arts)))
+		}
+		e.markHighImpact(result, highImpactHit, highImpactRisk)
+		return result, nil
+	}
 
 	// 特殊处理：内部工具（command 以 "internal:" 开头）
 	if strings.HasPrefix(toolConfig.Command, "internal:") {
