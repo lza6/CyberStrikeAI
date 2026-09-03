@@ -106,3 +106,5 @@ cd desktop && npx electron-builder --win nsis
 5. **新批次**：按 `docs/spec/README.md` § 5 的工作流（Specify → Plan → Implement → Verify → Review → Converge）走，每节点有交付物 + 验证 + 完成标准。
 
 **spec 文档 8 段固定结构**（匹配 agent-skills SKILL.md 规范）：Objective / Tech Stack / Commands / Project Structure / Code Style / Testing Strategy / Boundaries（Always/Ask first/Never）/ Success Criteria + Open Questions。详见 `docs/spec/README.md`。
+
+**可复用项目级 skills**（`.claude/skills/cyberstrike-*`）：`cyberstrike-add-vertical`（新增垂直域全流程）、`cyberstrike-full-loop`（批次落地闭环：拆需求→Builder→5 类审查→修复→双路径终验→E2E→文档→Release）、`cyberstrike-audit-loop`（5 类审查检查清单+修复-复验协议）。匹配任务时优先加载对应 skill，不要重新推导流程。
