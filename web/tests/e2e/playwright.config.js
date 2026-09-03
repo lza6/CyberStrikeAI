@@ -13,7 +13,7 @@ module.exports = defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:8080',
+    baseURL: process.env.CSAI_E2E_BASE || 'http://127.0.0.1:8080',
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',

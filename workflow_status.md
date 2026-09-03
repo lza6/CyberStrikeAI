@@ -1015,3 +1015,55 @@ AO 批次全节点 done（Audit CONDITIONAL PASS 已修复闭环）。可选后�
 1. stash@{0}（WIP on main @f678afb）为工作区旧快照（8 文件均为工作区更新版覆盖），保留未 drop 供用户自查
 2. perf-4-4-cache worktree 残留目录因 DB 被生产服务（PID 13740）占用未删净，不阻塞
 3. F4 CSP nonce：484 处 onclick 均为静态字面量（无 XSS 面），nonce 收紧需全部迁完才可做（语义陷阱：script-src 出现 nonce 即废 unsafe-inline），维持渐进策略
+
+
+---
+
+# 风险清零批次 · 剩余风险全部处置闭环（2026-09-03 · 会话 cyberstrikeai-orch-2）
+
+## 任务契约
+
+- **目标**：把 v1.8.0 发布后披露的 4 项剩余风险全部处置闭环（用户明确指令"解决你的所有剩余风险"）
+
+## 风险处置清单
+
+### R1 security 4×TestEinoStreamingShell（/bin/sh Windows 环境性 FAIL）→ **已修复**
+
+- **根因**：shell_execute_stream.go 2 处硬编码 `exec.CommandContext(ctx, "/bin/sh", ...)`，Windows 系统 PATH 无 sh → ExecuteStreaming 全失败
+- **修复**：新增 internal/security/shell_binary.go —— shellBinaryName() 跨平台 shell 解析（CYBERSTRIKE_SHELL 环境变量覆盖 > unix /bin/sh > Windows exec.LookPath("sh") > Git for Windows 常见安装路径回退）
+- **验证**：4/4 TestEinoStreamingShell PASS（首次在 Windows 全绿）；全量 `go test ./...` **61 包 ok / 0 FAIL**（历史首次全绿）
+
+### R2 F4 CSP nonce 收紧（487 onclick + 2 inline script）→ **已完整落地**
+
+- **onclick 全量迁移**：scripts/migrate-onclick.cjs 自动迁移 469 简单调用（data-action + data-argN）+ 手工迁移 21 复杂模式（if-self 遮罩/多语句链/短路守卫/JSON 参数/clickById）→ **index.html onclick= 0 残留**
+- **nav-delegate.js 重写**：通用分发器（data-action / data-action-chain 链式 / data-arg0..N / data-pass-event / data-pass-this / data-if-self 遮罩语义 / data-optional 守卫 / data-page 兼容 F4 第一步迁移 / clickById 内置特例）
+- **CSP 收紧**：secureheaders.go 生成 per-request 16 字节 CSP nonce（crypto/rand + sync.Pool），script-src 从 'unsafe-inline' 收紧为 'nonce-<per-request>'（style-src 保留 unsafe-inline）；app_routes.go 注入 {{ .CSPNonce }}；index.html 2 处 inline <script>（主题初始化/路由 pending）全部带 nonce
+- **一致性校验**：332 个唯一 action 全部有全局定义（node 静态扫描）
+- **真实浏览器验证**：Playwright **24/24 PASS**（21 原有用例 + 3 新增 onclick-functional：主题 cycle 委托/dashboard KPI 卡片跳页/模态遮罩 if-self 语义），连续多轮复跑全绿
+- **测试补齐**：secureheaders_test.go 新增 2 子用例（CSP 无 unsafe-inline + nonce 唯一性/context 注入一致性）全 PASS
+
+### R3 stash@{0} 旧快照 → **已 drop**
+
+- 逐文件比对确认 8 文件差异均为工作区更新版覆盖 stash 内容，无信息丢失，git stash drop 完成
+
+### R4 Tier3 evals（真实 LLM 在环）→ **离线确定性子集落地**
+
+- 新增 internal/skillpackage/evals/route_behavior.go —— Tier 3 离线路由评测：query→skill description 词面路由模拟，验证可路由性（≥0.34 词面证据）/路由正确性（目标并列第一）/发散度上限（≥0.5 的 skill ≤6）；真实 LLM 语义评测仍标付费红线不伪造
+- 新增 route_behavior_test.go 4 测试全 PASS；cmd/skill-evals 扩展 -tier3 开关 + 对齐本仓库实际 skill 的 5 条回归锚用例
+- **实跑验证**：Tier 1 违规 0 / Tier 2 碰撞 0 / **Tier 3 离线路由 5/5 通过**
+
+### R5（附带修复）E2E 基建可配置化
+
+- playwright.config.js / f3_f4_console_csp.spec.js / perf-cache.spec.js 端口从硬编码 8080 改为 CSAI_E2E_BASE 环境变量可覆盖（默认值不变）
+
+## 验证日志（真实输出）
+
+- go build ./... EXIT=0；go vet ./... EXIT=0
+- 全量 go test ./...：**61 包 ok / 0 FAIL**（历史首次全绿，R1 修复后）
+- Playwright 24 用例（smoke 11 + f3_f4 7 + perf 3 + onclick-functional 3）：**24/24 PASS** 多轮复跑
+- cmd/skill-evals 实跑：Tier1=0 / Tier2=0 / Tier3=5/5
+- curl E2E：CSP 头 nonce-only（'nonce-896e31...' 无 unsafe-inline）+ 同一请求内 CSP nonce 与 inline script nonce 逐字节一致 + onclick= 0
+
+## 阻塞项
+
+（无）

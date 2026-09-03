@@ -61,7 +61,7 @@ func runShellInBackground(ctx context.Context, command string, w *schema.StreamW
 	defer w.Close()
 
 	command = PrepareShellCommandForExecute(command)
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", command)
+	cmd := exec.CommandContext(ctx, shellBinaryName(), "-c", command)
 	applyDefaultTerminalEnv(cmd)
 	attachNonInteractiveStdin(cmd)
 	stdout, err := cmd.StdoutPipe()
@@ -121,7 +121,7 @@ func streamShellForeground(ctx context.Context, command string, w *schema.Stream
 	defer w.Close()
 
 	command = PrepareShellCommandForExecute(command)
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", command)
+	cmd := exec.CommandContext(ctx, shellBinaryName(), "-c", command)
 	applyDefaultTerminalEnv(cmd)
 	attachNonInteractiveStdin(cmd)
 

@@ -643,7 +643,11 @@ func setupRoutes(
 		if version == "" {
 			version = "v1.0.0"
 		}
-		c.HTML(http.StatusOK, "index.html", gin.H{"Version": version})
+		// F4 nonce 化：每请求注入 CSP nonce，供 index.html 的 2 处 inline <script> 带 nonce 通过 CSP。
+		c.HTML(http.StatusOK, "index.html", gin.H{
+			"Version": version,
+			"CSPNonce": security.CSPNonceFromContext(c),
+		})
 	})
 }
 

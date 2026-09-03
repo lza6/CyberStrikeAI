@@ -7,7 +7,7 @@
 //   CSP：本轮保持 unsafe-inline，浏览器控制台不应有 CSP 违规阻断导航/脚本错误
 const { test, expect } = require('@playwright/test');
 
-const BASE = 'http://127.0.0.1:8080';
+const BASE = process.env.CSAI_E2E_BASE || 'http://127.0.0.1:8080';
 
 // local_mode RBAC 探测完成前 nav 元素带 hidden 属性，等 nav 可见前须等鉴权就绪
 //（与 smoke.spec.js waitForAppReady 同一约定：预注入 local_mode token 走快路径，

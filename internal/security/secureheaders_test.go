@@ -1,6 +1,7 @@
 package security
 
 import (
+	"strings"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -80,6 +81,57 @@ func TestSecureHeaders(t *testing.T) {
 		}
 	})
 
+
+	t.Run("CSP script-src uses nonce not unsafe-inline", func(t *testing.T) {
+		router := setupSecureHeadersRouter(false)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ping", nil))
+		csp := w.Header().Get("Content-Security-Policy")
+		if strings.Contains(csp, "'unsafe-inline'") && strings.Contains(csp, "script-src") {
+			// script-src 段不允许 unsafe-inline（style-src 保留）
+			for _, part := range splitCSPDirectives(csp) {
+				if strings.HasPrefix(part, "script-src") && strings.Contains(part, "unsafe-inline") {
+					t.Errorf("script-src 不应包含 unsafe-inline（F4 nonce 化已收紧）: %q", part)
+				}
+			}
+		}
+		if !strings.Contains(csp, "'nonce-") {
+			t.Errorf("CSP script-src 应包含 nonce 指令: %q", csp)
+		}
+	})
+
+	t.Run("nonce unique per request and hex32", func(t *testing.T) {
+		router := setupSecureHeadersRouter(false)
+		w1 := httptest.NewRecorder()
+		router.ServeHTTP(w1, httptest.NewRequest(http.MethodGet, "/ping", nil))
+		w2 := httptest.NewRecorder()
+		router.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/ping", nil))
+		n1 := extractNonce(w1.Header().Get("Content-Security-Policy"))
+		n2 := extractNonce(w2.Header().Get("Content-Security-Policy"))
+		if n1 == "" || n2 == "" {
+			t.Fatalf("nonce 提取失败: %q / %q", n1, n2)
+		}
+		if len(n1) != 32 {
+			t.Errorf("nonce 应为 32 hex 字符, got %d", len(n1))
+		}
+		if n1 == n2 {
+			t.Errorf("每请求 nonce 应唯一, 两次相同: %s", n1)
+		}
+		// context 注入一致性
+		router2 := gin.New()
+		router2.Use(SecureHeaders(false))
+		var ctxNonce string
+		router2.GET("/ctx", func(c *gin.Context) {
+			ctxNonce = CSPNonceFromContext(c)
+			c.Status(http.StatusOK)
+		})
+		w3 := httptest.NewRecorder()
+		router2.ServeHTTP(w3, httptest.NewRequest(http.MethodGet, "/ctx", nil))
+		if ctxNonce != extractNonce(w3.Header().Get("Content-Security-Policy")) {
+			t.Errorf("context nonce 与 CSP 头 nonce 不一致" )
+		}
+	})
+
 	t.Run("static path does not get no-store Cache-Control", func(t *testing.T) {
 		router := setupSecureHeadersRouter(false)
 		w := httptest.NewRecorder()
@@ -89,6 +141,20 @@ func TestSecureHeaders(t *testing.T) {
 			t.Fatalf("/static/ 不应被 SecureHeaders 设 no-store（应由 StaticCacheHeaders 设长缓存）")
 		}
 	})
+}
+
+// extractNonce 从 CSP 头提取 'nonce-xxx' 中的 xxx
+func extractNonce(csp string) string {
+	i := strings.Index(csp, "'nonce-")
+	if i < 0 {
+		return ""
+	}
+	rest := csp[i+len("'nonce-"):]
+	j := strings.Index(rest, "'")
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
 }
 
 // splitCSPDirectives 按分号拆分并去空格，便于指令级断言

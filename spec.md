@@ -105,10 +105,10 @@ func Parse(cmd string) ([]string, error) { ... }
 | J8 app.go 拆分（2621 行） | 拆 5-8 文件，路由数不变 | done（拆 app_lifecycle/routes/webshell_tools/knowledge_init/middleware 5 文件；路由 236 处 AST 回归 PASS） |
 | J9 runner.go 拆分 | runner_tool + runner_summary | done（A 批次；runner.go 711 行入口收敛） |
 | J10 chat.js 拆分（11236 行） | 模块化拆分 | done（10 段 byte-exact 等价 + F5/F6 修改同步重切；SHA256/语法/引用三重 PASS） |
-| J11 CSP nonce 化 | 迁 inline onclick | partial（F4 第一步：50 处导航 onclick 迁 data-action 委托；484 残留全为静态字面量无 XSS 面，nonce 收紧需迁完再做——见 workflow_status.md 语义陷阱披露） |
+| J11 CSP nonce 化 | 迁 inline onclick | done（全量完成：487 onclick 0 残留全迁 data-action 委托；2 inline script 带 per-request nonce；script-src 收紧 nonce-only 无 unsafe-inline；Playwright 24/24 真实浏览器验证） |
 | J12 console.* 清理 | 265 处→可选 logger | done（258 处→logger.js；残留 logger 内部兜底 9 + workflows 调试分组 3 + router 懒加载 catch 6） |
 | J13 前端 Playwright E2E | 登录→配置→对话链路 | done（smoke 11 用例 + f3_f4 7 用例 + perf-cache 3 用例，21 轮稳定性验证） |
-| J14 三层 evals | Tier 1/2 | done（cmd/skill-evals 实跑 Tier1 违规 0 / Tier2 碰撞 0；Tier3 需真实 LLM 在环维持 TODO 不伪造） |
+| J14 三层 evals | Tier 1/2/3 | done（Tier1 违规 0 / Tier2 碰撞 0 / Tier3 离线路由 5/5；真实 LLM 语义评测属付费红线不做伪造） |
 | J15 测试补齐 | 关键包零测试→有 | done（A 批次 audit 90.7%/workflow 87.6%/knowledge 86.3% 覆盖率） |
 | J16 RunModelTurn 单入口 | 收敛桌面/CLI | done（审计结论：无重复 turn 入口可消；TurnSink 接口作为扩展点保留） |
 | J17 Dockerfile | 容器化部署 | done（多阶段构建） |

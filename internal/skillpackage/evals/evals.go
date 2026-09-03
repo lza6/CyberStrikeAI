@@ -1,6 +1,7 @@
 // Package evals 提供 skill 触发路由质量的三层评测（agent-skills 思想移植）：
 // Tier 1 结构校验（frontmatter/命名/必需段）+ Tier 2 触发路由碰撞检测（TF-IDF 相似度）。
-// Tier 3 行为评测需真实 LLM 在环，暂不实现（标注 TODO 但不伪造）。
+// Tier 3 行为评测：离线确定性子集见 route_behavior.go（词面路由模拟，零成本回归锚）；
+// 真实 LLM 在环评测需付费 API（付费红线），不做伪造。
 package evals
 
 import (
