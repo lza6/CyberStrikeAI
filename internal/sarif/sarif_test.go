@@ -237,3 +237,257 @@ func TestWriteReport(t *testing.T) {
 		}
 	}
 }
+
+// TestSyntheticLocation 验证 synthetic 兜底 URI 格式。
+func TestSyntheticLocation(t *testing.T) {
+	got := SyntheticLocation("SSRF", "http://target/api")
+	want := "synthetic:SSRF:http://target/api"
+	if got != want {
+		t.Errorf("SyntheticLocation = %q, want %q", got, want)
+	}
+}
+
+// TestSeverityToSecurityScore 覆盖 severity → 0-10 字符串映射。
+func TestSeverityToSecurityScore(t *testing.T) {
+	cases := []struct {
+		severity string
+		want     string
+	}{
+		{"critical", "9.5"},
+		{"high", "7.5"},
+		{"medium", "5.0"},
+		{"low", "2.0"},
+		{"info", "0.0"},
+		{"", "0.0"},
+		{"CRITICAL", "9.5"}, // 大小写不敏感
+		{"unknown", "0.0"},
+	}
+	for _, tc := range cases {
+		got := severityToSecurityScore(tc.severity)
+		if got != tc.want {
+			t.Errorf("severityToSecurityScore(%q) = %q, want %q", tc.severity, got, tc.want)
+		}
+	}
+}
+
+// TestCWEHelpURI 验证 CWE 详情页 URL 构造。
+func TestCWEHelpURI(t *testing.T) {
+	cases := []struct {
+		ruleID  string
+		baseURI string
+		want    string
+	}{
+		{"CWE-79", "", "https://cwe.mitre.org/data/definitions/79.html"},
+		{"cwe-89", "", "https://cwe.mitre.org/data/definitions/89.html"},
+		{"CWE-918", "https://example.com/cwe/", "https://example.com/cwe/918.html"},
+		{"NOT-CWE", "", ""},
+		{"CWE-", "", ""},
+	}
+	for _, tc := range cases {
+		got := cweHelpURI(tc.ruleID, tc.baseURI)
+		if got != tc.want {
+			t.Errorf("cweHelpURI(%q, %q) = %q, want %q", tc.ruleID, tc.baseURI, got, tc.want)
+		}
+	}
+}
+
+// TestParseLogicalKey 验证 DAST 端点锚点键解析。
+func TestParseLogicalKey(t *testing.T) {
+	cases := []struct {
+		target string
+		want   string
+	}{
+		{"http://target/api/users?id=1", "GET http://target/api/users"},
+		{"http://target/api/users#frag", "GET http://target/api/users"},
+		{"http://target/api/users", "GET http://target/api/users"},
+		{"", ""},
+		{"no-slash-host", ""},
+	}
+	for _, tc := range cases {
+		got := parseLogicalKey(tc.target)
+		if got != tc.want {
+			t.Errorf("parseLogicalKey(%q) = %q, want %q", tc.target, got, tc.want)
+		}
+	}
+}
+
+// TestFromVulnerabilitiesWithOptions 验证生产级字段：logicalLocations +
+// versionControlProvenance + security-severity + properties + helpUri。
+func TestFromVulnerabilitiesWithOptions(t *testing.T) {
+	vulns := []VulnerabilityInput{
+		{
+			ID: "v1", Title: "SSRF", Severity: "critical", Type: "SSRF",
+			Target:        "http://target/api?url=x",
+			Reproduction:  "curl 'http://target/api?url=http://oast'",
+			EvidenceLevel: "reproduced", Confirmed: "true",
+		},
+		{
+			ID: "v2", Title: "XSS", Severity: "medium", Type: "XSS",
+			Target:        "http://target/search?q=x",
+			Reproduction:  "注入 <script>alert(1)</script>",
+			EvidenceLevel: "suspected", Confirmed: "false",
+		},
+	}
+	opts := ReportOptions{
+		RepositoryURI:   "https://github.com/org/repo",
+		RevisionID:      "abc123",
+		Branch:          "main",
+		AsOfTimeISO8601: "2026-09-04T00:00:00Z",
+		AutomationID:    "run-001",
+		InformationURI:  "https://cyberstrike.ai/docs",
+	}
+	report := FromVulnerabilitiesWithOptions(vulns, opts)
+
+	if report.Version != "2.1.0" {
+		t.Errorf("Version = %q", report.Version)
+	}
+	if len(report.Runs) != 1 {
+		t.Fatalf("Runs 长度 = %d", len(report.Runs))
+	}
+	run := report.Runs[0]
+
+	// 版本控制溯源
+	if len(run.VersionControlProvenance) != 1 {
+		t.Fatalf("VersionControlProvenance 长度 = %d", len(run.VersionControlProvenance))
+	}
+	vcp := run.VersionControlProvenance[0]
+	if vcp.RepositoryURI != "https://github.com/org/repo" {
+		t.Errorf("RepositoryURI = %q", vcp.RepositoryURI)
+	}
+	if vcp.RevisionID != "abc123" {
+		t.Errorf("RevisionID = %q", vcp.RevisionID)
+	}
+	if vcp.Branch != "main" {
+		t.Errorf("Branch = %q", vcp.Branch)
+	}
+
+	// 自动化细节
+	if run.AutomationDetails == nil || run.AutomationDetails.ID != "run-001" {
+		t.Errorf("AutomationDetails.ID 异常: %+v", run.AutomationDetails)
+	}
+
+	// 工具信息链接
+	if run.Tool.Driver.InformationURI != "https://cyberstrike.ai/docs" {
+		t.Errorf("InformationURI = %q", run.Tool.Driver.InformationURI)
+	}
+
+	// logicalLocations：两个不同端点 → 2 条
+	if len(run.LogicalLocations) != 2 {
+		t.Errorf("LogicalLocations 长度 = %d, want 2", len(run.LogicalLocations))
+	}
+
+	// 规则配置：security-severity
+	if len(run.Tool.Driver.Rules) != 2 {
+		t.Fatalf("Rules 长度 = %d", len(run.Tool.Driver.Rules))
+	}
+	r0 := run.Tool.Driver.Rules[0]
+	if r0.DefaultConfiguration == nil {
+		t.Fatal("DefaultConfiguration 为空")
+	}
+	if r0.DefaultConfiguration.Properties.SecuritySeverity != "9.5" {
+		t.Errorf("rule[0] security-severity = %q, want 9.5", r0.DefaultConfiguration.Properties.SecuritySeverity)
+	}
+	if r0.HelpURI == "" {
+		t.Error("rule[0] HelpURI 为空")
+	}
+
+	// result properties
+	if len(run.Results) != 2 {
+		t.Fatalf("Results 长度 = %d", len(run.Results))
+	}
+	res0 := run.Results[0]
+	if res0.Properties == nil {
+		t.Fatal("result[0] Properties 为空")
+	}
+	if res0.Properties.SecuritySeverity != "9.5" {
+		t.Errorf("result[0] security-severity = %q, want 9.5", res0.Properties.SecuritySeverity)
+	}
+	if res0.Properties.EvidenceLevel != "reproduced" {
+		t.Errorf("result[0] evidence-level = %q, want reproduced", res0.Properties.EvidenceLevel)
+	}
+	if res0.Properties.Confirmed != "true" {
+		t.Errorf("result[0] confirmed = %q, want true", res0.Properties.Confirmed)
+	}
+	if res0.Properties.Reproduction == "" {
+		t.Error("result[0] reproduction 为空")
+	}
+	if res0.Properties.Category != "SSRF" {
+		t.Errorf("result[0] category = %q", res0.Properties.Category)
+	}
+	// logicalLocation 锚定
+	if res0.Locations[0].LogicalLocation == nil {
+		t.Error("result[0] LogicalLocation 为空")
+	}
+
+	// result[1]：suspected / not confirmed
+	res1 := run.Results[1]
+	if res1.Properties.EvidenceLevel != "suspected" {
+		t.Errorf("result[1] evidence-level = %q, want suspected", res1.Properties.EvidenceLevel)
+	}
+	if res1.Properties.Confirmed != "false" {
+		t.Errorf("result[1] confirmed = %q, want false", res1.Properties.Confirmed)
+	}
+}
+
+// TestFromVulnerabilitiesWithOptionsSynthetic 验证 Target 为空时 synthetic 兜底。
+func TestFromVulnerabilitiesWithOptionsSynthetic(t *testing.T) {
+	vulns := []VulnerabilityInput{
+		{ID: "v1", Title: "XSS", Severity: "high", Type: "XSS", Target: ""},
+	}
+	report := FromVulnerabilitiesWithOptions(vulns, ReportOptions{})
+	res := report.Runs[0].Results[0]
+	uri := res.Locations[0].PhysicalLocation.ArtifactLocation.URI
+	if !strings.HasPrefix(uri, "synthetic:") {
+		t.Errorf("Target 为空应用 synthetic 兜底，got URI = %q", uri)
+	}
+}
+
+// TestFromVulnerabilitiesWithOptionsJSON 验证生产级字段的 JSON 序列化字段名。
+func TestFromVulnerabilitiesWithOptionsJSON(t *testing.T) {
+	vulns := []VulnerabilityInput{
+		{ID: "v1", Title: "XSS", Severity: "high", Type: "XSS", Target: "http://t/path"},
+	}
+	opts := ReportOptions{RevisionID: "deadbeef", Branch: "dev"}
+	report := FromVulnerabilitiesWithOptions(vulns, opts)
+
+	var buf bytes.Buffer
+	if err := WriteReport(report, &buf); err != nil {
+		t.Fatalf("WriteReport: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("输出不是合法 JSON: %v", err)
+	}
+	runs := raw["runs"].([]interface{})
+	run := runs[0].(map[string]interface{})
+	// 生产级字段 camelCase 校验
+	if _, ok := run["logicalLocations"]; !ok {
+		t.Error("JSON 缺少 logicalLocations 字段")
+	}
+	if _, ok := run["versionControlProvenance"]; !ok {
+		t.Error("JSON 缺少 versionControlProvenance 字段")
+	}
+	vcp := run["versionControlProvenance"].([]interface{})[0].(map[string]interface{})
+	if vcp["revisionId"] != "deadbeef" {
+		t.Errorf("revisionId = %v", vcp["revisionId"])
+	}
+	if vcp["branch"] != "dev" {
+		t.Errorf("branch = %v", vcp["branch"])
+	}
+	// result properties.security-severity
+	results := run["results"].([]interface{})
+	r0 := results[0].(map[string]interface{})
+	props := r0["properties"].(map[string]interface{})
+	if props["security-severity"] != "7.5" {
+		t.Errorf("security-severity = %v, want 7.5", props["security-severity"])
+	}
+	// rule defaultConfiguration.properties.security-severity
+	driver := run["tool"].(map[string]interface{})["driver"].(map[string]interface{})
+	rules := driver["rules"].([]interface{})
+	rule0 := rules[0].(map[string]interface{})
+	dc := rule0["defaultConfiguration"].(map[string]interface{})
+	dcProps := dc["properties"].(map[string]interface{})
+	if dcProps["security-severity"] != "7.5" {
+		t.Errorf("rule security-severity = %v, want 7.5", dcProps["security-severity"])
+	}
+}

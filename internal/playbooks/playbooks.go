@@ -45,8 +45,8 @@ type PlaybookPhase struct {
 
 // rawPlaybook yaml 顶层结构（仅用于解析，不直接对外暴露）。
 type rawPlaybook struct {
-	Name        string          `yaml:"name"`
-	Description string          `yaml:"description"`
+	Name        string             `yaml:"name"`
+	Description string             `yaml:"description"`
 	Phases      []rawPlaybookPhase `yaml:"phases"`
 }
 

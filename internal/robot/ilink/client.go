@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	DefaultBaseURL       = "https://ilinkai.weixin.qq.com"
-	DefaultBotType       = "3"
-	DefaultBotAgent      = "CyberStrikeAI/1.0"
-	ILinkAppID           = "bot"
-	QRLongPollTimeout    = 35 * time.Second
-	APIDefaultTimeout    = 15 * time.Second
-	GetUpdatesTimeout    = 35 * time.Second
+	DefaultBaseURL    = "https://ilinkai.weixin.qq.com"
+	DefaultBotType    = "3"
+	DefaultBotAgent   = "CyberStrikeAI/1.0"
+	ILinkAppID        = "bot"
+	QRLongPollTimeout = 35 * time.Second
+	APIDefaultTimeout = 15 * time.Second
+	GetUpdatesTimeout = 35 * time.Second
 )
 
 // Client 微信 iLink Bot HTTP 客户端（与 @tencent-weixin/openclaw-weixin 协议兼容）
@@ -228,21 +228,21 @@ type MessageItem struct {
 
 // WeixinMessage 入站消息
 type WeixinMessage struct {
-	FromUserID    string        `json:"from_user_id"`
-	MessageType   int           `json:"message_type"`
-	MessageState  int           `json:"message_state"`
-	ItemList      []MessageItem `json:"item_list"`
-	ContextToken  string        `json:"context_token"`
+	FromUserID   string        `json:"from_user_id"`
+	MessageType  int           `json:"message_type"`
+	MessageState int           `json:"message_state"`
+	ItemList     []MessageItem `json:"item_list"`
+	ContextToken string        `json:"context_token"`
 }
 
 // GetUpdatesResponse 长轮询消息响应
 type GetUpdatesResponse struct {
-	Ret                 int             `json:"ret"`
-	ErrCode             int             `json:"errcode"`
-	ErrMsg              string          `json:"errmsg"`
-	Msgs                []WeixinMessage `json:"msgs"`
-	GetUpdatesBuf       string          `json:"get_updates_buf"`
-	LongPollingTimeoutMs int            `json:"longpolling_timeout_ms"`
+	Ret                  int             `json:"ret"`
+	ErrCode              int             `json:"errcode"`
+	ErrMsg               string          `json:"errmsg"`
+	Msgs                 []WeixinMessage `json:"msgs"`
+	GetUpdatesBuf        string          `json:"get_updates_buf"`
+	LongPollingTimeoutMs int             `json:"longpolling_timeout_ms"`
 }
 
 // GetUpdates 长轮询获取新消息

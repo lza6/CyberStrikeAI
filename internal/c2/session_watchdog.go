@@ -18,12 +18,12 @@ import (
 //   - 全局最小宽限期 minGrace 避免 sleep 配置错误的会话被误判；
 //   - 不读 implant_uuid，纯按 last_check_in 字段，与 listener 类型解耦。
 type SessionWatchdog struct {
-	manager   *Manager
-	logger    *zap.Logger
-	interval  time.Duration // 扫描周期，默认 15s
-	minGrace  time.Duration // 最小宽限期，默认 30s
-	gracePct  float64       // 心跳超时倍数，默认 3.0（即 3 倍 sleep 周期没心跳算掉线）
-	stopCh    chan struct{}
+	manager  *Manager
+	logger   *zap.Logger
+	interval time.Duration // 扫描周期，默认 15s
+	minGrace time.Duration // 最小宽限期，默认 30s
+	gracePct float64       // 心跳超时倍数，默认 3.0（即 3 倍 sleep 周期没心跳算掉线）
+	stopCh   chan struct{}
 }
 
 // NewSessionWatchdog 创建看门狗

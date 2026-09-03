@@ -103,11 +103,11 @@ type stubEvent struct {
 	data  string
 }
 
-func (e *stubEvent) ID() int64             { return e.id }
-func (e *stubEvent) Timestamp() time.Time { return e.ts }
+func (e *stubEvent) ID() int64                       { return e.id }
+func (e *stubEvent) Timestamp() time.Time            { return e.ts }
 func (e *stubEvent) Source() eventstream.EventSource { return e.src }
-func (e *stubEvent) Cause() int64          { return e.cause }
-func (e *stubEvent) EventType() string     { return e.etype }
+func (e *stubEvent) Cause() int64                    { return e.cause }
+func (e *stubEvent) EventType() string               { return e.etype }
 
 // evSeq 包级递增计数器，保证每个 makeEv 的 ID 唯一且单调。
 var evSeq atomic.Int64

@@ -1,5 +1,5 @@
 ---
-name: vulnclaw-core-index
+name: vulnclaw-core
 description: VulnClaw 7 个 core skill 的索引（exploitation/pentest-flow/post-exploitation/recon/reporting/vuln-discovery/waf-bypass）；本文件仅作目录导航，每个子目录有独立 SKILL.md。
 ---
 

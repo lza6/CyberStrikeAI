@@ -111,6 +111,9 @@ CyberStrikeAI connects planning, execution, human oversight, evidence, and repla
 
 - 🤖 **Agentic execution** translates natural-language intent into governed, auditable security actions.
 - 🧩 **Eino orchestration** supports single-agent execution plus Deep, Plan-Execute, and Supervisor multi-agent modes.
+- 🕸️ **Coordinator DAG** decomposes goals into a dependency DAG with concurrent dispatch and synthesis (four scheduling strategies + retry backoff).
+- 🧠 **Anti-degradation guards**: TurnToolCallLimiter (per-turn tool cap) plus StuckDetector (repeat/error/loop/monologue thresholds with a recon-tool whitelist).
+- ⚡ **Reactive events**: security events (high-impact tools, scope violations, rollbacks, HITL pending, session status) automatically trigger notifications and escalation.
 - 🔀 **Graph workflows** combine Agents, tools, conditions, approvals, and outputs into reusable flows.
 - 🎭 **Role-based testing** provides focused prompts and tool policies for common security scenarios.
 
@@ -125,10 +128,13 @@ CyberStrikeAI connects planning, execution, human oversight, evidence, and repla
 
 ### Governance and audit
 
-- 🧑‍⚖️ **Human in the loop** provides approval modes, tool allowlists, audit-agent review, and traceable decisions.
+- 🧑‍⚖️ **Human in the loop** provides approval modes, tool allowlists, audit-agent review, and traceable decisions; approval cards surface the agent's reasoning (Why panel: selection rationale, risk level, impact radius, reasoning intensity).
+- 🕳️ **Verification gate**: vulnerability claims pass 4-axis verification (real / triggerable / impactful / general) with evidence grading (suspected → corroborated → reproduced → impact_proven) and Playbook PROVE/RULE_OUT criteria; gate failures are downgraded to open.
+- 🔍 **Observability**: `/healthz` (liveness) and `/readyz` (DB / knowledge / blackboard readiness) health probes; Prometheus metrics; a frontend Trace Waterfall timeline for tool calls (opening the black box).
 - 🔐 **Platform RBAC** supports multiple users, system and custom roles, scoped permissions, ownership, and explicit assignments.
-- 🔒 **Security and audit** provide authenticated access, audit logs, SQLite persistence, and operational evidence retention.
+- 🔒 **Security and audit** provide authenticated access, audit logs, SQLite persistence, and operational evidence retention; blackboard findings support persistence (`blackboard_driver: sqlite`, WAL + restart-safe).
 - 📄 **Result governance** stores the same capped tool result seen by the agent, protects resume paths from oversized historical output, and adds UI safeguards for large detail views. See [Tool Execution Governance](docs/en-US/tool-execution-governance.md).
+- 🏗️ **Verticals**: the platform architecture abstracts vertical domains (`internal/vertical/`); `security` is the default vertical and the container for future general-domain expansion (e-commerce / office / content). Skill directories support nested grouping (`skills/security/...`) with recursive scanning and full SHA256 lock coverage.
 
 ### Security operations
 

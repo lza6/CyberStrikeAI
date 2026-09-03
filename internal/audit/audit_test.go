@@ -29,7 +29,7 @@ func testAuditRow(id, category, action, result, actor string) *database.AuditLog
 	}
 	return &database.AuditLog{
 		ID:        id,
-		CreatedAt:  time.Now().UTC(),
+		CreatedAt: time.Now().UTC(),
 		Level:     levelDefault(result),
 		Category:  category,
 		Action:    action,
@@ -148,10 +148,10 @@ func TestRecord_OKDefaultsSuccess(t *testing.T) {
 // TestSanitizeDetail_RedactsSensitiveKeys 验证敏感键被脱敏、其他键保留。
 func TestSanitizeDetail_RedactsSensitiveKeys(t *testing.T) {
 	in := map[string]interface{}{
-		"username":   "alice",
-		"password":   "hunter2",
-		"api_key":    "sk-xxx",
-		"meta":       map[string]interface{}{"token": "abc", "ok": "v"},
+		"username": "alice",
+		"password": "hunter2",
+		"api_key":  "sk-xxx",
+		"meta":     map[string]interface{}{"token": "abc", "ok": "v"},
 	}
 	out := SanitizeDetail(in, 8192)
 	if out["password"] != "***" {

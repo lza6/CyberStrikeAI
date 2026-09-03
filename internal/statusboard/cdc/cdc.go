@@ -195,9 +195,9 @@ func NewPoller(src Source, bcast *Broadcaster, cfg PollerConfig) *Poller {
 		src:      src,
 		bcast:    bcast,
 		interval: cfg.Interval,
-		batch:     cfg.Batch,
-		logger:    cfg.Logger,
-		lastSeq:   cfg.StartSeq,
+		batch:    cfg.Batch,
+		logger:   cfg.Logger,
+		lastSeq:  cfg.StartSeq,
 	}
 	if p.interval <= 0 {
 		p.interval = DefaultPollInterval

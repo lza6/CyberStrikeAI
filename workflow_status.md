@@ -1067,3 +1067,50 @@ AO 批次全节点 done（Audit CONDITIONAL PASS 已修复闭环）。可选后�
 ## 阻塞项
 
 （无）
+
+---
+
+# K 批次 · 终局闭环总审计（2026-09-04 · 会话 cyberstrikeai-c5）
+
+## 任务契约
+- 目标：8 批次（K0a/K0b/K0c/K3/K4/K8/K9/K10）落地 + 全链路审计修复 + 真实 E2E + 提交推送 Release
+- 授权：main 分支直接提交推送（用户明确"分支要求需要 main 分支，禁止创建其他分支"）
+
+## 批次落地台账
+
+| 节点 | 内容 | 状态 | 证据 |
+|------|------|------|------|
+| K0a | vertical 抽象（interface+Registry+security 首实现+config active_vertical+app Register） | done | internal/vertical/；18 agent 全可见性 curl 回归 |
+| K0b | blackboard SQLite 持久化（Board interface 不变+WAL+FTS5 降级+双驱动） | done | 12 新测试（重启不丢/1000 并发无 locked/-race） |
+| K0c | skillpackage 递归（lock/verbs_gate/layout WalkDir） | done+修复 | 修复后 ListSkillSummaries 96/96（原 27） |
+| K3 | CL4R1T4S prompt 五项（身份层/防注入/并行/outcome-first/WHY-EXPECT-LINK） | done+修复 | 立场保护"不得质疑"保留；{{date}} 外部路径修复 |
+| K4 | 黑匣子三件套（trace waterfall+HITL Why+托盘动态色） | done+P0修复 | waterfall 补 GET /conversations/:id/process-details 聚合端点真打通 |
+| K8 | verifier 4-axis+evidence ladder+SARIF 生产级+Operator Charter | done+P0修复 | Verify 接线 SARIF 导出+record_vulnerability 落库双链路 |
+| K9 | StuckDetector+Scheduler 四策略+retry/backoff+reactions lifecycle | done+P1修复 | 事件源接线（PublishHitlPending/RunComplete/ToolPending）+session-status 规则 |
+| K10 | golangci v2+gofmt gate+go-version-file+PR 风险分级器 | done | pr-risk-check.mjs execFileSync 修复注入 |
+
+## 审计循环台账（5 审查 → 8 修复 worker → 复验）
+
+| 审查 | 发现 | 修复 |
+|------|------|------|
+| critical-code-reviewer | B1 closed channel panic / B2 pr-risk shell 注入 / B3 持锁 DB I/O + RC4-10 | 全修（subscriber mu 互斥+execFileSync+锁外重放+死代码+选择器+竞态+吞错误+泄漏+全量扫描） |
+| 高并发 SaaS | P0 健康探针缺失 / P1 singleflight+LLM 熔断+FTS5 静默降级 | healthz/readyz 落地+E2E curl 200；P1 记录待后续批次 |
+| 前后端衔接 | P0 waterfall 假功能（404 空壳）/ P0 verifier 孤立 / P1 reasoning 断裂 / P2×3 | 全修（聚合端点 httptest 验证+verifier 接线+payload reasoning） |
+| 反向审判盲点 | P0 validate.go 96→27 / P1 _shared 幽灵 agent+lifecycle 空转+Close 泄漏+233 假阳性 / P2×4 | 全修（Base 比对 96/96 实测+include 机制+事件源+cancel+28 幽灵） |
+| spec-kit | docs/spec/ 8 批次回溯 spec+AGENTS.md SDD 段 | done |
+
+## 终验证据（真实命令）
+
+```
+CGO_ENABLED=1 go build ./... → exit 0
+CGO_ENABLED=1 go vet ./... → exit 0
+CGO_ENABLED=1 go test ./... → 61 包 ok（mcp 1 个 flaky 测试 3 次重跑全 PASS，非回归）
+CGO_ENABLED=0 go test -tags sqlite_pure_go ./... → 62 包 ok / 0 FAIL
+E2E（local_mode 真实起服）：/healthz 200 + /readyz 200 + agents 18(_shared 排除) + skills total 96 + waterfall 端点 200 结构对齐 + SSE 流式链路通（LLM 401 为无 key 预期，不烧钱） + verbs-gate 28 幽灵(真信号) + genlock Verify 0 违规
+```
+
+## 剩余披露
+- FTS5 生产 mattn 构建静默降级（Makefile 未带 -tags sqlite_fts5）——blackboard 全文搜索降级，核心功能不受影响
+- golangci v2 本地未装，CI 首跑可能需微调 schema
+- P1 高并发项（singleflight/LLM 熔断/FTS5 启用）记录于审查报告，待后续批次
+- worker G 改了 2 处 skill 数据（vulnclaw-core name / _template→template）：name 与目录名真实不一致属数据 bug

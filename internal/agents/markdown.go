@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -325,19 +326,78 @@ func collectMarkdownBasenames(dir string) ([]string, error) {
 		if strings.EqualFold(n, "README.md") {
 			continue
 		}
+		// `_` 前缀约定：共享片段（如 _shared.md Operator Charter），供正文
+		// {{include:_shared}} 引用，本身不作为独立 agent 加载/启动。
+		if strings.HasPrefix(n, "_") {
+			continue
+		}
 		names = append(names, n)
 	}
 	sort.Strings(names)
 	return names, nil
 }
 
+// sharedIncludePrefix {{include: 占位符前缀；`_` 前缀片段名经 {{include:_shared}} 语法引用。
+const sharedIncludePrefix = "{{include:"
+
+// loadSharedFragments 读取 dir 下 `_` 前缀 .md 文件，返回 片段名 → 正文（front matter 后 body）。
+// 读取失败（目录不存在等）返回空 map 不报错——include 是可选增强。
+func loadSharedFragments(dir string) map[string]string {
+	out := map[string]string{}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		n := e.Name()
+		if !strings.HasPrefix(n, "_") || !strings.EqualFold(filepath.Ext(n), ".md") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, n))
+		if err != nil {
+			continue
+		}
+		_, body, err := SplitFrontMatter(string(b))
+		if err != nil {
+			continue
+		}
+		name := strings.TrimSuffix(n, filepath.Ext(n))
+		out[name] = strings.TrimSpace(body)
+	}
+	return out
+}
+
+// ExpandSharedIncludes 把 content 中的 {{include:_shared}}（可多行、含任意空白）替换为
+// 共享片段 _shared.md 的正文。fragments 为 nil 时按未启用处理原样返回。
+// 未匹配到已知片段的占位符保持原样（避免误吞模板文本）。
+func ExpandSharedIncludes(content string, fragments map[string]string) string {
+	if len(fragments) == 0 || !strings.Contains(content, sharedIncludePrefix) {
+		return content
+	}
+	return sharedIncludeRe.ReplaceAllStringFunc(content, func(m string) string {
+		name := strings.TrimSpace(sharedIncludeRe.FindStringSubmatch(m)[1])
+		if body, ok := fragments[name]; ok {
+			return body
+		}
+		return m
+	})
+}
+
+// sharedIncludeRe 匹配 {{include:片段名}}，片段名允许字母数字下划线连字符与点。
+var sharedIncludeRe = regexp.MustCompile(`\{\{include:\s*([a-zA-Z0-9_.-]+?)\s*\}\}`)
+
 // LoadMarkdownAgentsDir 扫描 agents 目录：拆出 Deep / plan_execute / supervisor 主代理各至多一个，及其余子代理。
+// `_` 前缀 .md（如 _shared.md）为共享片段，不作为 agent 加载；其正文经 {{include:_shared}} 注入各 agent instruction。
 func LoadMarkdownAgentsDir(dir string) (*MarkdownDirLoad, error) {
 	out := &MarkdownDirLoad{}
 	names, err := collectMarkdownBasenames(dir)
 	if err != nil {
 		return nil, err
 	}
+	shared := loadSharedFragments(dir)
 	for _, n := range names {
 		p := filepath.Join(dir, n)
 		b, err := os.ReadFile(p)
@@ -348,6 +408,7 @@ func LoadMarkdownAgentsDir(dir string) (*MarkdownDirLoad, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", n, err)
 		}
+		body = ExpandSharedIncludes(body, shared)
 		switch OrchestratorMarkdownKind(n) {
 		case "plan_execute":
 			if out.OrchestratorPlanExecute != nil {

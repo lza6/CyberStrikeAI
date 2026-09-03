@@ -108,6 +108,22 @@ Common Web UI operations:
 - rerank config can inherit from embedding/openai.
 - `database.knowledge_db_path` can be separate or reuse the main DB.
 
+## Database
+
+```yaml
+database:
+  path: data/conversations.db
+  knowledge_db_path: data/knowledge.db
+  blackboard_driver: memory # memory | sqlite
+```
+
+`blackboard_driver` selects the persistence driver for the blackboard (agent-shared findings):
+
+- `memory` (default): in-process memory board; findings are lost on restart.
+- `sqlite`: findings persist to `~/.cyberstrikeai/blackboard.db` (falls back to the `database.path` directory when `storage.home_dir` is unset) and survive restarts; SQLite init failures degrade back to memory with a warning.
+
+The Web settings page does not cover the `database` section; edit config.yaml and restart the process for changes to take effect.
+
 When debugging, inspect both the child config and the fallback parent.
 
 ## Recommended Values

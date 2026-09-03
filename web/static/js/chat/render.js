@@ -341,6 +341,20 @@ async function sendMessage() {
                     () => assistantMessageId, (id) => { assistantMessageId = id; },
                     () => mcpExecutionIds, (ids) => { mcpExecutionIds = ids; },
                     { conversationId: streamConversationId });
+                // K4：工具调用/结果/HITL 事件到达时，通知 trace waterfall 增量刷新
+                try {
+                    if (eventData && eventData.type) {
+                        const t = String(eventData.type);
+                        if (t === 'tool_call' || t === 'tool_result' ||
+                            t === 'hitl_interrupt' || t === 'hitl_resumed' ||
+                            t === 'hitl_rejected' || t === 'hitl_audit_agent' ||
+                            t === 'hitl_audit_agent_started') {
+                            if (typeof window.traceWaterfallNotifyEvent === 'function') {
+                                window.traceWaterfallNotifyEvent();
+                            }
+                        }
+                    }
+                } catch (e) { /* waterfall 是辅助视图，绝不阻塞主流程 */ }
             };
             const processSseLines = typeof processSseDataLinesYielding === 'function'
                 ? processSseDataLinesYielding
@@ -1236,3 +1250,250 @@ function initializeChatUI() {
     ensureChatInputContainerId();
     setupChatFileUpload();
 }
+
+// ============================================================
+// K4 黑匣子打开 · trace waterfall（前端时间线 span 渲染）
+// 数据源：turn/tool_call 事件流（syncAgentLiveStreamConversationId 已接，
+// 后端经 taskEventBus 广播 tool_call/tool_result/hitl_interrupt）。
+// 轮询复用 monitor.js 的 loadActiveTasks 节奏；diff 复用 chat-plan-progress.js
+// 的签名机制（signature 未变则跳过重绘，避免打断滚动）。
+// 不改 chat.js 主结构：本模块自持 state，仅读全局 conversationId。
+// ============================================================
+const traceWaterfallState = {
+    conversationId: '',
+    spans: [],            // [{id, toolName, status: running|success|failed|hitl_wait, startTs, endTs, isSub, agent}]
+    signature: '',
+    pollTimer: null,
+    loaded: false
+};
+const TRACE_WATERFALL_POLL_MS = 1500;
+const TRACE_WATERFALL_MAX_SPANS = 200;
+
+// HIGH_IMPACT 工具集（与后端 internal/security/highimpact.go 口径一致，前端兜底判定）
+const TRACE_WATERFALL_HIGH_IMPACT_TOOLS = new Set([
+    'exec', 'execute', 'delete-file', 'modify-file', 'create-file',
+    'sqlmap', 'metasploit', 'msfvenom', 'hydra', 'hashcat', 'john',
+    'ettercap', 'arpspoof', 'responder', 'aircrack-ng', 'aireplay-ng',
+    'reaver', 'bettercap'
+]);
+
+function traceWaterfallNormalizeStatus(status) {
+    const s = String(status || '').trim().toLowerCase();
+    if (s === 'completed' || s === 'success') return 'success';
+    if (s === 'failed' || s === 'error' || s === 'cancelled' || s === 'canceled') return 'failed';
+    if (s === 'background_running' || s === 'result_missing') return 'running';
+    return 'running';
+}
+
+function traceWaterfallFormatDuration(ms) {
+    const n = Number(ms);
+    if (!Number.isFinite(n) || n < 0) return '';
+    if (n < 1000) return n + 'ms';
+    if (n < 60000) return (n / 1000).toFixed(1) + 's';
+    const m = Math.floor(n / 60000);
+    const s = Math.round((n % 60000) / 1000);
+    return m + 'm' + (s < 10 ? '0' : '') + s + 's';
+}
+
+function traceWaterfallTimeLabel(ts) {
+    if (!ts) return '';
+    try {
+        return new Date(ts).toLocaleTimeString(
+            (typeof window.__locale === 'string' && window.__locale.startsWith('zh')) ? 'zh-CN' : undefined,
+            { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
+        );
+    } catch (e) {
+        return '';
+    }
+}
+
+// 从后端 process-details 拉取工具事件并聚合为 span 列表（签名 diff：无变化不重绘）
+async function traceWaterfallFetchSpans() {
+    const cid = String(window.currentConversationId || '').trim();
+    if (!cid) {
+        traceWaterfallResetSpans();
+        return;
+    }
+    if (cid !== traceWaterfallState.conversationId) {
+        traceWaterfallState.conversationId = cid;
+        traceWaterfallState.spans = [];
+        traceWaterfallState.signature = '';
+        traceWaterfallState.loaded = false;
+    }
+    if (typeof apiFetch !== 'function') return;
+    try {
+        const resp = await apiFetch('/api/conversations/' + encodeURIComponent(cid) + '/process-details');
+        if (!resp || !resp.ok) return;
+        const data = await resp.json().catch(() => null);
+        const details = data && Array.isArray(data.processDetails) ? data.processDetails : [];
+        const spans = [];
+        const openSpans = new Map(); // toolCallId -> span index
+        details.forEach((d) => {
+            if (!d || typeof d !== 'object') return;
+            const eventType = String(d.eventType || '');
+            const payload = d.data && typeof d.data === 'object' ? d.data : {};
+            const toolCallId = String(payload.toolCallId || '').trim();
+            const toolName = String(payload.toolName || '').trim() || 'tool';
+            const isSub = String(payload.einoScope || '') === 'sub';
+            const agent = String(payload.einoAgent || '').trim();
+            const startTs = d.createdAt ? new Date(d.createdAt).getTime() : Date.now();
+            if (eventType === 'tool_call') {
+                const span = {
+                    id: toolCallId || ('span-' + spans.length),
+                    toolName: toolName,
+                    status: 'running',
+                    startTs: startTs,
+                    endTs: null,
+                    isSub: isSub,
+                    agent: agent
+                };
+                openSpans.set(span.id, spans.length);
+                spans.push(span);
+            } else if (eventType === 'tool_result') {
+                const idx = toolCallId && openSpans.has(toolCallId) ? openSpans.get(toolCallId) : -1;
+                const span = idx >= 0 ? spans[idx] : null;
+                const isError = payload.success === false || payload.isError === true;
+                if (span) {
+                    span.status = isError ? 'failed' : 'success';
+                    span.endTs = startTs;
+                    openSpans.delete(toolCallId);
+                } else {
+                    spans.push({
+                        id: toolCallId || ('span-' + spans.length),
+                        toolName: toolName,
+                        status: isError ? 'failed' : 'success',
+                        startTs: startTs,
+                        endTs: startTs,
+                        isSub: isSub,
+                        agent: agent
+                    });
+                }
+            } else if (eventType === 'hitl_interrupt') {
+                const idx = toolCallId && openSpans.has(toolCallId) ? openSpans.get(toolCallId) : -1;
+                const span = idx >= 0 ? spans[idx] : null;
+                if (span) span.status = 'hitl_wait';
+            } else if (eventType === 'hitl_resumed') {
+                const idx = toolCallId && openSpans.has(toolCallId) ? openSpans.get(toolCallId) : -1;
+                const span = idx >= 0 ? spans[idx] : null;
+                if (span) span.status = 'running';
+            } else if (eventType === 'hitl_rejected') {
+                const idx = toolCallId && openSpans.has(toolCallId) ? openSpans.get(toolCallId) : -1;
+                const span = idx >= 0 ? spans[idx] : null;
+                if (span) span.status = 'failed';
+            }
+        });
+        traceWaterfallState.spans = spans.slice(-TRACE_WATERFALL_MAX_SPANS);
+        traceWaterfallState.loaded = true;
+        traceWaterfallRender(false);
+    } catch (e) {
+        // 轮询失败静默：瀑布图是辅助视图，不干扰主对话
+    }
+}
+
+function traceWaterfallResetSpans() {
+    traceWaterfallState.conversationId = '';
+    traceWaterfallState.spans = [];
+    traceWaterfallState.signature = '';
+    traceWaterfallState.loaded = false;
+    traceWaterfallRender(true);
+}
+
+function traceWaterfallRender(force) {
+    const host = document.getElementById('trace-waterfall');
+    if (!host) return;
+    const spans = traceWaterfallState.spans;
+    const signature = JSON.stringify(spans) + '|' + spans.length;
+    if (!force && signature === traceWaterfallState.signature) return;
+    traceWaterfallState.signature = signature;
+
+    const frag = document.createDocumentFragment();
+    if (!spans.length) {
+        const empty = document.createElement('div');
+        empty.className = 'trace-waterfall-empty';
+        empty.textContent = (typeof window.t === 'function' && window.t('chat.noProcessDetail') !== 'chat.noProcessDetail')
+            ? window.t('chat.noProcessDetail')
+            : '暂无工具调用轨迹';
+        frag.appendChild(empty);
+    } else {
+        spans.forEach((span) => {
+            const bar = document.createElement('div');
+            bar.className = 'trace-waterfall-bar';
+            if (span.isSub) bar.dataset.nested = 'true';
+            if (span.agent) bar.title = span.agent + ' · ' + span.toolName;
+            else bar.title = span.toolName;
+
+            const timeEl = document.createElement('span');
+            timeEl.className = 'trace-waterfall-time';
+            timeEl.textContent = traceWaterfallTimeLabel(span.startTs);
+
+            const labelEl = document.createElement('span');
+            labelEl.className = 'trace-waterfall-label';
+            labelEl.textContent = (span.isSub && span.agent ? '[' + span.agent + '] ' : '') + span.toolName;
+
+            const statusEl = document.createElement('span');
+            statusEl.className = 'trace-waterfall-status-dot is-' + span.status;
+
+            const spanEl = document.createElement('span');
+            spanEl.className = 'trace-waterfall-span is-' + span.status;
+            const fill = document.createElement('span');
+            fill.className = 'trace-waterfall-fill';
+            // 宽度按耗时归一化到本批最大耗时（最小 8%，最大 100%）
+            const durations = spans.map((s) => (s.endTs || Date.now()) - s.startTs);
+            const maxDur = Math.max.apply(null, durations.concat([1]));
+            const dur = (span.endTs || Date.now()) - span.startTs;
+            const pct = Math.min(100, Math.max(8, Math.round((dur / maxDur) * 100)));
+            fill.style.width = pct + '%';
+            spanEl.appendChild(fill);
+
+            const durEl = document.createElement('span');
+            durEl.className = 'trace-waterfall-duration';
+            durEl.textContent = span.status === 'hitl_wait'
+                ? '等待审批'
+                : traceWaterfallFormatDuration(dur);
+
+            bar.appendChild(timeEl);
+            bar.appendChild(labelEl);
+            bar.appendChild(statusEl);
+            bar.appendChild(spanEl);
+            bar.appendChild(durEl);
+            frag.appendChild(bar);
+        });
+    }
+    host.replaceChildren(frag);
+}
+
+function traceWaterfallSchedulePoll(delayMs) {
+    if (traceWaterfallState.pollTimer) {
+        clearTimeout(traceWaterfallState.pollTimer);
+    }
+    traceWaterfallState.pollTimer = setTimeout(function () {
+        traceWaterfallState.pollTimer = null;
+        traceWaterfallFetchSpans().finally(function () {
+            const cid = String(window.currentConversationId || '').trim();
+            if (cid) traceWaterfallSchedulePoll(TRACE_WATERFALL_POLL_MS);
+        });
+    }, Number(delayMs) || 0);
+}
+
+// 对外暴露：tool_call/tool_result 事件到达时由 handleStreamEvent 路径增量提示刷新
+window.traceWaterfallNotifyEvent = function () {
+    traceWaterfallSchedulePoll(120);
+};
+
+window.addEventListener('conversation-changed', function () {
+    traceWaterfallState.conversationId = String(window.currentConversationId || '').trim();
+    traceWaterfallState.spans = [];
+    traceWaterfallState.signature = '';
+    traceWaterfallState.loaded = false;
+    traceWaterfallRender(true);
+    traceWaterfallSchedulePoll(60);
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    // 容器可能尚未挂载（index.html 由 chat 页注入），延迟一拍再启动
+    setTimeout(function () {
+        if (document.getElementById('trace-waterfall')) {
+            traceWaterfallSchedulePoll(0);
+        }
+    }, 0);
+});

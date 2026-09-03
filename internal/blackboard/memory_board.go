@@ -22,7 +22,7 @@ const subscriberBufferSize = 128
 type MemoryBoard struct {
 	mu          sync.Mutex
 	findings    []Finding            // 按 Publish 顺序追加
-	subscribers map[int64]chan Finding // key = subscriberID
+	subscribers map[int64]*subscriber // key = subscriberID
 	nextSubID   int64
 	logger      *zap.Logger
 }
@@ -30,7 +30,7 @@ type MemoryBoard struct {
 // NewMemoryBoard 创建进程内黑板。logger 可为 nil（静默丢弃）。
 func NewMemoryBoard(logger *zap.Logger) *MemoryBoard {
 	return &MemoryBoard{
-		subscribers: make(map[int64]chan Finding),
+		subscribers: make(map[int64]*subscriber),
 		logger:      logger,
 	}
 }
@@ -47,31 +47,17 @@ func (b *MemoryBoard) Publish(ctx context.Context, finding Finding) (string, err
 	b.mu.Lock()
 	b.findings = append(b.findings, finding)
 	// 复制 snapshot 用于广播，避免在持锁状态下向 channel 写入（可能阻塞）。
-	subs := make([]chan Finding, 0, len(b.subscribers))
-	for _, ch := range b.subscribers {
-		subs = append(subs, ch)
+	// 用 *subscriber 指针快照，trySend 对并发 close 安全（Blocking 1 修复）。
+	subs := make([]*subscriber, 0, len(b.subscribers))
+	for _, s := range b.subscribers {
+		subs = append(subs, s)
 	}
 	b.mu.Unlock()
 
 	// 非阻塞广播：channel 满则丢弃最旧一条 + Warn，保 at-least-once 语义。
-	for _, ch := range subs {
-		select {
-		case ch <- finding:
-		default:
-			// 满了：尝试丢一条旧的腾位置；仍不行就放弃这条（at-least-once 由 cursor 兜底）。
-			select {
-			case <-ch:
-			default:
-			}
-			select {
-			case ch <- finding:
-			default:
-				if b.logger != nil {
-					b.logger.Warn("blackboard 订阅 channel 满，丢弃一条 finding（订阅者靠 cursor 去重）",
-						zap.String("finding_id", finding.ID))
-				}
-			}
-		}
+	// trySend 用 closed 快速路径 + recover 兜底，对并发 ctx 取消/Close 安全。
+	for _, s := range subs {
+		s.trySend(finding, b.logger)
 	}
 
 	// ctx 已取消不阻塞 Publish 本身（finding 已落盘内存）；订阅者各自感知 ctx。
@@ -112,8 +98,16 @@ func (b *MemoryBoard) List(ctx context.Context, projectID string) ([]Finding, er
 // Subscribe 从 cursor 开始订阅。cursor 是已处理的最后一条 finding 序号（从 0 开始）；
 // 0 表示从第一条开始。返回的 channel 收到的 finding 对应序号 cursor+1..N。
 // ctx 取消时关闭 channel。
+//
+// Blocking 1 修复：ctx 取消 goroutine 在锁内 sub.close()，trySend 对已关闭
+// channel 安全（closed 快速路径 + recover 兜底）。原实现直接 close(ch)，
+// Publish 在解锁后遍历快照发送会 send-on-closed-channel panic。
 func (b *MemoryBoard) Subscribe(ctx context.Context, cursor int64) <-chan Finding {
-	ch := make(chan Finding, subscriberBufferSize)
+	sub := newSubscriber(subscriberBufferSize)
+	// P1-5：派生带 cancel 的 ctx 并存入 subscriber，Close 时统一取消（SQLiteBoard
+	// 同源修复）。ctx 无 cancel（如 context.Background()）也能被 board 级联取消。
+	ctx, cancel := context.WithCancel(ctx)
+	sub.bindCancel(cancel)
 
 	b.mu.Lock()
 	// 先把 cursor 之后已存在的 finding 投递到 channel（带缓冲，理论上不会阻塞）。
@@ -124,12 +118,12 @@ func (b *MemoryBoard) Subscribe(ctx context.Context, cursor int64) <-chan Findin
 		cursor = int64(len(b.findings))
 	}
 	for i := cursor; i < int64(len(b.findings)); i++ {
-		ch <- b.findings[i]
+		sub.ch <- b.findings[i]
 	}
 	// 注册为订阅者，接收后续 Publish。
 	b.nextSubID++
 	subID := b.nextSubID
-	b.subscribers[subID] = ch
+	b.subscribers[subID] = sub
 	b.mu.Unlock()
 
 	// ctx 取消时移除订阅者并关闭 channel。
@@ -138,12 +132,12 @@ func (b *MemoryBoard) Subscribe(ctx context.Context, cursor int64) <-chan Findin
 		b.mu.Lock()
 		if existing, ok := b.subscribers[subID]; ok {
 			delete(b.subscribers, subID)
-			close(existing)
+			existing.close()
 		}
 		b.mu.Unlock()
 	}()
 
-	return ch
+	return sub.ch
 }
 
 // Supersede 标记 oldID 被 newFinding 取代，返回新 finding 的 ID。

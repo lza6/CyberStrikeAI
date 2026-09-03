@@ -13,7 +13,7 @@ func TestLoadPlaybooksFromDir(t *testing.T) {
 	tests := []struct {
 		name      string
 		setup     func(t *testing.T, dir string) // 在 dir 内创建文件
-		dir       string                            // 传入 LoadPlaybooksFromDir 的 dir 参数（空 = 用 t.TempDir）
+		dir       string                         // 传入 LoadPlaybooksFromDir 的 dir 参数（空 = 用 t.TempDir）
 		wantErr   bool
 		wantNames []string // 期望加载出的 Name 列表（已排序）
 		check     func(t *testing.T, got []Playbook)
@@ -24,8 +24,8 @@ func TestLoadPlaybooksFromDir(t *testing.T) {
 			wantNames: []string{},
 		},
 		{
-			name:    "nonexistent_dir_returns_empty_no_error",
-			dir:      filepath.Join(os.TempDir(), "cyberstrike-playbooks-does-not-exist-xyz"),
+			name:      "nonexistent_dir_returns_empty_no_error",
+			dir:       filepath.Join(os.TempDir(), "cyberstrike-playbooks-does-not-exist-xyz"),
 			wantNames: []string{},
 		},
 		{

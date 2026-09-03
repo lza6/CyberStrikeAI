@@ -159,11 +159,11 @@ func TestRunRoleBoundWorkflow_streamingHitlApprovedWakesWaiter(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() {
 		res, runErr := RunRoleBoundWorkflow(ctx, RunArgs{
-			DB:     db,
-			Logger: zap.NewNop(),
-			Role:   role,
+			DB:          db,
+			Logger:      zap.NewNop(),
+			Role:        role,
 			UserMessage: "stream-payload",
-			Progress: func(eventType, _ string, _ interface{}) {},
+			Progress:    func(eventType, _ string, _ interface{}) {},
 		})
 		if runErr != nil {
 			errCh <- runErr

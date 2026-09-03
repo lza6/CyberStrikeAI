@@ -169,10 +169,10 @@ func TestScoreProjectFact(t *testing.T) {
 	cfg := DefaultDecayConfig()
 	now := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)
 	f := &ProjectFact{
-		ID:        "fact-1",
-		Category:  "target",
+		ID:         "fact-1",
+		Category:   "target",
 		Confidence: "confirmed",
-		CreatedAt: now.AddDate(0, 0, -30), // 30 天前
+		CreatedAt:  now.AddDate(0, 0, -30), // 30 天前
 	}
 	access := []time.Time{now.AddDate(0, 0, -5)} // 5 天前访问过
 	rs := ScoreProjectFact(f, access, 1, now, cfg)
@@ -208,8 +208,8 @@ func TestNormalizeConfidence(t *testing.T) {
 		"confirmed":  "confirmed",
 		"deprecated": "deprecated",
 		"tentative":  "tentative",
-		"":          "tentative",
-		"unknown":   "tentative",
+		"":           "tentative",
+		"unknown":    "tentative",
 	}
 	for in, want := range cases {
 		if got := normalizeConfidence(in); got != want {

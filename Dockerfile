@@ -35,7 +35,8 @@ FROM debian:bookworm-slim
 
 # ca-certificates：HTTPS 出站（OpenAI/飞书/钉钉等回调）
 # tzdata：日志时间按本地时区可读（容器默认 UTC）
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+# curl：HEALTHCHECK 探活 /healthz 所需（bookworm-slim 默认不带 wget/curl）
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -56,5 +57,10 @@ RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 
 EXPOSE 8080
+
+# 健康探针：/healthz 为 liveness（进程存活，不触碰依赖）。
+# 间隔 30s、超时 3s、重试 3 次、启动后 10s 开始探测。
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 --start-period=10s \
+  CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 
 ENTRYPOINT ["/app/cyberstrike-ai", "-config", "config.yaml", "--http"]

@@ -13,10 +13,10 @@ package ctxindex
 
 // Document is a unit of searchable content indexed by the context engine.
 type Document struct {
-	ID       string // stable identifier (event id, execution id, chunk hash)
-	Title    string // short label presented to the model in verdicts
-	Content  string // full text (only stored, never returned verbatim in verdicts)
-	Source   string // attribution label, e.g. "execute:shell" or "session-events"
+	ID      string // stable identifier (event id, execution id, chunk hash)
+	Title   string // short label presented to the model in verdicts
+	Content string // full text (only stored, never returned verbatim in verdicts)
+	Source  string // attribution label, e.g. "execute:shell" or "session-events"
 }
 
 // Scored pairs a document with its ranking score; higher is more relevant.

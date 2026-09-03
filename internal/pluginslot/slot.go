@@ -1,7 +1,7 @@
 // Package pluginslot 提供可插拔槽位（PluginSlot）的 Go interface 与 Registry。
 //
 // 设计移植自参考项目 agent-orchestrator-main 的 8 PluginSlot 系统
-//（packages/core/src/types.ts:1324 + plugin-registry.ts）。CyberStrikeAI 适配
+// （packages/core/src/types.ts:1324 + plugin-registry.ts）。CyberStrikeAI 适配
 // 为 6 个 slot（Runtime/Agent/Workspace/Notifier/Tool/Memory），Eino graph 保持
 // 非可插拔（core lifecycle 固定）——只把"可替换的横切关注点"抽成 interface。
 //

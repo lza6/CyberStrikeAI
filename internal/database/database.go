@@ -20,6 +20,11 @@ func sqliteDriverName() string {
 	return sqliteDriver
 }
 
+// SqliteDriverName 是 sqliteDriverName 的导出包装，供 blackboard 等独立模块
+// 复用同一套双驱动适配（CGO mattn / pure-go modernc），避免各模块各自 sql.Open
+// 导致驱动名分叉。语义与 sqliteDriverName() 完全一致。
+func SqliteDriverName() string { return sqliteDriverName() }
+
 // sqliteDSN 构造与驱动匹配的 DSN。
 // mattn：?_journal_mode=WAL&_foreign_keys=1&_busy_timeout=5000&_synchronous=NORMAL
 // modernc：同样语义经 _pragma 传递（modernc 仅识别 _pragma=...，其余 key 忽略）。
@@ -30,6 +35,11 @@ func sqliteDSN(dbPath string) string {
 	// modernc：_pragma 按 key=value，多次出现累加。
 	return dbPath + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
 }
+
+// SqliteDSN 是 sqliteDSN 的导出包装，供 blackboard 等独立模块复用同一套 DSN
+// 构造逻辑（WAL/foreign_keys/busy_timeout/synchronous 双驱动一致）。语义与
+// sqliteDSN() 完全一致。
+func SqliteDSN(dbPath string) string { return sqliteDSN(dbPath) }
 
 const (
 	// SQLite 在 WAL 模式下建议使用较保守的连接数，降低长读快照导致 checkpoint 饥饿的概率。

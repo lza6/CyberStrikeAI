@@ -45,8 +45,8 @@ func RegisterCtxExecuteTool(server *Server, engine *ctxsandbox.Engine) {
 			"type": "object",
 			"properties": map[string]interface{}{
 				"command": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{"type": "string"},
+					"type":        "array",
+					"items":       map[string]interface{}{"type": "string"},
 					"description": "要执行的命令及参数数组，如 [\"nmap\",\"-sT\",\"-p-\",\"192.168.1.0/24\"]",
 				},
 				"intent": map[string]interface{}{
@@ -55,7 +55,7 @@ func RegisterCtxExecuteTool(server *Server, engine *ctxsandbox.Engine) {
 						"工具会把全文索引并只返回匹配 intent 的 section 标题+预览（verdict）；不填则小输出直返、大输出落索引返指针。",
 				},
 				"timeout_seconds": map[string]interface{}{
-					"type": "number",
+					"type":        "number",
 					"description": "超时秒数，默认 60，上限 600；超时返回已捕获的部分输出",
 				},
 			},

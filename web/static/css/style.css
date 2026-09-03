@@ -46615,3 +46615,228 @@ html[data-theme="dark"] .hitl-inline-approval.hitl-inline-approval--merged {
         animation: none;
     }
 }
+
+/* ============================================================
+ * K4 黑匣子打开 · trace waterfall 时间线 span
+ * 复用 .progress-timeline / .timeline-item 结构，新增 span 形态：
+ * 每条工具调用渲染为水平时间线段（起始/耗时/状态色），HITL 等待为
+ * 虚线宽帽 span，subagent 为嵌套 span。仅在带 trace-waterfall 标记的
+ * timeline 上启用，避免影响原有竖向时间线。
+ * ============================================================ */
+.progress-timeline.trace-waterfall {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 4px;
+    max-height: none;
+    overflow: visible;
+}
+
+.trace-waterfall-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--bg-secondary, #1e2429);
+    border: 1px solid var(--border-color, #2a3138);
+    font-size: 0.8rem;
+    color: var(--text-secondary, #cbd5e1);
+    min-width: 0;
+}
+
+.trace-waterfall-bar .trace-waterfall-time {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.72rem;
+    min-width: 64px;
+}
+
+.trace-waterfall-bar .trace-waterfall-label {
+    flex: 0 0 auto;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 38%;
+}
+
+.trace-waterfall-span {
+    flex: 1 1 auto;
+    position: relative;
+    height: 14px;
+    border-radius: 7px;
+    background: rgba(148, 163, 184, 0.12);
+    overflow: hidden;
+    min-width: 80px;
+}
+
+.trace-waterfall-span .trace-waterfall-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    border-radius: 7px;
+    background: #3b82f6;
+    transition: width 0.25s ease;
+}
+
+.trace-waterfall-span.is-success .trace-waterfall-fill {
+    background: var(--success-color, #22c55e);
+}
+
+.trace-waterfall-span.is-running .trace-waterfall-fill {
+    background: var(--accent-color, #eab308);
+    background: linear-gradient(90deg, #eab308, #f59e0b);
+    animation: trace-waterfall-pulse 1.2s ease-in-out infinite;
+}
+
+.trace-waterfall-span.is-failed .trace-waterfall-fill {
+    background: var(--error-color, #ef4444);
+}
+
+.trace-waterfall-span.is-hitl-wait {
+    background: transparent;
+    border: 2px dashed #eab308;
+    box-sizing: border-box;
+}
+
+.trace-waterfall-span.is-hitl-wait .trace-waterfall-fill {
+    display: none;
+}
+
+.trace-waterfall-duration {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.trace-waterfall-status-dot {
+    flex: 0 0 auto;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #64748b;
+}
+
+.trace-waterfall-status-dot.is-success { background: var(--success-color, #22c55e); }
+.trace-waterfall-status-dot.is-running { background: #eab308; }
+.trace-waterfall-status-dot.is-failed { background: var(--error-color, #ef4444); }
+.trace-waterfall-status-dot.is-hitl { background: #eab308; box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25); }
+
+@keyframes trace-waterfall-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+/* subagent 嵌套 span：缩进 + 父子连接线 */
+.trace-waterfall-bar[data-nested="true"] {
+    margin-left: 20px;
+    background: rgba(148, 163, 184, 0.06);
+    border-style: dashed;
+}
+
+.trace-waterfall-bar[data-nested="true"]::before {
+    content: '';
+    position: absolute;
+    margin-left: -14px;
+    margin-top: -3px;
+    width: 12px;
+    height: 16px;
+    border-left: 1px solid var(--border-color, #2a3138);
+    border-bottom: 1px solid var(--border-color, #2a3138);
+    border-bottom-left-radius: 4px;
+}
+
+.trace-waterfall-empty {
+    padding: 8px 12px;
+    text-align: center;
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.8rem;
+}
+
+/* ============================================================
+ * K4 黑匣子打开 · HITL Why 区折叠面板
+ * ============================================================ */
+.hitl-why-region {
+    margin: 8px 0 12px 0;
+    border: 1px solid var(--border-color, #2a3138);
+    border-radius: 8px;
+    background: rgba(234, 179, 8, 0.04);
+    overflow: hidden;
+}
+
+.hitl-why-region > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary, #cbd5e1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+}
+
+.hitl-why-region > summary::-webkit-details-marker { display: none; }
+.hitl-why-region > summary::before {
+    content: '▸';
+    transition: transform 0.18s ease;
+    color: #eab308;
+}
+.hitl-why-region[open] > summary::before { transform: rotate(90deg); }
+
+.hitl-why-region .hitl-why-body {
+    padding: 6px 12px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.8rem;
+}
+
+.hitl-why-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.hitl-why-row .hitl-why-label {
+    flex: 0 0 auto;
+    color: var(--text-muted, #94a3b8);
+    min-width: 80px;
+}
+
+.hitl-why-row .hitl-why-value {
+    flex: 1 1 auto;
+    word-break: break-word;
+    color: var(--text-primary, #e2e8f0);
+}
+
+.hitl-why-risk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.hitl-why-risk--high   { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
+.hitl-why-risk--medium { background: rgba(234, 179, 8, 0.16); color: #fde68a; }
+.hitl-why-risk--low    { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+
+.hitl-why-reasoning {
+    background: var(--bg-secondary, #1e2429);
+    border-radius: 6px;
+    padding: 8px 10px;
+    white-space: pre-wrap;
+    color: var(--text-secondary, #cbd5e1);
+    font-family: inherit;
+    max-height: 220px;
+    overflow-y: auto;
+}
+

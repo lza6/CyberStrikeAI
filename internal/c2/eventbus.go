@@ -35,12 +35,12 @@ type EventBus struct {
 
 // Subscription 订阅句柄
 type Subscription struct {
-	ID         string
-	Ch         chan *Event
-	SessionID  string // 空表示不限制
-	Category   string // 空表示不限制
-	Levels     map[string]struct{}
-	dropCount  atomic.Int64
+	ID        string
+	Ch        chan *Event
+	SessionID string // 空表示不限制
+	Category  string // 空表示不限制
+	Levels    map[string]struct{}
+	dropCount atomic.Int64
 }
 
 // NewEventBus 创建总线

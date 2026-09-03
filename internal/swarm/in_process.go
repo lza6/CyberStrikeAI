@@ -27,22 +27,22 @@ type RunFunc func(ctx context.Context, cfg SpawnConfig, messages <-chan Message)
 //
 // 移植自 OpenHarness swarm/in_process.py:413 InProcessBackend。
 type InProcessBackend struct {
-	homeDir  string
-	run      RunFunc
-	mu       sync.Mutex
-	active   map[string]*inProcessEntry
+	homeDir         string
+	run             RunFunc
+	mu              sync.Mutex
+	active          map[string]*inProcessEntry
 	shutdownTimeout time.Duration // 默认 10s
 }
 
 type inProcessEntry struct {
-	agentID   string
-	taskID    string
-	cancel    context.CancelFunc // 优雅取消
+	agentID     string
+	taskID      string
+	cancel      context.CancelFunc // 优雅取消
 	forceCancel context.CancelFunc // 强制取消
-	done      chan struct{}        // goroutine 完成信号
-	mailbox   *Mailbox
-	msgCh     chan Message
-	startedAt time.Time
+	done        chan struct{}      // goroutine 完成信号
+	mailbox     *Mailbox
+	msgCh       chan Message
+	startedAt   time.Time
 }
 
 // NewInProcessBackend 创建进程内后端。homeDir/run 为空时返回错误。
@@ -128,7 +128,7 @@ func (b *InProcessBackend) SendMessage(ctx context.Context, agentID string, msg 
 	mbMsg := MailboxMessage{
 		ID: uuid.NewString(), Type: MsgUserMessage,
 		Sender: msg.FromAgent, Recipient: agentID,
-		Payload: map[string]interface{}{"content": msg.Text, "color": msg.Color},
+		Payload:   map[string]interface{}{"content": msg.Text, "color": msg.Color},
 		Timestamp: float64(time.Now().UnixNano()) / 1e9,
 	}
 	if err := entry.mailbox.Write(ctx, mbMsg); err != nil {

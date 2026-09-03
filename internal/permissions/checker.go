@@ -34,10 +34,10 @@ type PermissionDecision struct {
 // Settings 是 PermissionChecker 的配置。移植自 OpenHarness PermissionSettings。
 type Settings struct {
 	Mode           PermissionMode
-	AllowedTools   []string  // 显式允许列表
-	DeniedTools    []string  // 显式拒绝列表（优先级最高）
+	AllowedTools   []string // 显式允许列表
+	DeniedTools    []string // 显式拒绝列表（优先级最高）
 	PathRules      []PathRule
-	DeniedCommands []string  // 命令 deny 模式（如 "rm -rf *"）
+	DeniedCommands []string // 命令 deny 模式（如 "rm -rf *"）
 }
 
 // Checker 评估工具调用是否允许。移植自 OpenHarness permissions/checker.py:32。

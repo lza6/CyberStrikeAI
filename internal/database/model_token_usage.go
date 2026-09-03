@@ -200,6 +200,14 @@ func (db *DB) maybeRecordModelTokenUsage(messageID, conversationID, processDetai
 }
 
 // UpsertModelTokenUsage persists usage with process_detail_id idempotency.
+//
+// 时间列写入用 UTC RFC3339 文本而非 time.Time：pure-go modernc 驱动把 time.Time
+// 序列化为 Go 的 time.String() 文本（"2006-01-02 15:04:05.999999999 -0700 MST m=+0.xxx"，
+// 含单调时钟后缀），SQLite 的 date()/julianday() 等函数无法解析该格式而返回 NULL，
+// 导致 GetModelTokenUsageStats 的 byDay 分组键为 NULL；mattn 驱动则写
+// "2006-01-02 15:04:05.999999999-07:00"（可解析）。统一写 RFC3339 UTC 文本后双驱动
+// 存储格式一致，SQL 时间函数行为一致。回填/读取侧 parseModelTokenUsageTime 已兼容
+// 该格式（RFC3339Nano 布局在候选列表中）。
 func (db *DB) UpsertModelTokenUsage(usage ModelTokenUsage) error {
 	if db == nil {
 		return fmt.Errorf("database is nil")
@@ -246,7 +254,7 @@ ON CONFLICT(process_detail_id) DO UPDATE SET
 		usage.ID, usage.ProcessDetailID, usage.MessageID, usage.ConversationID, projectValue,
 		usage.Source, usage.Orchestration, usage.Reason, usage.Model, usage.ModelCalls,
 		usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.CachedTokens, usage.ReasoningTokens,
-		createdAt, now,
+		formatSQLiteUTC(createdAt), formatSQLiteUTC(now),
 	)
 	if err != nil {
 		return fmt.Errorf("写入模型Token用量失败: %w", err)

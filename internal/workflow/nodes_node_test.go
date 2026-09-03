@@ -99,8 +99,8 @@ func TestRunToolNode_success(t *testing.T) {
 
 	var progressEvents []string
 	args := RunArgs{
-		AppCfg:        &config.Config{},
-		Agent:         ag,
+		AppCfg:         &config.Config{},
+		Agent:          ag,
 		ConversationID: "conv-1",
 		Progress: func(eventType, _ string, _ interface{}) {
 			progressEvents = append(progressEvents, eventType)
@@ -181,10 +181,10 @@ func TestBuildAgentNodeMessage_variants(t *testing.T) {
 	state.LastOutput = map[string]any{"output": "prev-out"}
 
 	tests := []struct {
-		name       string
+		name        string
 		instruction string
-		upstream   string
-		wantSub    string
+		upstream    string
+		wantSub     string
 	}{
 		{name: "instruction+upstream", instruction: "继续", upstream: "up-val", wantSub: "上游输入"},
 		{name: "instruction-only", instruction: "纯指令", upstream: "", wantSub: "纯指令"},

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"time"
@@ -9,6 +10,17 @@ import (
 // formatSQLiteUTC stores instants as UTC RFC3339 for consistent SQLite reads/writes.
 func formatSQLiteUTC(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
+}
+
+// formatNullableSQLiteUTC 是 formatSQLiteUTC 的可空版本，用于 DATETIME 列写入：
+// Invalid 传 nil（NULL），Valid 传 UTC RFC3339 文本。理由见 formatSQLiteUTC——
+// 必须避免 modernc 驱动把 time.Time 序列化为带 "m=+..." 后缀的 Go 文本，
+// 该文本无法被 SQLite 时间函数（julianday/strftime/datetime/date）解析。
+func formatNullableSQLiteUTC(t sql.NullTime) interface{} {
+	if !t.Valid {
+		return nil
+	}
+	return formatSQLiteUTC(t.Time)
 }
 
 // sqliteEpochGE returns SQL comparing column to param as Unix seconds (timezone-safe).

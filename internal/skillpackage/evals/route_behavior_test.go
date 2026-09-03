@@ -10,13 +10,13 @@ import (
 func TestRouteScore(t *testing.T) {
 	cases := []struct {
 		query, desc string
-		wantMin    float64
-		wantMax    float64
+		wantMin     float64
+		wantMax     float64
 	}{
-		{"nmap 端口扫描", "对目标执行 nmap 端口扫描与服务识别", 0.9, 1.01},   // 全命中
-		{"nmap 端口扫描", "web 漏洞扫描工具", 0, 0.41},                    // 低命中（"扫描"字面撞上 0.4）
-		{"", "任何描述", 0, 0.01},                                    // 空查询
-		{"sql 注入检测", "sqli sql 注入注入点检测", 0.5, 1.01},          // 部分命中
+		{"nmap 端口扫描", "对目标执行 nmap 端口扫描与服务识别", 0.9, 1.01}, // 全命中
+		{"nmap 端口扫描", "web 漏洞扫描工具", 0, 0.41},             // 低命中（"扫描"字面撞上 0.4）
+		{"", "任何描述", 0, 0.01},                            // 空查询
+		{"sql 注入检测", "sqli sql 注入注入点检测", 0.5, 1.01},      // 部分命中
 	}
 	for _, c := range cases {
 		got := routeScore(c.query, c.desc)

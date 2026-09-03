@@ -28,7 +28,7 @@ type Retriever struct {
 	rerankMu sync.RWMutex
 	reranker DocumentReranker
 
-	pipeline retriever.Retriever
+	pipeline   retriever.Retriever
 	wireOpenAI *config.OpenAIConfig
 
 	// degradeLogOnce 保证"pipeline 未装配"降级日志只输出一次，避免高频检索下刷屏。

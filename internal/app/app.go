@@ -31,6 +31,7 @@ import (
 	"cyberstrike-ai/internal/securityevents"
 	"cyberstrike-ai/internal/skillpackage"
 	"cyberstrike-ai/internal/storage"
+	"cyberstrike-ai/internal/vertical"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -69,12 +70,26 @@ type App struct {
 	c2WatchdogCancel   context.CancelFunc        // 看门狗取消函数
 	c2Handler          *handler.C2Handler        // C2 REST（与 Manager 生命周期同步）
 	auditSvc           *audit.Service
-	blackboard         *blackboard.MemoryBoard // 进程内黑板（Agent 共享 findings）
+	blackboard         blackboard.Board // 进程内黑板（Agent 共享 findings）：MemoryBoard 或 SQLiteBoard
 	reactionsEngine    *reactions.Engine       // K2：反应式安全事件引擎（nil=未启用）
+	startedAt          time.Time               // 进程启动时间（healthz uptime 用）
 }
 
 // New 创建新应用
 func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error) {
+	// K0a：vertical 抽象奠基——注册 security 默认实现，并按 config.ActiveVertical
+	// 判定是否非默认 vertical。本期只奠基+注册 security，不实际切换 active vertical
+	// （即使 ActiveVertical 非 security 也只 Warn 不切换），vertical 过滤留给后续批次。
+	// 向后兼容：ActiveVertical 空值默认 security（ResolveActiveName 归一化）。
+	vertical.Register(vertical.New())
+	activeVertical := vertical.ResolveActiveName(cfg.ActiveVertical)
+	if activeVertical != vertical.DefaultActiveName {
+		log.Logger.Warn("config.active_vertical 非 security，但 K0a 奠基阶段不切换 vertical（仍按 security 运行）",
+			zap.String("configured", cfg.ActiveVertical),
+			zap.String("resolved", activeVertical),
+			zap.String("default", vertical.DefaultActiveName))
+	}
+
 	if err := multiagent.InitADK(); err != nil {
 		return nil, fmt.Errorf("初始化 Eino ADK: %w", err)
 	}
@@ -115,8 +130,37 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		log.Logger.Info("Prometheus 指标端点已关闭（metrics.enabled=false）")
 	}
 
-	// 初始化进程内黑板（Agent 共享 findings）
-	board := blackboard.NewMemoryBoard(log.Logger)
+	// 初始化进程内黑板（Agent 共享 findings）。
+	// K0b：根据 cfg.Database.BlackboardDriver 选 MemoryBoard（默认，向后兼容）
+	// 或 SQLiteBoard（持久化，重启不丢 findings）。SQLite 路径从 storage.HomeDir()
+	// 派生（与 knowledge 共库管理方式），与 dbPath 同目录便于统一迁移。
+	// Board interface 不变：NewMemoryBoard / NewSQLiteBoard 二选一。
+	var board blackboard.Board
+	if cfg.Database.BlackboardDriverEffective() == "sqlite" {
+		// SQLite 路径：优先 storage.home_dir 派生；home 未配置时回退到 dbPath 同目录
+		// （与 knowledge 共库管理的语义一致：集中在家目录，便于备份/迁移）。
+		blackboardDBPath := ""
+		if homeDir := strings.TrimSpace(cfg.Storage.HomeDir); homeDir != "" {
+			blackboardDBPath = filepath.Join(homeDir, "blackboard.db")
+		} else if dbPathEarly := strings.TrimSpace(cfg.Database.Path); dbPathEarly != "" {
+			blackboardDBPath = filepath.Join(filepath.Dir(dbPathEarly), "blackboard.db")
+		} else {
+			blackboardDBPath = filepath.Join("data", "blackboard.db")
+		}
+		sb, err := blackboard.NewSQLiteBoard(blackboardDBPath, log.Logger)
+		if err != nil {
+			// 降级到 MemoryBoard：不阻断启动（与 cache redis 降级语义一致），
+			// 但记录 Warn 提醒运维 findings 不会持久化。
+			log.Logger.Warn("blackboard SQLite 初始化失败，降级到内存模式（findings 重启丢失）",
+				zap.String("path", blackboardDBPath), zap.Error(err))
+			board = blackboard.NewMemoryBoard(log.Logger)
+		} else {
+			board = sb
+			log.Logger.Info("已启用 blackboard SQLite 持久化", zap.String("path", blackboardDBPath))
+		}
+	} else {
+		board = blackboard.NewMemoryBoard(log.Logger)
+	}
 
 	// 初始化数据库
 	dbPath := cfg.Database.Path
@@ -640,6 +684,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		c2Handler:          c2Handler,
 		auditSvc:           auditSvc,
 		blackboard:         board,
+		startedAt:          time.Now(),
 	}
 	// 飞书/钉钉长连接（无需公网），启用时在后台启动；后续前端应用配置时会通过 RestartRobotConnections 重启
 	app.startRobotConnections()

@@ -15,11 +15,11 @@ var promoteSlugSanitizer = regexp.MustCompile(`[^a-z0-9._/-]+`)
 
 // PromoteToProjectResult 攻击链沉淀结果。
 type PromoteToProjectResult struct {
-	FactsCreated int                         `json:"facts_created"`
-	FactsUpdated int                         `json:"facts_updated"`
-	EdgesCreated int                         `json:"edges_created"`
-	FactKeys     []string                    `json:"fact_keys"`
-	Graph        *database.ProjectFactGraph  `json:"graph,omitempty"`
+	FactsCreated int                        `json:"facts_created"`
+	FactsUpdated int                        `json:"facts_updated"`
+	EdgesCreated int                        `json:"edges_created"`
+	FactKeys     []string                   `json:"fact_keys"`
+	Graph        *database.ProjectFactGraph `json:"graph,omitempty"`
 }
 
 // PromoteToProject 将对话攻击链沉淀为项目事实与边。

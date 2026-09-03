@@ -25,8 +25,9 @@ import (
 //   - 一个 listener 仅处理一个 WS 路径（默认 /ws），但可承载多个并发 implant。
 //
 // 帧协议（皆为加密后 base64 字符串走 TextMessage）：
-//   client → server：{"type":"checkin"|"result", "data": <ImplantCheckInRequest|TaskResultReport>}
-//   server → client：{"type":"task", "data": <TaskEnvelope>} 或 {"type":"sleep","data":{"sleep":N,"jitter":J}}
+//
+//	client → server：{"type":"checkin"|"result", "data": <ImplantCheckInRequest|TaskResultReport>}
+//	server → client：{"type":"task", "data": <TaskEnvelope>} 或 {"type":"sleep","data":{"sleep":N,"jitter":J}}
 type WebSocketListener struct {
 	rec     *database.C2Listener
 	cfg     *ListenerConfig
@@ -36,10 +37,10 @@ type WebSocketListener struct {
 	srv      *http.Server
 	upgrader websocket.Upgrader
 
-	mu       sync.Mutex
-	conns    map[string]*wsConn // session_id → 连接
-	stopped  bool
-	stopCh   chan struct{}
+	mu      sync.Mutex
+	conns   map[string]*wsConn // session_id → 连接
+	stopped bool
+	stopCh  chan struct{}
 }
 
 // wsConn 单个 WS implant 的内存状态

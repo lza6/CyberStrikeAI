@@ -23,9 +23,9 @@ type BackendType string
 
 const (
 	BackendSubprocess BackendType = "subprocess" // 子进程隔离（os/exec + 文件 mailbox）
-	BackendInProcess   BackendType = "in_process" // 进程内（goroutine + channel）
-	BackendTmux        BackendType = "tmux"        // tmux pane（保留，未实现）
-	BackendITerm2      BackendType = "iterm2"      // iTerm2 pane（保留，未实现）
+	BackendInProcess  BackendType = "in_process" // 进程内（goroutine + channel）
+	BackendTmux       BackendType = "tmux"       // tmux pane（保留，未实现）
+	BackendITerm2     BackendType = "iterm2"     // iTerm2 pane（保留，未实现）
 )
 
 // ErrNotSupported 表示该后端在当前平台/配置下未实现。
@@ -38,10 +38,10 @@ var ErrAgentNotFound = errors.New("swarm: agent not found")
 //
 // 移植自 OpenHarness swarm/types.py:238 TeammateIdentity。
 type TeammateIdentity struct {
-	AgentID  string // 唯一 ID（格式：agentName@teamName）
-	Name     string // agent 名（如 researcher）
-	Team     string // team 名
-	Color    string // UI 区分色（可选）
+	AgentID         string // 唯一 ID（格式：agentName@teamName）
+	Name            string // agent 名（如 researcher）
+	Team            string // team 名
+	Color           string // UI 区分色（可选）
 	ParentSessionID string // 父会话 ID（transcript 关联，可选）
 }
 
@@ -50,38 +50,38 @@ type TeammateIdentity struct {
 // 移植自 OpenHarness swarm/types.py:258 TeammateSpawnConfig，简化：
 // 去掉 system_prompt/system_prompt_mode/plan_mode_required（由编排层管）。
 type SpawnConfig struct {
-	Name        string   // teammate 名
-	Team        string   // team 名
-	Prompt      string   // 初始 prompt/任务
-	Cwd         string   // 工作目录
-	ParentSessionID string // 父会话 ID
-	Model       string   // 模型覆盖（可选）
-	Color       string   // UI 色（可选）
-	Permissions []string // 工具权限列表
-	WorktreePath string   // git worktree 路径（可选，subprocess 后端用）
-	SessionID   string   // 显式 session ID（空则生成）
+	Name            string   // teammate 名
+	Team            string   // team 名
+	Prompt          string   // 初始 prompt/任务
+	Cwd             string   // 工作目录
+	ParentSessionID string   // 父会话 ID
+	Model           string   // 模型覆盖（可选）
+	Color           string   // UI 色（可选）
+	Permissions     []string // 工具权限列表
+	WorktreePath    string   // git worktree 路径（可选，subprocess 后端用）
+	SessionID       string   // 显式 session ID（空则生成）
 }
 
 // SpawnResult 是 spawn 的结果。
 //
 // 移植自 OpenHarness swarm/types.py:316 SpawnResult。
 type SpawnResult struct {
-	TaskID      string     // 任务管理器中的 task ID
-	AgentID     string     // agent_id（agentName@teamName）
+	TaskID      string      // 任务管理器中的 task ID
+	AgentID     string      // agent_id（agentName@teamName）
 	BackendType BackendType // 使用的后端
-	Success     bool       // 是否成功
-	Error       string     // 失败原因（Success=false 时）
+	Success     bool        // 是否成功
+	Error       string      // 失败原因（Success=false 时）
 }
 
 // Message 是发给 teammate 的消息。
 //
 // 移植自 OpenHarness swarm/types.py:336 TeammateMessage。
 type Message struct {
-	Text       string    // 消息正文
-	FromAgent  string    // 发送方 agent_id
-	Color      string    // 色（可选）
-	Timestamp  time.Time // 时间戳
-	Summary    string    // 摘要（可选）
+	Text      string    // 消息正文
+	FromAgent string    // 发送方 agent_id
+	Color     string    // 色（可选）
+	Timestamp time.Time // 时间戳
+	Summary   string    // 摘要（可选）
 }
 
 // MailboxMessage 是 swarm agent 间交换的单条消息（文件 mailbox 用）。
@@ -89,7 +89,7 @@ type Message struct {
 // 移植自 OpenHarness swarm/mailbox.py:39 MailboxMessage。
 type MailboxMessage struct {
 	ID        string                 `json:"id"`
-	Type      string                 `json:"type"`       // user_message/permission_request/permission_response/shutdown/idle_notification
+	Type      string                 `json:"type"` // user_message/permission_request/permission_response/shutdown/idle_notification
 	Sender    string                 `json:"sender"`
 	Recipient string                 `json:"recipient"`
 	Payload   map[string]interface{} `json:"payload"`

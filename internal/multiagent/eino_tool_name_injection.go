@@ -83,4 +83,3 @@ func collectToolNames(ctx context.Context, tools []tool.BaseTool) []string {
 	}
 	return out
 }
-

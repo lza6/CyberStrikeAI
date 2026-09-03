@@ -30,8 +30,8 @@ type WorktreeInfo struct {
 }
 
 var (
-	validSegment    = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-	maxSlugLength   = 64
+	validSegment      = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+	maxSlugLength     = 64
 	commonSymlinkDirs = []string{"node_modules", ".venv", "__pycache__", ".tox"}
 )
 

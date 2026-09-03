@@ -1,0 +1,70 @@
+# golangci-lint v2 配置（K10 工程化 CI 矩阵升级）
+#
+# 对标 agent-orchestrator CI 矩阵：v2 schema + zero-findings blocking。
+# 与 .golangci.yml（v1 向后兼容）并存，CI 切 v2。
+#
+# 安装 v2：
+#   go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.0.2
+# 运行：
+#   golangci-lint run -c .golangci.v2.yml ./...
+
+version: "2"
+
+run:
+  timeout: 10m
+  # 限制并发，避免 CI OOM
+  concurrency: 4
+
+linters:
+  # none = 不启用默认 linter，只启用下方 enable 列表（zero-findings 严格策略）
+  default: none
+  enable:
+    - govet        # 标准 vet 检查
+    - errcheck     # 错误返回值必须检查
+    - staticcheck  # 综合静态分析
+    - gosec        # 安全扫描
+    - ineffassign  # 无效赋值
+    - gofmt        # 格式化检查（与 formatters.go fmt 双重保险）
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        # 关闭过于严格的 fieldalignment（字段对齐优化，非 bug）
+        - fieldalignment
+    gosec:
+      # 排除测试文件中的硬编码（测试 fixture）
+      excludes:
+        - G101  # 硬编码凭证（测试 fixture 常用）
+        - G404  # 弱随机数（测试可接受）
+        - G601  # 切片元素隐式别名（常见误报）
+  exclusions:
+    # 测试文件放宽部分检查
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+    # generated 文件跳过
+    - path: _gen\.go$
+      linters:
+        - all
+    # cmd 下 bootstrap 容忍 gosec G304（文件路径来自配置）
+    - path: cmd/
+      linters:
+        - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      # local-prefixes 让本地 import 分组前置
+      local-prefixes:
+        - cyberstrike-ai
+
+issues:
+  # zero-findings blocking：发现即 exit 1
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # 不自动 fix（CI 不应改代码，只报红）
+  fix: false

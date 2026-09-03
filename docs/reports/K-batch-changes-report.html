@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K 批次变更报告 · CyberStrikeAI v1.9.0</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-panel: #161b22;
+    --bg-code: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --pink: #ff7b72;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", -apple-system, sans-serif;
+    line-height: 1.75;
+    padding: 0 0 80px 0;
+  }
+  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 48px 0 32px;
+    margin-bottom: 40px;
+    background: linear-gradient(180deg, #10161f 0%, var(--bg) 100%);
+  }
+  header h1 { font-size: 2rem; letter-spacing: -0.5px; }
+  header .sub { color: var(--text-dim); margin-top: 8px; font-size: 0.95rem; }
+  header .meta { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 0.78rem; border: 1px solid var(--border); color: var(--text-dim);
+    background: var(--bg-panel);
+  }
+  .tag.ok { color: var(--green); border-color: rgba(63,185,80,.4); }
+  .tag.blue { color: var(--accent); border-color: rgba(88,166,255,.4); }
+  section { margin-bottom: 56px; }
+  h2 {
+    font-size: 1.4rem; margin-bottom: 20px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  h2 .num { color: var(--accent); font-family: Consolas, monospace; margin-right: 8px; }
+  h3 { font-size: 1.08rem; margin: 26px 0 12px; color: var(--text); }
+  p { margin-bottom: 12px; color: var(--text); }
+  .dim { color: var(--text-dim); }
+  code {
+    font-family: Consolas, "JetBrains Mono", monospace;
+    background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; font-size: 0.86em;
+    color: #79c0ff; white-space: nowrap;
+  }
+  .path { color: var(--purple); }
+  ul.plain { padding-left: 22px; margin-bottom: 12px; }
+  ul.plain li { margin-bottom: 8px; }
+  ol.plain { padding-left: 22px; margin-bottom: 12px; }
+  ol.plain li { margin-bottom: 10px; }
+  .panel {
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px 20px; margin: 16px 0;
+  }
+  .panel.green { border-left: 3px solid var(--green); }
+  .panel.red { border-left: 3px solid var(--red); }
+  .panel.blue { border-left: 3px solid var(--accent); }
+  .panel.orange { border-left: 3px solid var(--orange); }
+  .panel p:last-child, .panel ul:last-child { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 0.9rem; }
+  th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-panel); color: var(--text); font-weight: 600; white-space: nowrap; }
+  td { color: var(--text-dim); }
+  td strong { color: var(--text); }
+  tr:hover td { background: rgba(88,166,255,.04); }
+  code.wrap { white-space: normal; word-break: break-all; }
+  .sev { font-weight: 700; white-space: nowrap; }
+  .sev.p0 { color: var(--red); }
+  .sev.p1 { color: var(--orange); }
+  .sev.p2 { color: var(--accent); }
+  .sev.crit { color: var(--red); }
+  pre {
+    background: var(--bg-code); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; overflow-x: auto;
+    font-family: Consolas, monospace; font-size: 0.84rem;
+    color: #a5d6ff; margin: 14px 0 20px; line-height: 1.6;
+  }
+  pre .c { color: var(--text-dim); }
+  .arrow-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0; }
+  .flow-step {
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: 0.84rem;
+  }
+  .flow-step.hot { border-color: rgba(88,166,255,.5); color: var(--accent); }
+  .flow-arrow { color: var(--text-dim); }
+  /* ============ 测验 ============ */
+  #quiz-section { border-top: 2px solid var(--accent); padding-top: 48px; }
+  .quiz-q {
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 22px 24px; margin-bottom: 22px;
+  }
+  .quiz-q .q-title { font-weight: 600; font-size: 1rem; margin-bottom: 14px; }
+  .quiz-q .q-title .qn { color: var(--accent); font-family: Consolas, monospace; margin-right: 6px; }
+  .quiz-opt {
+    display: block; width: 100%; text-align: left;
+    background: var(--bg-code); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 11px 14px; margin-bottom: 9px; cursor: pointer;
+    font-size: 0.9rem; font-family: inherit; line-height: 1.55;
+    transition: border-color .15s, background .15s;
+  }
+  .quiz-opt:hover { border-color: var(--accent); }
+  .quiz-opt .opt-key { color: var(--text-dim); font-family: Consolas, monospace; margin-right: 8px; }
+  .quiz-opt.correct { border-color: var(--green); background: rgba(63,185,80,.12); }
+  .quiz-opt.wrong { border-color: var(--red); background: rgba(248,81,73,.12); }
+  .quiz-opt.disabled { cursor: default; opacity: .75; }
+  .quiz-opt.disabled:not(.correct):not(.wrong) { opacity: .45; }
+  .quiz-explain {
+    display: none; margin-top: 10px; padding: 12px 14px;
+    border-radius: 6px; font-size: 0.86rem; line-height: 1.65;
+  }
+  .quiz-explain.show { display: block; }
+  .quiz-explain.ok { background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.35); color: var(--green); }
+  .quiz-explain.bad { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.35); color: var(--red); }
+  .quiz-explain .ref { color: var(--text-dim); display: block; margin-top: 6px; }
+  #quiz-result {
+    position: sticky; bottom: 16px;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 22px; margin-top: 28px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  #quiz-score { font-size: 1.05rem; font-weight: 700; }
+  #quiz-verdict { font-weight: 700; }
+  #quiz-verdict.pass { color: var(--green); }
+  #quiz-verdict.fail { color: var(--red); }
+  #quiz-verdict.pending { color: var(--text-dim); font-weight: 400; }
+  footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>K 批次变更报告 · 终局闭环总审计</h1>
+    <div class="sub">CyberStrikeAI · 8 批次落地 + 5 轮审查 + 8 修复 worker + 真实 E2E 终验</div>
+    <div class="meta">
+      <span class="tag blue">批次 K0a / K0b / K0c / K3 / K4 / K8 / K9 / K10</span>
+      <span class="tag blue">会话 cyberstrikeai-c5 · 2026-09-04</span>
+      <span class="tag ok">61 包 CGO + 62 包 pure-go 全绿</span>
+      <span class="tag ok">基线 0d70721 (v1.8.0)</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- ==================== 1. 上下文 ==================== -->
+<section id="context">
+  <h2><span class="num">01</span>上下文：为什么做这轮变更</h2>
+  <p>v1.8.0 发布后（commit <code>0d70721</code>，风险清零批次收口），产品提出了 <strong>5 条方向性升级</strong>：</p>
+  <ol class="plain">
+    <li><strong>通用化扩展</strong> — 平台目前深度绑定"安全渗透"这一个垂直域，需要为 office / ecommerce / content 等非安全域预留接入点，而不是把安全逻辑硬编码在加载链路里。</li>
+    <li><strong>小白易用黑匣子</strong> — 多 agent 协作对新手是黑盒：任务卡死了不知道为什么、协作中间产物看不见、出错没有可视轨迹。需要"打开就能看懂"的过程透明化。</li>
+    <li><strong>用户自建 skills</strong> — skill 目录只支持顶层一层结构，用户无法按自己的业务组织嵌套子目录包。</li>
+    <li><strong>多模态</strong> — 现有配置层对视觉/多模态模型的支持散乱，需要收敛。</li>
+    <li><strong>CL4R1T4S prompt 优化</strong> — 系统提示词借鉴 CL4R1T4S 分层结构（身份层 / 防注入层 / 行为层），强化防注入与执行纪律。</li>
+  </ol>
+  <p>这 5 条方向经过收敛与工程化拆解，落成 <strong>K 批次 8 个可独立验收的子批次</strong>：</p>
+  <div class="arrow-flow">
+    <span class="flow-step">通用化扩展</span><span class="flow-arrow">→</span>
+    <span class="flow-step hot">K0a vertical 抽象</span>
+    <span class="flow-arrow">+</span>
+    <span class="flow-step hot">K0b blackboard 持久化</span>
+    <span class="flow-arrow">+</span>
+    <span class="flow-step hot">K0c skill 递归扫描</span>
+  </div>
+  <div class="arrow-flow">
+    <span class="flow-step">小白易用黑匣子</span><span class="flow-arrow">→</span>
+    <span class="flow-step hot">K4 黑匣子三件套（trace waterfall / HITL Why / 托盘动态色）</span>
+  </div>
+  <div class="arrow-flow">
+    <span class="flow-step">CL4R1T4S prompt 优化</span><span class="flow-arrow">→</span>
+    <span class="flow-step hot">K3 质量门 + prompt 五项</span>
+    <span class="flow-arrow">+</span>
+    <span class="flow-step hot">K10 工程 CI 矩阵</span>
+  </div>
+  <div class="arrow-flow">
+    <span class="flow-step">多模态 / 安全深化 / 编排健壮性</span><span class="flow-arrow">→</span>
+    <span class="flow-step hot">K8 SARIF + 攻击链</span>
+    <span class="flow-arrow">+</span>
+    <span class="flow-step hot">K9 编排策略层</span>
+  </div>
+  <div class="panel blue">
+    <p><strong>一个补充事实</strong>：多模态配置（<code>internal/config/vision.go</code>）在本轮作为独立模块完成接入（vision 配置 + 测试），但它不是 8 个 K 批次的验收主线——8 批次的 spec 文件均落在 <code>docs/spec/</code>（K0a / K0b / K0c / K3 / K4 / K8 / K9 / K10），每份 spec 都带 Objective / Success Criteria / Commands / Project Structure，用于后续改代码前判断是否过时（spec-driven development 回溯规范）。</p>
+  </div>
+</section>
+
+<!-- ==================== 2. 直觉 ==================== -->
+<section id="intuition">
+  <h2><span class="num">02</span>直觉：四个核心设计决策的"为什么"</h2>
+
+  <h3>2.1 为什么 vertical 抽象是"容器"，而不是"功能开关"</h3>
+  <p>如果做通用化时直接加一个 <code>if domain == "security"</code> 的分支，每新增一个域就要在全仓撒 N 个 if。K0a 把"域"本身提升为接口：</p>
+  <pre><span class="c">// internal/vertical/vertical.go</span>
+Vertical interface {
+  Name() string
+  DefaultSystemPrompt() string
+  AgentMdDir() / SkillDir() / ToolWhitelist() / OnboardingDoc() ...
+}
++ Registry（Register / Get / SetActive / List / ResolveActiveName）</pre>
+  <p>security 只是这个容器的<strong>第一个住客</strong>（<code class="path">internal/vertical/security.go</code>）。加载链路（agent 目录、skill 目录、工具白名单）从"硬编码 security 路径"变为"问 Registry 要当前 vertical 的配置"。后续接 office 域 = 写一个新 <code>Vertical</code> 实现 + 注册，<strong>零改动现有加载代码</strong>。</p>
+  <p>K0a 是奠基阶段，刻意保守：<strong>只定义接口 + 注册 security，不实际切换 active vertical</strong>——即使 config 配了非 security 值也只 Warn 不切换，vertical 过滤（agent/skill 目录过滤、ToolWhitelist 收紧）留给后续批次。这保证了 18 agent / 74→96 skill / 108 工具的现有加载行为一个字节都不变。</p>
+
+  <h3>2.2 为什么 blackboard SQLite 是"底座"</h3>
+  <p>多 agent 涌现式协作的 blackboard（findings 发布/订阅/取代）原来只在内存里，<strong>进程一重启所有协作中间产物全丢</strong>——这对"小白黑匣子"是致命的：你想看 agent 们刚才为什么做出那个决定，重启一次就没了。K0b 把它升级为 SQLite 持久化（WAL 模式），<code class="path">internal/blackboard/sqlite_board.go</code>：</p>
+  <ul class="plain">
+    <li><strong>Board interface 不变</strong>：<code>NewMemoryBoard / NewSQLiteBoard</code> 二选一，config 的 <code>blackboard_driver: memory|sqlite</code> 控制，默认 memory 向后兼容。</li>
+    <li><strong>FTS5 尝试建虚拟表，失败降级</strong>（fts5=false），核心 Publish/Get/List/Subscribe/Supersede 不依赖 FTS5——全文搜索是增强项不是生存项。</li>
+    <li><strong>与 memory 4 层是包级独立，不是依赖关系</strong>：blackboard 只借用 <code>internal/database</code> 的 <code>sqliteDriverName()/sqliteDSN()</code> 双驱动适配函数（CGO mattn / pure-go modernc），有自己的 <code>*sql.DB</code>、自己的表、自己的生命周期（app_lifecycle Shutdown 时关闭），不读也不写 memory 的 4 层表结构。两者是"共用同一个驱动适配层的平级包"。</li>
+  </ul>
+
+  <h3>2.3 为什么"授权不质疑"立场不能动</h3>
+  <p>K3 借鉴 CL4R1T4S 做 prompt 分层时，防注入层最容易犯的错误是把"更安全"理解为"让 agent 更怀疑一切"。如果 prompt 写成 "authorized-only，请先质疑用户是否真的授权了"，后果是：</p>
+  <ul class="plain">
+    <li><strong>授权判断已经有硬边界兜底</strong>——scope 守卫、权限系统、 verbs-gate、HITL 审批在代码层，不靠 prompt 自我怀疑；</li>
+    <li><strong>注入者恰恰可以利用"降低权限"话术</strong>——攻击者诱导 agent 进入"我是不是没被授权"的犹豫态，反而削弱执行力、增加被社工的面积；</li>
+    <li>这是渗透测试平台，<strong>用户的授权前提是产品契约</strong>，agent 的职责是在边界内坚决执行。</li>
+  </ul>
+  <p>所以 K3 的身份层明确保留<strong>"用户已授权，执行工具不质疑"</strong>立场，防注入层防的是"边界外的指令篡改"，而不是"边界内的执行决心"。审查轮次专门验证了这一点未被弱化。</p>
+
+  <h3>2.4 为什么 outcome-first 不破坏 ReAct</h3>
+  <p>outcome-first（K3 prompt 五项之一）指最终给用户看的回复以"结论/结果"开头，而不是复述"我第一步做了什么第二步做了什么"。它<strong>只作用于最终回复的呈现层</strong>：</p>
+  <ul class="plain">
+    <li>中间的 Reason → Act → Observe 循环<strong>一个环节都不压缩</strong>——模型在中间步骤仍然完整推理、完整调工具、完整观察；</li>
+    <li>如果让模型从中间步骤就开始"只给结果"，会破坏工具调用链（模型跳过 Observe 直接下结论、或省略调用参数的推导），这是 ReAct 的语义依赖；</li>
+    <li>WHY-EXPECT-LINK（每步说明为什么做 + 预期看到什么）同样作用于中间推理，与 outcome-first 互补：过程对内完整，结论对外前置。</li>
+  </ul>
+</section>
+
+<!-- ==================== 3. 做了什么 ==================== -->
+<section id="batches">
+  <h2><span class="num">03</span>做了什么：8 批次台账</h2>
+  <table>
+    <tr><th>批次</th><th>内容</th><th>关键文件</th><th>验证</th></tr>
+    <tr>
+      <td><strong>K0a</strong><br><span class="dim">vertical 抽象</span></td>
+      <td><code>Vertical</code> interface + <code>Registry</code> + <code>SecurityVertical</code> 首实现；config 加 <code>active_vertical</code>（非 security 只 Warn 不切换）；app 启动 Register。奠基约束：不切换、不过滤。</td>
+      <td><code class="path wrap">internal/vertical/vertical.go</code><br><code class="path wrap">internal/vertical/security.go</code><br><code class="path wrap">internal/config/config.go</code><br><code class="path wrap">internal/app/app.go</code></td>
+      <td>go vet/test；18 agent 全可见性 curl 回归（现有加载零回归）</td>
+    </tr>
+    <tr>
+      <td><strong>K0b</strong><br><span class="dim">blackboard 持久化</span></td>
+      <td>blackboard 从内存升级 SQLite（WAL）；Board interface 不变；FTS5 失败降级；双驱动适配；config <code>blackboard_driver: memory|sqlite</code>；Shutdown 关闭 DB。</td>
+      <td><code class="path wrap">internal/blackboard/sqlite_board.go</code><br><code class="path wrap">internal/blackboard/subscriber.go</code><br><code class="path wrap">internal/config/config.go</code><br><code class="path wrap">internal/app/app_lifecycle.go</code></td>
+      <td>12 新测试：重启不丢 findings / 1000 并发写无 locked / <code>-race</code> / 双驱动一致性 / FTS5 降级 / Subscribe 重放</td>
+    </tr>
+    <tr>
+      <td><strong>K0c</strong><br><span class="dim">skill 递归扫描</span></td>
+      <td>skill 扫描 <code>os.ReadDir</code> → <code>filepath.WalkDir</code> 递归，支持子目录垂直包；<code>make skills-lock</code>（SHA256 锁）+ <code>make verbs-gate</code>（skill→tool 引用漂移检测，strict 模式 exit 1）；name 语义改为相对路径。</td>
+      <td><code class="path wrap">internal/skillpackage/lock.go</code><br><code class="path wrap">internal/skillpackage/verbs_gate.go</code><br><code class="path wrap">internal/skillpackage/layout.go</code><br><code class="path wrap">cmd/genlock/</code> · <code class="path wrap">cmd/verbs-gate/</code></td>
+      <td>done + 修复（96→27 回归，见第 04 节）；修复后 ListSkillSummaries <strong>96/96</strong></td>
+    </tr>
+    <tr>
+      <td><strong>K3</strong><br><span class="dim">质量门 + prompt</span></td>
+      <td><code>-race</code> 测试、diff-cover 80% 门禁、gitleaks + govulncheck、CI 矩阵升级；CL4R1T4S prompt 五项：身份层 / 防注入层 / 并行执行 / outcome-first / WHY-EXPECT-LINK。<strong>"授权不质疑"立场保留</strong>。</td>
+      <td><code class="path wrap">Makefile</code><br><code class="path wrap">.github/workflows/ci.yml</code><br><code class="path wrap">.github/workflows/quality.yml</code><br><code class="path wrap">internal/agent/default_single_system_prompt.go</code></td>
+      <td>done + 修复（{{date}} 外部注入路径）；立场保护经审查确认未被 authorized-only 弱化</td>
+    </tr>
+    <tr>
+      <td><strong>K4</strong><br><span class="dim">黑匣子三件套</span></td>
+      <td>① trace waterfall（前端过程瀑布图）② HITL Why（审批时说明"为什么问你"）③ 托盘动态色（desktop tray 按运行状态变色）；统一 home 目录 <code>~/.cyberstrikeai/</code> 回退。</td>
+      <td><code class="path wrap">internal/handler/</code>（waterfall 聚合端点）<br><code class="path wrap">internal/handler/hitl.go</code><br><code class="path wrap">desktop/src/tray.js</code><br><code class="path wrap">internal/config/config.go</code> · <code class="path wrap">internal/storage/</code></td>
+      <td>done + P0 修复（waterfall 前端原调不存在的端点 → 补 <code>GET /conversations/:id/process-details</code> 真打通，httptest 验证结构对齐）</td>
+    </tr>
+    <tr>
+      <td><strong>K8</strong><br><span class="dim">SARIF + 攻击链</span></td>
+      <td>verifier 4-axis 验证 + evidence ladder 证据分级；漏洞导出 SARIF 2.1.0（GitHub Code Scanning 原生支持）：CWE 归一化 + severity 压缩 + partialFingerprints 指纹去重；attackchain builder（LLM 辅助链构建 + DB 持久化 + 项目级提升 + token 预算截断）；Operator Charter。</td>
+      <td><code class="path wrap">internal/sarif/sarif.go</code><br><code class="path wrap">internal/attackchain/builder.go</code><br><code class="path wrap">internal/attackchain/promote_project.go</code><br><code class="path wrap">internal/attackchain/truncate.go</code></td>
+      <td>done + P0 修复（verifier 原是孤立模块 → Verify 接线 SARIF 导出 + record_vulnerability 落库双链路）</td>
+    </tr>
+    <tr>
+      <td><strong>K9</strong><br><span class="dim">编排策略层</span></td>
+      <td>StuckDetector（四阈值：sameOutputRepeat / sameErrorRepeat / revisionLoop / monologue，移植 OpenHands 设计，与 J7 TurnToolCallLimiter 成二级防线）；Scheduler 四策略；coordinator retry/backoff（最多 1+MaxRetries 次）；reactions lifecycle 状态机（SessionStatus 派生 + 转换触发）。</td>
+      <td><code class="path wrap">internal/multiagent/eino_stuck_detector.go</code><br><code class="path wrap">internal/multiagent/coordinator_orchestrator.go</code><br><code class="path wrap">internal/reactions/engine.go</code></td>
+      <td>done + P1 修复（事件源接线：PublishHitlPending / RunComplete / ToolPending + session-status 规则；lifecycle 原空转）</td>
+    </tr>
+    <tr>
+      <td><strong>K10</strong><br><span class="dim">工程 CI 矩阵</span></td>
+      <td>golangci-lint v2（zero-findings 阻断）+ gofmt gate + go-version-file（4 处，防 CI 与 module 漂移）+ PR 风险分级器（按文件路径 Tier 分级，只读 git diff 不执行任意代码，<code>pull_request_target</code> + base checkout）。</td>
+      <td><code class="path wrap">.golangci.v2.yml</code><br><code class="path wrap">.github/workflows/ci.yml</code><br><code class="path wrap">.github/workflows/quality.yml</code><br><code class="path wrap">scripts/pr-risk-check.mjs</code></td>
+      <td>done；pr-risk-check 由 shell 调用改 <code>execFileSync</code>（消注入，见第 04 节）；golangci v2 本地未装，CI 首跑待验（见第 06 节）</td>
+    </tr>
+  </table>
+  <p class="dim">每批次的完整 spec（Objective / Success Criteria / Commands / Project Structure / Code Style）见 <code class="path">docs/spec/K*.md</code>。</p>
+</section>
+
+<!-- ==================== 4. 审计与修复 ==================== -->
+<section id="audit">
+  <h2><span class="num">04</span>审计与修复：5 轮审查 → 8 个修复 worker → 复验</h2>
+  <p>8 批次落地后跑了 <strong>5 轮独立审查</strong>，发现的问题分派给 <strong>8 个修复 worker</strong> 并行修复，随后逐项复验。审查角度：critical 代码审查 / 高并发 SaaS / 前后端衔接 / 反向审判盲点 / spec-kit 规范。</p>
+
+  <h3>4.1 五轮审查的完整发现 → 修复 → 证据</h3>
+  <table>
+    <tr><th>问题</th><th>级别</th><th>根因</th><th>修复</th><th>复验证据</th></tr>
+    <tr>
+      <td><strong>Closed channel panic</strong></td>
+      <td class="sev crit">CRITICAL</td>
+      <td>blackboard subscriber 的广播在<strong>锁外</strong>向 channel 发送，另一 goroutine 在<strong>锁内</strong> close channel → 发送到已关闭 channel 直接 panic</td>
+      <td>subscriber 的 send 与 close 全部置于同一把 <code>mu</code> 互斥保护下（<code class="path">internal/blackboard/subscriber.go</code>）</td>
+      <td>新增 <code class="path">internal/blackboard/subscriber_close_test.go</code> 并发 close+send 场景 PASS；blackboard 包整体 <code>-race</code> PASS</td>
+    </tr>
+    <tr>
+      <td><strong>96→27 skill 回归</strong></td>
+      <td class="sev crit">CRITICAL</td>
+      <td><code class="path">internal/skillpackage/validate.go</code> 校验逻辑用 <code>Name == 单段目录名</code> 比对；K0c 递归扫描后嵌套 skill 的 name 变成相对路径（多段），与目录名不等 → 绝大多数 skill 被校验拒绝，96 掉到 27</td>
+      <td>改为 <code>Base(name)</code> 比对（name 的最后一段与所在目录名一致即可），兼容顶层与嵌套路径</td>
+      <td>ListSkillSummaries 实测 <strong>96/96</strong>；新增 <code class="path">internal/skillpackage/nested_validate_test.go</code></td>
+    </tr>
+    <tr>
+      <td><strong>Waterfall 假功能</strong></td>
+      <td class="sev p0">P0</td>
+      <td>前端 waterfall 面板调用的 <code>GET /conversations/:id/process-details</code> <strong>端点根本不存在</strong> → 永远 404 空壳，界面看起来"有这个功能"实际拿不到任何数据</td>
+      <td>补聚合端点：从 blackboard / 事件流 / turn 记录聚合过程明细，返回结构与前端渲染字段对齐</td>
+      <td>httptest 验证端点 200 + 结构对齐；E2E curl 200（见第 05 节）</td>
+    </tr>
+    <tr>
+      <td><strong>Verifier 孤立</strong></td>
+      <td class="sev p0">P0</td>
+      <td>K8 的 verifier 4-axis 验证链路写好了但<strong>没有任何调用方接线</strong>——孤立模块，验证结果既不出 SARIF 也不落库</td>
+      <td>Verify 接线两条链路：验证结果 → SARIF 导出；→ <code>record_vulnerability</code> 落库</td>
+      <td>E2E 双链路验证（SARIF 可导出 + 漏洞行真实写库）</td>
+    </tr>
+    <tr>
+      <td><strong>pr-risk shell 注入</strong></td>
+      <td class="sev crit">CRITICAL</td>
+      <td><code class="path">scripts/pr-risk-check.mjs</code> 经 shell 拼接调用 git 命令，PR 分支名等外部输入可注入</td>
+      <td>改 <code>execFileSync</code>（不经 shell，参数数组化）</td>
+      <td>静态确认：脚本内无 shell 拼接调用残留</td>
+    </tr>
+    <tr>
+      <td><strong>持锁 DB I/O + RC4-10 等</strong></td>
+      <td class="sev p1">P1</td>
+      <td>critical 审查批：锁内做 DB I/O（长时间持锁阻塞其他 goroutine）、死代码、选择器低效、竞态、吞错误、句柄泄漏等 10 项</td>
+      <td>8 修复 worker 分工全修：锁外重放、死代码删除、选择器优化、竞态收敛、错误显式处理、泄漏修复 + 全量同模式扫描</td>
+      <td>复验 build/vet/test 全过 + 全量扫描无同类残留</td>
+    </tr>
+    <tr>
+      <td><strong>健康探针缺失</strong></td>
+      <td class="sev p0">P0</td>
+      <td>无 <code>/healthz /readyz</code>，编排器/监控无法区分"进程活着"与"依赖就绪"，探活只能打业务端点（会吃鉴权+限流）</td>
+      <td>落地 <code>/healthz</code>（进程存活）+ <code>/readyz</code>（依赖就绪），置于鉴权与限流中间件之前</td>
+      <td>E2E curl：<code>/healthz 200</code> + <code>/readyz 200</code></td>
+    </tr>
+    <tr>
+      <td><strong>verbs-gate 233 假阳性</strong></td>
+      <td class="sev p1">P1</td>
+      <td>verbs-gate 的引用解析过宽：把 SKILL.md 中所有出现工具名的文本（含示例、说明、非引用块）都计为"skill→tool 引用"，递归扫描后进一步放大 → 233 个"幽灵工具"绝大多数是假的</td>
+      <td>引入 <strong>include 机制</strong>精确界定真实引用块，只解析真实引用来源</td>
+      <td>收敛为 <strong>28 幽灵</strong>——经人工确认为真信号（真实引用了未注册工具），E2E verbs-gate 28 幽灵为预期输出</td>
+    </tr>
+    <tr>
+      <td><strong>_shared 幽灵 agent</strong></td>
+      <td class="sev p1">P1</td>
+      <td>agent 计数把 <code>_shared</code> 模板目录也当成真实 agent → 幽灵计数</td>
+      <td>排除 <code>_shared</code>（模板不参与加载），E2E agents 计数 18（排除后）</td>
+      <td>E2E：agents 18（_shared 排除）</td>
+    </tr>
+    <tr>
+      <td><strong>lifecycle 空转 / Close 泄漏 / reasoning 断裂</strong></td>
+      <td class="sev p1">P1</td>
+      <td>reactions lifecycle 状态机无事件源（轮询空转）；blackboard Close 泄漏；multiagent payload 丢失 reasoning 字段（前后端衔接断）</td>
+      <td>事件源接线（PublishHitlPending / RunComplete / ToolPending）+ session-status 规则；Close 收敛；payload 补 reasoning</td>
+      <td>reactions e2e_test 状态转换触发 reaction PASS；SSE 流式链路 E2E 通</td>
+    </tr>
+    <tr>
+      <td><strong>其余 P1/P2 项</strong></td>
+      <td class="sev p2">P2</td>
+      <td>cancel 未传播、i18n 键缺失等若干低危项</td>
+      <td>cancel 修复落地；P2 择要修复，其余记录于审查报告</td>
+      <td>复验通过</td>
+    </tr>
+  </table>
+
+  <h3>4.2 修复 worker 分工</h3>
+  <p>8 个 worker 按包切分并行（互不碰同一文件）：worker A blackboard（panic + Close 泄漏）· worker B skillpackage（96→27 + verbs-gate include）· worker C handler（waterfall 端点 + healthz/readyz）· worker D verifier 接线 · worker E multiagent/reactions（事件源 + cancel + reasoning）· worker F scripts/CI（execFileSync）· worker G skill 数据修正 · worker H 全量同模式扫描收尾。</p>
+  <div class="panel orange">
+    <p><strong>worker G 的 2 处 skill 数据修正</strong>（vulnclaw-core 的 name / <code>_template</code>→<code>template</code> 目录改名）：这不是"改测试凑绿"，而是<strong>数据 bug 修正</strong>——skill 的 frontmatter name 与所在目录名真实不一致，在 Base 比对规则下属于校验应拦截的真实违规，修的是数据不是校验逻辑。</p>
+  </div>
+</section>
+
+<!-- ==================== 5. 真实验证 ==================== -->
+<section id="verify">
+  <h2><span class="num">05</span>真实验证：E2E 证据与双路径测试</h2>
+
+  <h3>5.1 终验命令（真实输出）</h3>
+  <pre><span class="c"># 双路径构建与测试</span>
+CGO_ENABLED=1 go build ./...   <span class="c">→ exit 0</span>
+CGO_ENABLED=1 go vet ./...     <span class="c">→ exit 0</span>
+CGO_ENABLED=1 go test ./...    <span class="c">→ 61 包 ok（mcp 1 个 flaky 测试 3 次重跑全 PASS，非回归）</span>
+CGO_ENABLED=0 go test -tags sqlite_pure_go ./...   <span class="c">→ 62 包 ok / 0 FAIL</span>
+
+<span class="c"># E2E（local_mode 真实起服，LLM 走 401 预期路径，不烧真实 API 钱）</span>
+/healthz                 <span class="c">→ 200（不走鉴权限流）</span>
+/readyz                  <span class="c">→ 200（不走鉴权限流）</span>
+agents                   <span class="c">→ 18（_shared 排除）</span>
+skills total             <span class="c">→ 96（K0c 修复后）</span>
+waterfall 端点           <span class="c">→ 200，结构对齐前端渲染字段</span>
+SSE 流式链路             <span class="c">→ 通（LLM 401 为无 key 预期，链路本身可达）</span>
+verbs-gate               <span class="c">→ 28 幽灵（真信号）</span>
+genlock Verify           <span class="c">→ 0 违规</span></pre>
+
+  <h3>5.2 双路径测试为什么是 61 + 62</h3>
+  <p>仓库支持两种 SQLite 驱动路径：<strong>CGO mattn</strong>（生产，<code>CGO_ENABLED=1</code> + mingw gcc）和 <strong>pure-go modernc</strong>（<code>-tags sqlite_pure_go</code>，无 CGO 环境）。pure-go 路径下部分 CGO-only 测试被 Skip、另有 tag-gated 测试被激活，所以包计数略有差异（61 vs 62），两条路径都要求 0 FAIL。</p>
+
+  <h3>5.3 验证覆盖面</h3>
+  <table>
+    <tr><th>维度</th><th>证据</th></tr>
+    <tr><td>编译 / 静态</td><td>build + vet exit 0（CGO 路径）</td></tr>
+    <tr><td>单元 + 集成</td><td>CGO 61 包 ok / pure-go 62 包 ok，0 FAIL</td></tr>
+    <tr><td>并发安全</td><td>blackboard / StuckDetector <code>-race</code> PASS；1000 并发写无 locked</td></tr>
+    <tr><td>持久化</td><td>SQLiteBoard 重启不丢 findings 测试 PASS</td></tr>
+    <tr><td>HTTP 真实路径</td><td>local_mode 起服：healthz / readyz / agents / skills / waterfall / SSE / verbs-gate 全实测</td></tr>
+    <tr><td>锁完整性</td><td><code>make skills-lock</code> SHA256 锁生成；genlock Verify 0 违规</td></tr>
+  </table>
+</section>
+
+<!-- ==================== 6. 剩余风险 ==================== -->
+<section id="risks">
+  <h2><span class="num">06</span>剩余风险与披露</h2>
+  <table>
+    <tr><th>风险</th><th>影响</th><th>状态 / 建议</th></tr>
+    <tr>
+      <td><strong>FTS5 生产静默降级</strong></td>
+      <td>Makefile 生产构建未带 <code>-tags sqlite_fts5</code> → mattn 构建里 FTS5 编译期缺席 → blackboard 全文搜索按设计降级（fts5=false），核心 Publish/Get/List/Subscribe 不受影响</td>
+      <td>已知且符合降级设计；若要启用全文搜索，生产构建命令加 <code>-tags sqlite_fts5</code> 即可（无代码改动）</td>
+    </tr>
+    <tr>
+      <td><strong>golangci v2 待 CI 首跑验证</strong></td>
+      <td>本地未安装 golangci-lint v2，v2 schema（<code>.golangci.v2.yml</code>）未经真实运行确认</td>
+      <td>CI 首跑可能需微调 schema 版本字段；v1 配置并存兜底</td>
+    </tr>
+    <tr>
+      <td><strong>P1 高并发项</strong></td>
+      <td>singleflight（同 key 请求合并）、LLM 熔断器、生产 FTS5 启用——高并发 SaaS 审查提出，属吞吐优化</td>
+      <td>已记录于审查报告，待后续批次；当前单机/小团队规模不构成阻塞</td>
+    </tr>
+    <tr>
+      <td><strong>2 处 skill 数据修正说明</strong></td>
+      <td>vulnclaw-core name 修正 + <code>_template</code>→<code>template</code> 目录改名</td>
+      <td>属数据 bug 修正（name 与目录名真实不一致），非逻辑妥协；如外部脚本引用旧目录名需同步</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ==================== 测验 ==================== -->
+<section id="quiz-section">
+  <h2><span class="num">07</span>底部测验（必须通过）</h2>
+  <p class="dim">10 道单选题。点击选项立即判分；全对显示"✅ 测验通过"，错任意一题显示"❌ 请重读报告对应章节"。答错会给出解释与对应章节引用。</p>
+
+  <div id="quiz" data-total="10"></div>
+
+  <div id="quiz-result">
+    <span id="quiz-score">得分 0 / 10</span>
+    <span id="quiz-verdict" class="pending">未完成</span>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    CyberStrikeAI · K 批次变更报告 · 生成于 2026-09-04 · 基线 0d70721 → K 批次工作区<br>
+    台账来源：<code class="path">workflow_status.md</code>（K 批次段）· spec 来源：<code class="path">docs/spec/K*.md</code>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var QUESTIONS = [
+    {
+      q: '为什么说 blackboard SQLite 与 memory 4 层是"包级独立"，而不是依赖关系？',
+      opts: [
+        '因为 blackboard 的表结构是由 memory 4 层迁移函数自动生成的，二者共享同一套 schema',
+        '因为 blackboard 只借用 internal/database 的双驱动适配函数（sqliteDriverName/sqliteDSN），有自己的 *sql.DB、自己的表、自己的生命周期，互不读写对方数据',
+        '因为 blackboard 在 CGO 模式下走 mattn、memory 在 pure-go 模式下走 modernc，驱动不同所以独立',
+        '因为 memory 4 层运行在独立进程中，blackboard 通过 IPC 访问它'
+      ],
+      correct: 1,
+      why: '包级独立的准确含义是：两个平级包共用同一个驱动适配层，但各自持有 *sql.DB、各自建表、各自管理生命周期（blackboard 的 DB 在 app_lifecycle Shutdown 时关闭），blackboard 不依赖 memory 的表结构与迁移逻辑。',
+      ref: '第 02 节 2.2「为什么 blackboard SQLite 是底座」'
+    },
+    {
+      q: '"授权不质疑"立场为什么不能被 authorized-only 话术弱化？',
+      opts: [
+        '因为 authorized-only 会增加 token 消耗，出于成本考虑被移除',
+        '因为授权判断已由 scope 守卫/权限系统/HITL 在代码层兜底，prompt 层自我怀疑反而给注入者留下"降低权限"的社工话术，削弱边界内的执行力',
+        '因为 K3 的防注入层与身份层是同一层，二者只能保留一个',
+        '因为渗透测试场景下所有操作都无风险，不需要任何怀疑机制'
+      ],
+      correct: 1,
+      why: '安全边界由代码层（scope/权限/verbs-gate/HITL 审批）保证，不靠 prompt 自我怀疑；而"先质疑是否被授权"的措辞恰好可被注入者利用为削弱 agent 执行力的社工入口。K3 身份层保留"用户已授权，执行工具不质疑"，防注入层防的是边界外的指令篡改。',
+      ref: '第 02 节 2.3「为什么"授权不质疑"立场不能动」'
+    },
+    {
+      q: 'outcome-first 为什么只作用于最终回复，而不作用于中间步骤？',
+      opts: [
+        '因为中间步骤的内容没有价值，只是为了省 token 才压缩',
+        '因为 ReAct 循环的语义依赖中间的完整推理与观察——若中间步骤也"只给结果"，模型会跳过 Observe 直接下结论、破坏工具调用链；outcome-first 只是最终呈现层的结论前置',
+        '因为中间步骤由 multiagent 系统 agents 各自生成，prompt 无法约束',
+        '因为最终回复走单独的模型，与中间步骤使用的模型不同'
+      ],
+      correct: 1,
+      why: '中间的 Reason→Act→Observe 循环一个环节都不压缩：完整推理保证工具调用参数的推导、完整观察保证结论有依据。outcome-first 与 WHY-EXPECT-LINK 互补——过程对内完整，结论对外前置。',
+      ref: '第 02 节 2.4「为什么 outcome-first 不破坏 ReAct」'
+    },
+    {
+      q: 'Closed channel panic 的根因是什么？',
+      opts: [
+        'channel 缓冲区大小设为 0，导致发送阻塞超时',
+        'Go 版本兼容性问题，channel 语义发生了变化',
+        '广播在锁外向 channel 发送，而另一个 goroutine 在锁内 close channel——发送方与关闭方没有互斥，发送到已关闭的 channel 直接 panic',
+        'SQLite 驱动在 WAL 模式下返回了 nil channel'
+      ],
+      correct: 2,
+      why: '发送与关闭分属两把不同的"保护域"（send 在锁外、close 在锁内），互斥被打破。修复是把 subscriber 的 send 与 close 全部置于同一把 mu 下，使二者原子互斥。',
+      ref: '第 04 节 4.1 表「Closed channel panic」行'
+    },
+    {
+      q: '96→27 skill 回归的根因是什么？',
+      opts: [
+        'K0c 递归扫描漏扫了子目录，只扫到 27 个 SKILL.md',
+        'skills-lock.json 的 SHA256 与磁盘文件不一致，校验拒绝',
+        'validate.go 用 Name == 单段目录名 比对，而递归扫描后嵌套 skill 的 name 是多段相对路径，与目录名不等，绝大多数 skill 被校验拒绝',
+        'verbs-gate 严格模式把 69 个含幽灵引用的 skill 全部下线了'
+      ],
+      correct: 2,
+      why: '扫描本身没漏（递归扫到了全部 96 个），坏在校验：name 语义从"直接父目录名"改为"相对 skillsDir 的路径"后，旧的"Name == 目录名"比对对嵌套路径必然失败。修复为 Base(name) 比对——name 的最后一段与所在目录名一致即可，顶层与嵌套都兼容。',
+      ref: '第 04 节 4.1 表「96→27 skill 回归」行'
+    },
+    {
+      q: 'Waterfall "假功能"的根因是什么？',
+      opts: [
+        'waterfall 渲染性能太差，被浏览器降级为空壳',
+        '前端调用的 GET /conversations/:id/process-details 端点后端根本不存在，永远 404——界面有入口但拿不到任何数据',
+        'blackboard 内存版不持久化，重启后过程数据全丢，所以瀑布图是空的',
+        'HITL 审批没有把 Why 字段传给前端，导致瀑布图拒绝渲染'
+      ],
+      correct: 1,
+      why: '这不是数据问题也不是性能问题，而是前后端契约从未接通：前端写了调用，后端没有这个路由。修复是补聚合端点（从 blackboard/事件流/turn 记录聚合），httptest + E2E curl 验证 200 且结构与前端渲染字段对齐。',
+      ref: '第 04 节 4.1 表「Waterfall 假功能」行 + 第 03 节 K4 行'
+    },
+    {
+      q: 'verbs-gate 233 假阳性的根因是什么？',
+      opts: [
+        'verbs-gate 把 233 个不存在的工具误报为存在（方向反了）',
+        '引用解析过宽：SKILL.md 中所有出现工具名的文本（示例、说明、非引用块）都被计为 skill→tool 引用，递归扫描后进一步放大',
+        'skills-lock.json 版本号过旧，gate 拿旧锁比对新目录产生大量差异',
+        '_shared 模板目录被算进了 233 个 agent 的引用里'
+      ],
+      correct: 1,
+      why: '匹配过宽 + 递归扫描放大导致引用计数虚高。修复是引入 include 机制精确界定真实引用块，只解析真实引用来源；收敛后的 28 个幽灵经确认为真信号（真实引用了未注册工具），不再是假阳性。',
+      ref: '第 04 节 4.1 表「verbs-gate 233 假阳性」行'
+    },
+    {
+      q: 'healthz / readyz 为什么不走鉴权与限流？',
+      opts: [
+        '因为这是开发遗留的调试端点，忘记挂中间件了',
+        '因为 K8s/编排器的探针必须无凭证可达；若探针吃鉴权或限流，会被误判为不健康而触发重启循环；且这两个端点只返回进程存活/依赖就绪状态，无敏感数据',
+        '因为限流中间件依赖数据库会话，而 readyz 恰恰在数据库不可用时需要响应',
+        '因为 local_mode 下整个服务都没有鉴权，healthz 只是随大流'
+      ],
+      correct: 1,
+      why: '探针端点的契约就是"无凭证、无副作用、极轻量"。挂鉴权会让编排器拿不到 200 而反复重启实例；挂限流会让探针在高频轮询下被 429 误伤。两个端点只暴露存活/就绪布尔状态，无敏感信息泄露面。',
+      ref: '第 04 节 4.1 表「健康探针缺失」行 + 第 05 节 5.1'
+    },
+    {
+      q: 'FTS5 为什么会在生产 mattn 构建中静默降级？',
+      opts: [
+        'mattn/go-sqlite3 从某个版本开始移除了 FTS5 支持',
+        'SQLite 数据库文件损坏时，驱动自动放弃全文索引',
+        'FTS5 是 mattn 驱动的编译期可选特性（需 -tags sqlite_fts5），Makefile 生产构建没带这个 tag；运行时按 K0b 设计尝试建虚拟表失败即降级 fts5=false（只 Warn 不报错），所以"静默"',
+        '因为 pure-go modernc 驱动不支持 FTS5，双驱动协商后选择了不带 FTS5 的公共子集'
+      ],
+      correct: 2,
+      why: '两层原因叠加：① 编译期——tag 没打，FTS5 代码根本没进二进制；② 运行期——K0b 的降级设计刻意把 FTS5 做成增强项而非生存项（核心 Publish/Get/List/Subscribe/Supersede 不依赖它），失败只 Warn。要启用全文搜索，生产构建加 -tags sqlite_fts5 即可。',
+      ref: '第 06 节 剩余风险表「FTS5 生产静默降级」行 + 第 02 节 2.2'
+    },
+    {
+      q: 'workflow_status.md 在这套工作流里是什么角色？',
+      opts: [
+        '面向最终用户的功能更新日志（changelog）',
+        '复杂任务的台账/单一事实源：任务契约、验收标准表、验证日志（真实命令输出）、审查发现、剩余披露——只有观察到交付物和验收证据才允许标记 done',
+        'CI 流水线自动生成的测试覆盖率报告',
+        'git 提交历史的自动摘要，每次 commit 后由钩子生成'
+      ],
+      correct: 1,
+      why: '它是人工维护的过程台账，核心纪律是"只记录事实与证据"：验证日志里放的必须是真实执行的命令与输出，验收标准表的状态必须以可观察的交付物为依据，剩余披露如实记录未闭环项。本报告的内容即取自其 K 批次段。',
+      ref: '报告 footer + 第 03/05 节的台账与终验证据来源'
+    }
+  ];
+
+  var answered = 0;
+  var score = 0;
+  var KEYS = ['A', 'B', 'C', 'D'];
+
+  var quizEl = document.getElementById('quiz');
+  var scoreEl = document.getElementById('quiz-score');
+  var verdictEl = document.getElementById('quiz-verdict');
+
+  function render() {
+    var html = '';
+    for (var i = 0; i < QUESTIONS.length; i++) {
+      var item = QUESTIONS[i];
+      html += '<div class="quiz-q" data-idx="' + i + '">';
+      html += '<div class="q-title"><span class="qn">Q' + (i + 1) + '.</span>' + item.q + '</div>';
+      for (var j = 0; j < item.opts.length; j++) {
+        html += '<button type="button" class="quiz-opt" data-q="' + i + '" data-opt="' + j + '"' +
+                (j === item.correct ? ' data-correct="1"' : '') + '>' +
+                '<span class="opt-key">' + KEYS[j] + '.</span>' + escapeHtml(item.opts[j]) +
+                '</button>';
+      }
+      html += '<div class="quiz-explain" id="exp-' + i + '"></div>';
+      html += '</div>';
+    }
+    quizEl.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function onClick(e) {
+    var btn = e.target.closest('.quiz-opt');
+    if (!btn) return;
+    var qi = parseInt(btn.getAttribute('data-q'), 10);
+    var oi = parseInt(btn.getAttribute('data-opt'), 10);
+    var qEl = quizEl.querySelector('.quiz-q[data-idx="' + qi + '"]');
+    var item = QUESTIONS[qi];
+
+    // 已作答的题不允许重复作答
+    if (qEl.getAttribute('data-answered') === '1') return;
+    qEl.setAttribute('data-answered', '1');
+    answered++;
+
+    var isRight = (oi === item.correct);
+    if (isRight) score++;
+
+    // 标记：选中的选项（对/错）+ 高亮正确答案
+    var btns = qEl.querySelectorAll('.quiz-opt');
+    for (var k = 0; k < btns.length; k++) {
+      btns[k].classList.add('disabled');
+      var bOi = parseInt(btns[k].getAttribute('data-opt'), 10);
+      if (bOi === item.correct) btns[k].classList.add('correct');
+      else if (bOi === oi) btns[k].classList.add('wrong');
+    }
+
+    var expEl = document.getElementById('exp-' + qi);
+    expEl.className = 'quiz-explain show ' + (isRight ? 'ok' : 'bad');
+    expEl.innerHTML = (isRight ? '✓ 正确。' : '✗ 错误。正确答案是 ' + KEYS[item.correct] + '。') +
+      escapeHtml(item.why) +
+      '<span class="ref">📖 对应章节：' + escapeHtml(item.ref) + '</span>';
+
+    scoreEl.textContent = '得分 ' + score + ' / ' + QUESTIONS.length;
+    updateVerdict();
+  }
+
+  function updateVerdict() {
+    if (answered < QUESTIONS.length) {
+      verdictEl.className = 'pending';
+      verdictEl.textContent = '已作答 ' + answered + ' / ' + QUESTIONS.length + ' 题';
+      return;
+    }
+    if (score === QUESTIONS.length) {
+      verdictEl.className = 'pass';
+      verdictEl.textContent = '✅ 测验通过';
+    } else {
+      verdictEl.className = 'fail';
+      verdictEl.textContent = '❌ 请重读报告对应章节';
+    }
+  }
+
+  quizEl.addEventListener('click', onClick);
+  render();
+  updateVerdict();
+})();
+</script>
+
+</body>
+</html>

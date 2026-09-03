@@ -170,7 +170,7 @@ func compareVersionStrings(a, b string) int {
 
 // splitVersionSegments 按 "." 分段转 int；空串返回 [0]。
 // 预发布标记（-rc.1 / -beta / -alpha 等）单独处理：带预发布标记的版本小于同号正式版
-//（如 1.8.0-rc.1 < 1.8.0），避免把 rc 段误判成更大版本。
+// （如 1.8.0-rc.1 < 1.8.0），避免把 rc 段误判成更大版本。
 func splitVersionSegments(v string) []int {
 	v = normalizeVersionTag(v)
 	if v == "" {

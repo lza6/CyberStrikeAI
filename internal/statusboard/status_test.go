@@ -14,7 +14,7 @@ func session(activity statusboard.ActivityState) statusboard.SessionFacts {
 	return statusboard.SessionFacts{
 		Activity:       activity,
 		LastActivityAt: statusNow,
-		HasSignal:       true,
+		HasSignal:      true,
 	}
 }
 

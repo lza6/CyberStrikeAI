@@ -66,7 +66,7 @@ func TestTemporalScore_FutureEventHighActivation(t *testing.T) {
 
 func TestTemporalScore_PastEventDecaysWithAge(t *testing.T) {
 	now := mustTime(t, "2026-09-02")
-	recent := &FactInstance{LifecycleState: LifecycleActive, EventDate: "2026-09-01"}   // 1 day past
+	recent := &FactInstance{LifecycleState: LifecycleActive, EventDate: "2026-09-01"}  // 1 day past
 	old := &FactInstance{LifecycleState: LifecycleActive, EventDate: "2026-08-01"}     // ~32 days past
 	ancient := &FactInstance{LifecycleState: LifecycleActive, EventDate: "2025-01-01"} // ~610 days past
 

@@ -23,7 +23,7 @@ type AttackChainHandler struct {
 	openAIConfig *config.OpenAIConfig
 	mu           sync.RWMutex // 保护 openAIConfig 的并发访问
 	// 用于防止同一对话的并发生成
-	generatingLocks sync.Map // map[string]*sync.Mutex
+	generatingLocks sync.Map         // map[string]*sync.Mutex
 	board           blackboard.Board // 进程内黑板（Agent 共享 findings），可为 nil
 }
 

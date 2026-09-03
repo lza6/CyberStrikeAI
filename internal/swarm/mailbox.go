@@ -23,11 +23,11 @@ import (
 
 // Mailbox 消息类型常量。移植自 OpenHarness swarm/mailbox.py:27 MessageType。
 const (
-	MsgUserMessage           = "user_message"
-	MsgPermissionRequest     = "permission_request"
-	MsgPermissionResponse    = "permission_response"
-	MsgShutdown              = "shutdown"
-	MsgIdleNotification      = "idle_notification"
+	MsgUserMessage        = "user_message"
+	MsgPermissionRequest  = "permission_request"
+	MsgPermissionResponse = "permission_response"
+	MsgShutdown           = "shutdown"
+	MsgIdleNotification   = "idle_notification"
 )
 
 // Mailbox 是单个 agent 在 swarm team 中的文件邮箱。
@@ -270,13 +270,13 @@ func NewIdleNotification(sender, recipient, summary string) MailboxMessage {
 // NewPermissionRequest 创建一条 permission_request（移植 mailbox.py:277）。
 func NewPermissionRequest(sender, recipient string, req map[string]interface{}) MailboxMessage {
 	payload := map[string]interface{}{
-		"type":    MsgPermissionRequest,
-		"request_id":   req["request_id"],
-		"agent_id":     req["agent_id"],
-		"tool_name":    req["tool_name"],
-		"tool_use_id":  req["tool_use_id"],
-		"description":  req["description"],
-		"input":        req["input"],
+		"type":                   MsgPermissionRequest,
+		"request_id":             req["request_id"],
+		"agent_id":               req["agent_id"],
+		"tool_name":              req["tool_name"],
+		"tool_use_id":            req["tool_use_id"],
+		"description":            req["description"],
+		"input":                  req["input"],
 		"permission_suggestions": req["permission_suggestions"],
 	}
 	return newMessage(MsgPermissionRequest, sender, recipient, payload)
@@ -285,11 +285,11 @@ func NewPermissionRequest(sender, recipient string, req map[string]interface{}) 
 // NewPermissionResponse 创建一条 permission_response（移植 mailbox.py:306）。
 func NewPermissionResponse(sender, recipient string, resp map[string]interface{}) MailboxMessage {
 	payload := map[string]interface{}{
-		"type":    MsgPermissionResponse,
-		"request_id": resp["request_id"],
-		"subtype":   resp["subtype"],
-		"error":     resp["error"],
-		"updated_input": resp["updated_input"],
+		"type":               MsgPermissionResponse,
+		"request_id":         resp["request_id"],
+		"subtype":            resp["subtype"],
+		"error":              resp["error"],
+		"updated_input":      resp["updated_input"],
 		"permission_updates": resp["permission_updates"],
 	}
 	return newMessage(MsgPermissionResponse, sender, recipient, payload)

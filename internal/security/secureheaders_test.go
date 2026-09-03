@@ -1,9 +1,9 @@
 package security
 
 import (
-	"strings"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -81,7 +81,6 @@ func TestSecureHeaders(t *testing.T) {
 		}
 	})
 
-
 	t.Run("CSP script-src uses nonce not unsafe-inline", func(t *testing.T) {
 		router := setupSecureHeadersRouter(false)
 		w := httptest.NewRecorder()
@@ -128,7 +127,7 @@ func TestSecureHeaders(t *testing.T) {
 		w3 := httptest.NewRecorder()
 		router2.ServeHTTP(w3, httptest.NewRequest(http.MethodGet, "/ctx", nil))
 		if ctxNonce != extractNonce(w3.Header().Get("Content-Security-Policy")) {
-			t.Errorf("context nonce 与 CSP 头 nonce 不一致" )
+			t.Errorf("context nonce 与 CSP 头 nonce 不一致")
 		}
 	})
 

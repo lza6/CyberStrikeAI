@@ -94,7 +94,7 @@ func TestEvaluatePathRuleAllowOnly(t *testing.T) {
 // TestEvaluateCommandDeny 验证 command deny pattern。
 func TestEvaluateCommandDeny(t *testing.T) {
 	c := New(Settings{
-		Mode: ModeFullAuto,
+		Mode:           ModeFullAuto,
 		DeniedCommands: []string{"rm -rf *"},
 	})
 	d := c.Evaluate("bash", false, "", "rm -rf /")

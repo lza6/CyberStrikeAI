@@ -26,6 +26,10 @@ type einoAssistantStreamEventHandlerConfig struct {
 	NextMainStreamID          func() string
 	NextReasoningStreamID     func() string
 	NextSubAgentReplyStreamID func() string
+	// StuckDetector K9/P2-2：流式完成观测。nil=未启用（no-op，向后兼容）。
+	// 主代理流式输出完成时调 ObserveStreamComplete(content, toolCalls)，
+	// 让 sameOutputRepeat/monologue 在流式场景下当轮生效（不再等物质化消息晚一轮）。
+	StuckDetector StuckDetectorAdapter
 }
 
 type einoAssistantStreamEventHandler struct {
@@ -46,6 +50,7 @@ type einoAssistantStreamEventHandler struct {
 	nextMainStreamID          func() string
 	nextReasoningStreamID     func() string
 	nextSubAgentReplyStreamID func() string
+	stuckDetector             StuckDetectorAdapter
 }
 
 func newEinoAssistantStreamEventHandler(cfg einoAssistantStreamEventHandlerConfig) *einoAssistantStreamEventHandler {
@@ -88,6 +93,7 @@ func newEinoAssistantStreamEventHandler(cfg einoAssistantStreamEventHandlerConfi
 		nextMainStreamID:          cfg.NextMainStreamID,
 		nextReasoningStreamID:     cfg.NextReasoningStreamID,
 		nextSubAgentReplyStreamID: cfg.NextSubAgentReplyStreamID,
+		stuckDetector:             cfg.StuckDetector,
 	}
 }
 
@@ -145,8 +151,9 @@ func (h *einoAssistantStreamEventHandler) Handle(mv *adk.MessageVariant, agentNa
 			zap.Int("toolFragments", len(toolStreamFragments)))
 	}
 	reasoningEmitter.Finish()
+	streamBody := ""
 	if h.streamsMainAssistant(agentName) {
-		mainAssistantStream.Finish()
+		streamBody = mainAssistantStream.Finish()
 	}
 	subReplyEmitter.Finish()
 	if h.toolCallCompletion != nil {
@@ -154,6 +161,17 @@ func (h *einoAssistantStreamEventHandler) Handle(mv *adk.MessageVariant, agentNa
 	}
 	if h.usage != nil {
 		h.usage.AddUsage(streamUsage)
+	}
+	// K9/P2-2：主代理流式完成即观测（与 ObserveMaterialized 共用 StuckDetector 逻辑）。
+	// run loop 的 ObserveMaterialized 仍保留（兜底非流式路径），二者共用 per-conversation
+	// 计数：同一次输出两次观测会被 detector 计为连续两次相同输出（见接入说明）。
+	// 注意：物质化消息与流式完成通常成对出现，detector 的 sameOutputRepeat 以
+	// 观测次数为准——为避免双计导致阈值提前触发，此处仅在"流式事件"路径观测，
+	// run loop 对已流式处理的轮次跳过 ObserveMaterialized（见 eino_adk_run_loop.go）。
+	if h.stuckDetector != nil {
+		if ev := h.stuckDetector.ObserveStreamComplete(streamBody, toolStreamFragments); ev != nil {
+			PublishStuckEvent(ev)
+		}
 	}
 	return true, recvErr
 }

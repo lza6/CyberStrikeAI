@@ -9,6 +9,9 @@ const (
 	hitlPayloadThinking       = "thinking"
 	hitlPayloadReasoningChain = "reasoningChain"
 	hitlPayloadPlanning       = "planning"
+	// hitlPayloadReasoning P1：本轮请求的推理意图（{mode, effort}），审批页（非 chat
+	// 页）没有 buildReasoningRequestPayload 上下文，「推理强度」行的数据源只有这里。
+	hitlPayloadReasoning = "reasoning"
 )
 
 type hitlCognitionFields struct {
@@ -35,6 +38,35 @@ func (h *AgentHandler) enrichHitlApprovalPayload(conversationID, assistantMessag
 	if s := strings.TrimSpace(cog.Planning); s != "" {
 		payload[hitlPayloadPlanning] = s
 	}
+	// P1：把本轮 chat 请求的 reasoning 意图写入 payload，审批页 Why 区「推理强度」
+	// 行的数据源（前端 payloadObj.reasoning 优先，buildReasoningRequestPayload 兜底）。
+	// 任务管理器未记录（如旧任务/外部触发）时不写字段，前端走旧兜底，向后兼容。
+	if r := h.collectHitlReasoningIntent(conversationID); r != nil {
+		payload[hitlPayloadReasoning] = r
+	}
+}
+
+// collectHitlReasoningIntent 读取当前任务缓存的 reasoning 意图（mode/effort）。
+// 返回 nil 表示本轮无显式推理意图（或任务不存在）。
+func (h *AgentHandler) collectHitlReasoningIntent(conversationID string) map[string]string {
+	if h == nil || h.tasks == nil {
+		return nil
+	}
+	mode, effort, ok := h.tasks.GetHitlReasoningIntent(conversationID)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, 2)
+	if s := strings.TrimSpace(mode); s != "" {
+		out["mode"] = s
+	}
+	if s := strings.TrimSpace(effort); s != "" {
+		out["effort"] = s
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (h *AgentHandler) collectHitlCognition(conversationID, assistantMessageID string) hitlCognitionFields {

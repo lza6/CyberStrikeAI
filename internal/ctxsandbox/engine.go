@@ -29,9 +29,9 @@ import (
 
 // Thresholds mirror context-mode server.ts:1979-1980.
 const (
-	IntentSearchThreshold = 5_000     // bytes; outputs above this w/ intent become a verdict
-	LargeOutputThreshold  = 102_400   // bytes; outputs above this are force-indexed, pointer returned
-	PreviewMaxRunes       = 120       // first-line preview cap in verdict
+	IntentSearchThreshold = 5_000           // bytes; outputs above this w/ intent become a verdict
+	LargeOutputThreshold  = 102_400         // bytes; outputs above this are force-indexed, pointer returned
+	PreviewMaxRunes       = 120             // first-line preview cap in verdict
 	HardCapBytes          = 100 * 1_000_000 // per-process stdout hard cap (executor.ts:251)
 	DefaultTimeout        = 60 * time.Second
 	MaxTimeout            = 10 * time.Minute
@@ -53,9 +53,9 @@ type Index interface {
 
 // Engine executes sandboxed commands and applies the three-tier downgrade.
 type Engine struct {
-	Index      Index
-	SpillRoot  string // workspace root; empty = os.MkdirTemp
-	Workdir    string // fixed sandbox dir; empty = per-call temp
+	Index     Index
+	SpillRoot string // workspace root; empty = os.MkdirTemp
+	Workdir   string // fixed sandbox dir; empty = per-call temp
 	// DisableEnvScrub opts out of the default dangerous-env scrubbing. The
 	// zero value (false) means scrubbing is ENABLED, matching context-mode's
 	// executor.ts default. Callers must opt out explicitly to inherit the
@@ -260,33 +260,33 @@ func (w *boundedErrWriter) Write(p []byte) (int, error) {
 // context-mode executor.ts:579-672.
 func scrubEnv(in []string) []string {
 	dangerous := map[string]struct{}{
-		"BASH_ENV":         {},
-		"ENV":              {},
-		"ZDOTDIR":          {},
-		"NODE_OPTIONS":     {},
-		"NODE_PATH":        {},
-		"PYTHONSTARTUP":    {},
-		"PYTHONPATH":       {},
-		"PYTHONHOME":       {},
-		"PERL5OPT":         {},
-		"PERL5LIB":         {},
-		"PERLLIB":          {},
-		"RUBYOPT":          {},
-		"RUBYLIB":          {},
-		"LD_PRELOAD":       {},
-		"LD_LIBRARY_PATH":  {},
+		"BASH_ENV":              {},
+		"ENV":                   {},
+		"ZDOTDIR":               {},
+		"NODE_OPTIONS":          {},
+		"NODE_PATH":             {},
+		"PYTHONSTARTUP":         {},
+		"PYTHONPATH":            {},
+		"PYTHONHOME":            {},
+		"PERL5OPT":              {},
+		"PERL5LIB":              {},
+		"PERLLIB":               {},
+		"RUBYOPT":               {},
+		"RUBYLIB":               {},
+		"LD_PRELOAD":            {},
+		"LD_LIBRARY_PATH":       {},
 		"DYLD_INSERT_LIBRARIES": {},
 		"DYLD_LIBRARY_PATH":     {},
-		"GIT_SSH":          {},
-		"GIT_SSH_COMMAND":  {},
-		"GIT_ASKPASS":      {},
-		"SSH_AUTH_SOCK":    {},
-		"SSH_AGENT_PID":    {},
-		"IFS":              {},
-		"PS1":              {},
-		"PS2":              {},
-		"PS3":              {},
-		"PS4":              {},
+		"GIT_SSH":               {},
+		"GIT_SSH_COMMAND":       {},
+		"GIT_ASKPASS":           {},
+		"SSH_AUTH_SOCK":         {},
+		"SSH_AGENT_PID":         {},
+		"IFS":                   {},
+		"PS1":                   {},
+		"PS2":                   {},
+		"PS3":                   {},
+		"PS4":                   {},
 	}
 	out := make([]string, 0, len(in))
 	for _, kv := range in {

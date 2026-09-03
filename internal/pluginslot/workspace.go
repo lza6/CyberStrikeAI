@@ -39,13 +39,13 @@ type WorkspaceConfig struct {
 
 // WorkspaceInfo Create/Restore 的返回。移植自参考项目 ports.WorkspaceInfo。
 type WorkspaceInfo struct {
-	Path       string // 工作区绝对路径
-	Branch     string // 实际使用的 branch（git-worktree 模式）
-	BaseRef    string // 基线 ref（git-worktree 模式）
-	SessionID  string
-	ProjectID  string
-	RepoPath   string            // 源 git 仓路径（git-worktree 模式；Destroy 需要）
-	Isolation  WorkspaceIsolation // 实际使用的隔离模式
+	Path      string // 工作区绝对路径
+	Branch    string // 实际使用的 branch（git-worktree 模式）
+	BaseRef   string // 基线 ref（git-worktree 模式）
+	SessionID string
+	ProjectID string
+	RepoPath  string             // 源 git 仓路径（git-worktree 模式；Destroy 需要）
+	Isolation WorkspaceIsolation // 实际使用的隔离模式
 }
 
 // WorkspaceIsolation 隔离模式枚举。

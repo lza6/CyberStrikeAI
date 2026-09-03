@@ -224,8 +224,8 @@ func TestSSESanitizer_PassesNonSSEResponseUntouched(t *testing.T) {
 	}
 }
 
-// 6) 错误响应 (4xx/5xx) 不应被 sanitize, 即使 Content-Type 是 SSE 也不动,
-//    避免吞掉类似 "data: " 之外的错误正文。
+//  6. 错误响应 (4xx/5xx) 不应被 sanitize, 即使 Content-Type 是 SSE 也不动,
+//     避免吞掉类似 "data: " 之外的错误正文。
 func TestSSESanitizer_PassesNon200Untouched(t *testing.T) {
 	body := `{"error":{"message":"rate limit"}}`
 	srv := newSSEServer(t, body, "text/event-stream", 429)

@@ -314,7 +314,7 @@ func (h *SystemPromptsHandler) DeleteSystemPrompt(c *gin.Context) {
 // 建议在 config.yaml 固化 system_prompt_path；接口返回提示文案。
 // filename = __builtin__ 时激活内置提示（路径置空）。
 // 存储值 = "prompts/<filename>"（相对 config.yaml 所在目录），与 agent.promptBaseDir
-//（= configDir）拼路径约定一致；此前只存文件名会让 agent 去 configDir 根下找文件而读不到。
+// （= configDir）拼路径约定一致；此前只存文件名会让 agent 去 configDir 根下找文件而读不到。
 func (h *SystemPromptsHandler) ActivateSystemPrompt(c *gin.Context) {
 	filename := c.Param("filename")
 	var target string

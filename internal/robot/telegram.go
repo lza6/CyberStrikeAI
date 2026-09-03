@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	telegramPlatform       = "telegram"
-	telegramAPIBase        = "https://api.telegram.org"
-	telegramLongPollSec    = 30
+	telegramPlatform        = "telegram"
+	telegramAPIBase         = "https://api.telegram.org"
+	telegramLongPollSec     = 30
 	telegramMaxMessageRunes = 4096
 )
 
@@ -28,10 +28,10 @@ type telegramUpdate struct {
 }
 
 type telegramMessage struct {
-	MessageID int64           `json:"message_id"`
-	Chat      telegramChat    `json:"chat"`
-	From      *telegramUser   `json:"from"`
-	Text      string          `json:"text"`
+	MessageID int64            `json:"message_id"`
+	Chat      telegramChat     `json:"chat"`
+	From      *telegramUser    `json:"from"`
+	Text      string           `json:"text"`
 	Entities  []telegramEntity `json:"entities"`
 }
 

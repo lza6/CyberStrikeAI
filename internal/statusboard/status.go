@@ -121,11 +121,11 @@ type KanbanColumn string
 
 // KanbanColumn 值，对应 AO 看板四列 + 归档。
 const (
-	ColumnWorking       KanbanColumn = "working"        // 正在实现或就绪
-	ColumnNeedsYou      KanbanColumn = "needs_you"      // 阻塞/缺输入/CI 失败/待审核
-	ColumnInReview       KanbanColumn = "in_review"     // 开放/draft PR 等审核
-	ColumnReadyToMerge  KanbanColumn = "ready_to_merge" // 已批准/可合并
-	ColumnArchived      KanbanColumn = "archived"       // 已合并/已终止
+	ColumnWorking      KanbanColumn = "working"        // 正在实现或就绪
+	ColumnNeedsYou     KanbanColumn = "needs_you"      // 阻塞/缺输入/CI 失败/待审核
+	ColumnInReview     KanbanColumn = "in_review"      // 开放/draft PR 等审核
+	ColumnReadyToMerge KanbanColumn = "ready_to_merge" // 已批准/可合并
+	ColumnArchived     KanbanColumn = "archived"       // 已合并/已终止
 )
 
 // DeriveStatus 从 session 和 pull-request 事实派生展示状态。移植自 contract/status.go:101-132。

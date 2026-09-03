@@ -50,6 +50,13 @@ func setupRoutes(
 	bugBountyHandler *handler.BugBountyHandler,
 	configPath string,
 ) {
+	// 健康探针（公开路由，鉴权/限流/审计之前）：基础设施探活端点。
+	// /healthz = liveness（进程存活），/readyz = readiness（DB 等依赖就绪）。
+	// 刻意不挂 /api 组中间件——探针被限流 429 误杀会导致 Docker/k8s 误判并重启容器。
+	healthHandler := handler.NewHealthHandler(app.startedAt, app.config.Version, app.db, app.knowledgeDB, app.blackboard)
+	router.GET("/healthz", healthHandler.Healthz)
+	router.GET("/readyz", healthHandler.Readyz)
+
 	// API路由
 	api := router.Group("/api")
 
@@ -196,6 +203,7 @@ func setupRoutes(
 		protected.GET("/conversations/:id/token-usage", conversationHandler.GetConversationTokenUsageStats)
 		protected.GET("/conversations/:id/plan-tasks", conversationHandler.GetConversationPlanTasks)
 		protected.GET("/messages/:id/process-details", conversationHandler.GetMessageProcessDetails)
+		protected.GET("/conversations/:id/process-details", conversationHandler.GetConversationProcessDetails)
 		protected.GET("/process-details/:id", conversationHandler.GetProcessDetail)
 		protected.PUT("/conversations/:id", conversationHandler.UpdateConversation)
 		protected.PUT("/conversations/:id/project", conversationHandler.SetConversationProject)
@@ -645,7 +653,7 @@ func setupRoutes(
 		}
 		// F4 nonce 化：每请求注入 CSP nonce，供 index.html 的 2 处 inline <script> 带 nonce 通过 CSP。
 		c.HTML(http.StatusOK, "index.html", gin.H{
-			"Version": version,
+			"Version":  version,
 			"CSPNonce": security.CSPNonceFromContext(c),
 		})
 	})

@@ -198,7 +198,8 @@ func TestFirstToken_StripsPathAndExe(t *testing.T) {
 		if got := firstToken("C:\\tools\\nmap.exe"); got != "nmap" {
 			t.Fatalf("windows exe strip failed: %q", got)
 		}
-	}}
+	}
+}
 
 func TestCapRunes_NoMidGlyphCut(t *testing.T) {
 	s := "你好世界hello"

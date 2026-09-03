@@ -192,6 +192,10 @@ func (h *AgentHandler) MultiAgentLoopStream(c *gin.Context) {
 		return
 	}
 	taskOwned = true
+	// P1：记录本轮 reasoning 意图，HITL 中断 payload 回放（审批页「推理强度」行）。
+	if h.tasks != nil {
+		h.tasks.SetHitlReasoningIntent(conversationID, reasoningIntentMode(req.Reasoning), reasoningIntentEffort(req.Reasoning))
+	}
 
 	// 同一 HTTP 流内多段 Run（如中断并继续）合并 MCP execution id，供最终 response / 库表与工具芯片展示完整列表
 	var cumulativeMCPExecutionIDs []string

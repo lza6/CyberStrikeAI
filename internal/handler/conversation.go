@@ -417,6 +417,58 @@ func (h *ConversationHandler) GetMessageProcessDetails(c *gin.Context) {
 	})
 }
 
+// maxConversationProcessDetails 限制 conversation 级详情聚合窗口，防止长会话全量拉爆响应体。
+const maxConversationProcessDetails = 200
+
+// GetConversationProcessDetails 获取指定对话最近的过程详情（conversation 级聚合）。
+// 供前端 trace waterfall 轮询使用：跨消息聚合该会话最近 N 条工具事件，
+// 返回结构与 message 级端点一致（processDetails[]，含 eventType/toolCallId 等）。
+// 查询参数 limit：聚合窗口大小（默认 200，上限 maxConversationProcessDetails）。
+func (h *ConversationHandler) GetConversationProcessDetails(c *gin.Context) {
+	conversationID := strings.TrimSpace(c.Param("id"))
+	if conversationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "conversation id required"})
+		return
+	}
+
+	session, ok := security.CurrentSession(c)
+	if !ok || !h.db.UserCanAccessResource(session.UserID, session.Scope, "conversation", conversationID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该对话"})
+		return
+	}
+	if _, err := h.db.GetConversationLite(conversationID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "对话不存在"})
+		return
+	}
+
+	limit := maxConversationProcessDetails
+	if limitStr := strings.TrimSpace(c.Query("limit")); limitStr != "" {
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		if parsed < limit {
+			limit = parsed
+		}
+	}
+
+	details, err := h.db.GetRecentProcessDetailsByConversation(conversationID, limit)
+	if err != nil {
+		h.logger.Error("获取对话过程详情失败", zap.String("conversationId", conversationID), zap.Error(err))
+		internalError(c, h.logger, "conversation.go:GetConversationProcessDetails", err)
+		return
+	}
+	details = database.DedupeConsecutiveProcessDetails(details)
+	out := processDetailsToJSON(h.logger, h.db, details, false)
+	c.JSON(http.StatusOK, gin.H{
+		"processDetails": out,
+		"total":          len(out),
+		"limit":          limit,
+		"hasMore":        false,
+	})
+}
+
 // GetProcessDetail 获取单条完整过程详情。列表接口默认不给工具 payload，用户点开单条工具时再拉这里。
 func (h *ConversationHandler) GetProcessDetail(c *gin.Context) {
 	id := strings.TrimSpace(c.Param("id"))

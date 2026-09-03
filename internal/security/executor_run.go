@@ -16,8 +16,9 @@ import (
 
 	"cyberstrike-ai/internal/capability"
 	"cyberstrike-ai/internal/config"
-	"cyberstrike-ai/internal/metrics"
 	"cyberstrike-ai/internal/mcp"
+	"cyberstrike-ai/internal/metrics"
+	"cyberstrike-ai/internal/securityevents"
 	"cyberstrike-ai/internal/tooloutput"
 
 	"github.com/creack/pty"
@@ -160,6 +161,11 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		zap.String("toolName", toolName),
 		zap.Any("args", args),
 	)
+
+	// P2-3：tool-pending 事件广播——reactions lifecycle 状态机 deriveSessionStatus
+	// 用真实 finding Type（tool-pending）判定 tool_pending 态（原 Detail 含 "pending"
+	// 启发式对 hitl-pending 等 finding 永不命中）。board 未注入时 no-op。
+	securityevents.PublishToolPending(mcp.MCPConversationIDFromContext(ctx), toolName, "")
 
 	// HIGH_IMPACT 第二道标记闸：破坏性工具集命中时，在执行前先记一条 audit，
 	// 并在返回的 ToolResult 上打 high_impact=true 标记。不阻断执行——真正阻断
@@ -1203,7 +1209,6 @@ func runCommandWithPTY(ctx context.Context, cmd *exec.Cmd, cb ToolOutputCallback
 	waitErr := cmd.Wait()
 	return finalizeBoundedOutput(outBuilder, maxBytes, tee), waitErr
 }
-
 
 // executeCapabilityProvider 执行 Capability Provider 完整生命周期（J5）：
 // plan→validate→execute→rollback→collect_artifacts。ExecuteTool 与 executeInternalTool

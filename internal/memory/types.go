@@ -105,8 +105,8 @@ const (
 // exclusively "ADD" — there is no UPDATE/DELETE event in ADD-only extraction.
 type AddResult struct {
 	Instance *FactInstance `json:"instance,omitempty"`
-	Event    string         `json:"event"` // "ADD" | "SKIPPED_DUPLICATE"
-	Skipped  bool           `json:"skipped"` // true when hash matched an existing instance
+	Event    string        `json:"event"`   // "ADD" | "SKIPPED_DUPLICATE"
+	Skipped  bool          `json:"skipped"` // true when hash matched an existing instance
 }
 
 // Store is the storage abstraction for the memory subsystem. Implementations

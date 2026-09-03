@@ -10,19 +10,24 @@ import (
 )
 
 type einoToolResultEventHandlerConfig struct {
-	Context         context.Context
-	Logger          *zap.Logger
-	RunMessages     *einoRunMessageAccumulator
-	Emitter         *einoToolResultProgressEmitter
-	ConfirmRecovery func()
+	Context          context.Context
+	Logger           *zap.Logger
+	RunMessages      *einoRunMessageAccumulator
+	Emitter          *einoToolResultProgressEmitter
+	ConfirmRecovery  func()
+	// K9：StuckDetector 适配器（工具错误观测）。nil=未启用（no-op）。
+	// 物质化工具结果错误时调 ObserveToolError，触发 sameErrorRepeat 阈值时
+	// 由 run loop 发布到 blackboard → reactions（agent-stuck 规则）。
+	StuckDetector StuckDetectorAdapter
 }
 
 type einoToolResultEventHandler struct {
-	ctx             context.Context
-	logger          *zap.Logger
-	runMessages     *einoRunMessageAccumulator
-	emitter         *einoToolResultProgressEmitter
-	confirmRecovery func()
+	ctx              context.Context
+	logger           *zap.Logger
+	runMessages      *einoRunMessageAccumulator
+	emitter          *einoToolResultProgressEmitter
+	confirmRecovery  func()
+	stuckDetector    StuckDetectorAdapter
 }
 
 func newEinoToolResultEventHandler(cfg einoToolResultEventHandlerConfig) *einoToolResultEventHandler {
@@ -35,6 +40,7 @@ func newEinoToolResultEventHandler(cfg einoToolResultEventHandlerConfig) *einoTo
 		runMessages:     cfg.RunMessages,
 		emitter:         cfg.Emitter,
 		confirmRecovery: cfg.ConfirmRecovery,
+		stuckDetector:   cfg.StuckDetector,
 	}
 }
 
@@ -71,6 +77,12 @@ func (h *einoToolResultEventHandler) HandleStreaming(mv *adk.MessageVariant, age
 		if h.emitter != nil {
 			h.emitter.Emit(h.ctx, toolName, content, toolCallID, isErr, agentName)
 		}
+		// K9：工具错误观测（sameErrorRepeat）。recon 白名单豁免由 detector 内部判定。
+		if isErr && h.stuckDetector != nil {
+			if ev := h.stuckDetector.ObserveToolError(toolName, content); ev != nil {
+				PublishStuckEvent(ev)
+			}
+		}
 		if recvErr != nil && !isEinoVoluntaryCancelErr(recvErr) && h.logger != nil {
 			h.logger.Warn("eino tool result stream recv error",
 				zap.Error(recvErr),
@@ -99,6 +111,12 @@ func (h *einoToolResultEventHandler) HandleMaterialized(mv *adk.MessageVariant, 
 	toolCallID := strings.TrimSpace(msg.ToolCallID)
 	if h.emitter != nil {
 		h.emitter.Emit(h.ctx, toolName, content, toolCallID, isErr, agentName)
+	}
+	// K9：物质化工具结果错误观测（sameErrorRepeat）。
+	if isErr && h.stuckDetector != nil {
+		if ev := h.stuckDetector.ObserveToolError(toolName, content); ev != nil {
+			PublishStuckEvent(ev)
+		}
 	}
 	return true
 }

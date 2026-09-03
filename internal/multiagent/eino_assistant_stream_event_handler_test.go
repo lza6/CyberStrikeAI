@@ -146,3 +146,100 @@ func TestEinoAssistantStreamEventHandlerIgnoresToolStream(t *testing.T) {
 		t.Fatalf("handled=%v err=%v, want ignored", handled, err)
 	}
 }
+
+// TestEinoAssistantStreamEventHandlerObserveStreamComplete P2-2：主代理流式完成时
+// 调 StuckDetector.ObserveStreamComplete——同一内容 3 次流式完成即触发 same-output-repeat
+// （此前该接口为死代码，流式场景检测延迟一轮）。
+func TestEinoAssistantStreamEventHandlerObserveStreamComplete(t *testing.T) {
+	detector := NewStuckDetector(DefaultStuckDetectorConfig())
+	var triggered []string
+	newHandler := func() *einoAssistantStreamEventHandler {
+		return newEinoAssistantStreamEventHandler(einoAssistantStreamEventHandlerConfig{
+			ConversationID:       "conv-stream-stuck",
+			OrchMode:             "deep",
+			RunMessages:          newEinoRunMessageAccumulator(nil),
+			StreamsMainAssistant: func(string) bool { return true },
+			StuckDetector: &stuckDetectorCaptureAdapter{
+				detector:  detector,
+				onTrigger: func(kind string) { triggered = append(triggered, kind) },
+			},
+		})
+	}
+
+	mkStream := func(body string) *adk.MessageVariant {
+		return &adk.MessageVariant{
+			IsStreaming: true,
+			Role:        schema.Assistant,
+			MessageStream: schema.StreamReaderFromArray([]*schema.Message{
+				{Role: schema.Assistant, Content: body},
+			}),
+		}
+	}
+
+	// 第 1、2 次相同流式输出不触发。
+	for i := 0; i < 2; i++ {
+		if handled, err := newHandler().Handle(mkStream("stuck output"), "lead"); !handled || err != nil {
+			t.Fatalf("iter %d handled=%v err=%v", i, handled, err)
+		}
+	}
+	if len(triggered) != 0 {
+		t.Fatalf("should not trigger before threshold, got %v", triggered)
+	}
+	// 第 3 次：same-output-repeat 触发。
+	if handled, err := newHandler().Handle(mkStream("stuck output"), "lead"); !handled || err != nil {
+		t.Fatalf("3rd handled=%v err=%v", handled, err)
+	}
+	if len(triggered) != 1 || triggered[0] != "same-output-repeat" {
+		t.Fatalf("3rd stream completion should trigger same-output-repeat, got %v", triggered)
+	}
+}
+
+// TestEinoAssistantStreamEventHandlerNoStuckDetectorWithoutDetector 未注入
+// StuckDetector 时流式处理不受影响（no-op 向后兼容）。
+func TestEinoAssistantStreamEventHandlerNoStuckDetectorWithoutDetector(t *testing.T) {
+	handler := newEinoAssistantStreamEventHandler(einoAssistantStreamEventHandlerConfig{
+		ConversationID:       "conv-no-detector",
+		OrchMode:             "deep",
+		RunMessages:          newEinoRunMessageAccumulator(nil),
+		StreamsMainAssistant: func(string) bool { return true },
+	})
+	mv := &adk.MessageVariant{
+		IsStreaming:   true,
+		Role:          schema.Assistant,
+		MessageStream: schema.StreamReaderFromArray([]*schema.Message{{Role: schema.Assistant, Content: "plain"}}),
+	}
+	if handled, err := handler.Handle(mv, "lead"); !handled || err != nil {
+		t.Fatalf("handled=%v err=%v", handled, err)
+	}
+}
+
+// stuckDetectorCaptureAdapter 包装 StuckDetectorAdapter，捕获触发的 kind。
+type stuckDetectorCaptureAdapter struct {
+	detector  *StuckDetector
+	onTrigger func(kind string)
+}
+
+func (a *stuckDetectorCaptureAdapter) ObserveMaterialized(msg adk.Message) *StuckEvent {
+	if a == nil || a.detector == nil {
+		return nil
+	}
+	return a.detector.ObserveAssistantOutput("conv-stream-stuck", msg.Content, msg.ToolCalls)
+}
+
+func (a *stuckDetectorCaptureAdapter) ObserveToolError(toolName, content string) *StuckEvent {
+	if a == nil || a.detector == nil {
+		return nil
+	}
+	return a.detector.ObserveToolError("conv-stream-stuck", toolName, content)
+}
+
+func (a *stuckDetectorCaptureAdapter) ObserveStreamComplete(content string, toolCalls []schema.ToolCall) *StuckEvent {
+	if a == nil || a.detector == nil {
+		return nil
+	}
+	ev := a.detector.ObserveAssistantOutput("conv-stream-stuck", content, toolCalls)
+	if ev != nil && a.onTrigger != nil {
+		a.onTrigger(ev.Kind)
+	}
+	return ev
+}

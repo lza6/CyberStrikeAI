@@ -4,9 +4,9 @@ import "testing"
 
 func TestShellSafeParse(t *testing.T) {
 	cases := []struct {
-		name    string
-		cmd     string
-		wantErr bool
+		name     string
+		cmd      string
+		wantErr  bool
 		wantArgs []string // 期望（仅 wantErr=false 时校验）
 	}{
 		// 正常命令应通过

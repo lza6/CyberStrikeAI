@@ -109,7 +109,7 @@ func TestCacheTokens(t *testing.T) {
 	tr := New()
 	// claude-sonnet-4: cache_read=0.3/1M, cache_write=3.75/1M
 	_ = tr.Add(UsageSnapshot{
-		Model: "claude-sonnet-4-5",
+		Model:            "claude-sonnet-4-5",
 		CacheReadTokens:  1000000,
 		CacheWriteTokens: 1000000,
 	})

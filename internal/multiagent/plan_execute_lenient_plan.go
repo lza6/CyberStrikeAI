@@ -154,4 +154,3 @@ func stripCodeFence(s string) string {
 	s = strings.TrimSuffix(strings.TrimSpace(s), "```")
 	return strings.TrimSpace(s)
 }
-

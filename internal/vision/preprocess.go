@@ -18,16 +18,16 @@ type ImagePayload struct {
 
 // PreprocessMeta 记录缩放与编码结果，供工具输出与排障。
 type PreprocessMeta struct {
-	OriginalPath      string
-	OriginalBytes     int64
-	OriginalWidth     int
-	OriginalHeight    int
-	OutputWidth       int
-	OutputHeight      int
-	OutputBytes       int
-	OutputMIMEType    string
-	JPEGQuality       int // 0 表示未 JPEG 重编码（原图直传）
-	PreprocessMode    string // passthrough | jpeg
+	OriginalPath   string
+	OriginalBytes  int64
+	OriginalWidth  int
+	OriginalHeight int
+	OutputWidth    int
+	OutputHeight   int
+	OutputBytes    int
+	OutputMIMEType string
+	JPEGQuality    int    // 0 表示未 JPEG 重编码（原图直传）
+	PreprocessMode string // passthrough | jpeg
 }
 
 // PreprocessOptions 图片预处理参数。

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"cyberstrike-ai/internal/multiagent/coordkit"
 
@@ -37,6 +38,12 @@ type CoordinatorConfig struct {
 	// KnownAgents is the roster the coordinator is told about in its system
 	// prompt (worker names). Workers are built on demand by WorkerFactory.
 	KnownAgents []string
+	// SchedulerStrategy K9：调度策略（round-robin/least-busy/capability-match/
+	// dependency-first）。空走 coordkit.DefaultSchedulerStrategy（round-robin，
+	// 向后兼容）。四策略 + MaxParallel 信号量限并发，只改"先派谁"不改"派多少"。
+	SchedulerStrategy coordkit.SchedulerStrategy
+	// Scheduler K9：可注入的调度器（测试用）。nil 时按 SchedulerStrategy 构造。
+	Scheduler *coordkit.Scheduler
 }
 
 // CoordinatorResult is the aggregated outcome of a coordinator run, mirroring
@@ -72,6 +79,10 @@ func NewCoordinatorRunner(cfg CoordinatorConfig) (*CoordinatorRunner, error) {
 	}
 	if cfg.MaxParallel <= 0 {
 		cfg.MaxParallel = 5
+	}
+	// K9：构造调度器。注入优先；否则按 SchedulerStrategy 构造。
+	if cfg.Scheduler == nil {
+		cfg.Scheduler = coordkit.NewScheduler(cfg.SchedulerStrategy)
 	}
 	return &CoordinatorRunner{cfg: cfg}, nil
 }
@@ -136,6 +147,12 @@ func (r *CoordinatorRunner) Run(ctx context.Context, goal string) (*CoordinatorR
 // are dispatched in parallel (bounded by MaxParallel), and the loop repeats
 // until no pending task remains (either all completed or the rest are
 // blocked by a failed dependency).
+//
+// K9：接入 Scheduler 四策略（round-robin/least-busy/capability-match/
+// dependency-first）。调度器按策略对 ready 任务排序，MaxParallel 信号量
+// 仍限并发——四策略改变的是"先派谁"，不是"派多少"，与现有批次模式兼容。
+// runningAssignees 跟踪当前 in_progress 任务的 assignee 计数，供
+// least-busy/capability-match 策略使用。
 func (r *CoordinatorRunner) dispatchQueue(ctx context.Context, dag *coordkit.DAG) error {
 	sem := make(chan struct{}, r.cfg.MaxParallel)
 	for {
@@ -148,6 +165,9 @@ func (r *CoordinatorRunner) dispatchQueue(ctx context.Context, dag *coordkit.DAG
 		if len(ready) == 0 {
 			break
 		}
+		// K9：按调度策略对 ready 排序。round-robin（默认）与改造前等价。
+		runningAssignees := r.snapshotRunningAssignees(dag)
+		ready = r.cfg.Scheduler.Select(dag, ready, runningAssignees)
 		var wg sync.WaitGroup
 		for _, task := range ready {
 			task.Status = coordkit.TaskRunning
@@ -172,8 +192,25 @@ func (r *CoordinatorRunner) dispatchQueue(ctx context.Context, dag *coordkit.DAG
 	return nil
 }
 
+// snapshotRunningAssignees 返回当前 in_progress 任务的 assignee 计数快照。
+// 供 least-busy/capability-match 策略决策（不持锁，快照一致性由 dispatchQueue
+// 单轮串行保证：每轮 wg.Wait 后下一轮才重新快照）。
+func (r *CoordinatorRunner) snapshotRunningAssignees(dag *coordkit.DAG) map[string]int {
+	out := make(map[string]int)
+	for _, t := range dag.Tasks() {
+		if t.Status == coordkit.TaskRunning {
+			out[t.Assignee]++
+		}
+	}
+	return out
+}
+
 // runOneTask builds a worker for the task's assignee, injects any messages
 // addressed to it from the bus, invokes the worker, and records the result.
+//
+// K9：消费 Task 的 MaxRetries / RetryDelay / Backoff 字段。
+// 失败时按 computeRetryDelay(baseDelay, backoff, attempt, cap 30s) 退避重试。
+// MaxRetries<=0 时不重试（维持单次执行向后兼容）。
 func (r *CoordinatorRunner) runOneTask(ctx context.Context, t *coordkit.Task) {
 	assignee := strings.TrimSpace(t.Assignee)
 	if assignee == "" {
@@ -188,14 +225,51 @@ func (r *CoordinatorRunner) runOneTask(ctx context.Context, t *coordkit.Task) {
 		return
 	}
 	prompt := buildTaskPrompt(t, r.cfg.Bus)
-	out, err := invokeAgentText(ctx, worker, prompt)
-	if err != nil {
-		t.Status = coordkit.TaskFailed
-		t.Result = fmt.Sprintf("worker %q invoke: %v", assignee, err)
-		return
+
+	// K9 retry/backoff 循环：最多尝试 1 + MaxRetries 次。
+	// MaxRetries<=0 等价单次（0 次重试）。
+	maxAttempts := 1 + t.MaxRetries
+	baseDelay := time.Duration(t.RetryDelay) * time.Millisecond
+	if baseDelay <= 0 {
+		baseDelay = time.Second // 默认 1s（与 Task.RetryDelay 注释 0=1000ms 对齐）
 	}
-	t.Status = coordkit.TaskCompleted
-	t.Result = out
+	backoff := t.Backoff
+	if backoff <= 0 {
+		backoff = 2.0
+	}
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// 上一次失败后退避等待（首次 attempt=0 不等）。
+		if attempt > 0 {
+			delay := coordkit.ComputeRetryDelay(baseDelay, backoff, attempt-1, coordkit.RetryBackoffCap)
+			if r.cfg.Logger != nil {
+				r.cfg.Logger.Info("coordinator task retry backoff",
+					zap.String("task", t.Title),
+					zap.Int("attempt", attempt),
+					zap.Duration("delay", delay))
+			}
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				t.Status = coordkit.TaskFailed
+				t.Result = "cancelled: context done during retry backoff"
+				return
+			}
+		}
+
+		out, err := invokeAgentText(ctx, worker, prompt)
+		if err == nil {
+			t.Status = coordkit.TaskCompleted
+			t.Result = out
+			return
+		}
+
+		// 本次失败：记录结果，待下一轮重试（若还有剩余 attempt）。
+		t.Result = fmt.Sprintf("worker %q invoke: %v", assignee, err)
+	}
+
+	// 所有重试耗尽：标 TaskFailed。
+	t.Status = coordkit.TaskFailed
 }
 
 // invokeAgentText runs a one-shot adk.Agent against a single user message and

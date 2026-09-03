@@ -35,6 +35,142 @@ function hitlRenderContextBlocks(payloadObj) {
     return blocks.join('');
 }
 
+// ============================================================
+// K4 黑匣子打开 · HITL Why 区折叠面板
+// 消费 buildReasoningRequestPayload（chat/render.js:251 已构建但未在审批 UI
+// 消费）+ 后端 payload.capabilityPlan（将执行什么/动作/目标）+ HIGH_IMPACT
+// 工具风险等级与影响半径。展示"为什么请求此工具 + 风险等级 + 影响半径"。
+// 仅在 pending 审批面板渲染，不破坏原有 contextBlocks。
+// ============================================================
+
+// HIGH_IMPACT 工具集（与 internal/security/highimpact.go 口径一致，前端兜底）
+const HITL_HIGH_IMPACT_TOOLS = {
+    'exec': '任意命令执行（含删除/修改文件）',
+    'execute': '任意命令执行（Eino ADK filesystem execute，含删除/修改文件）',
+    'delete-file': '删除文件',
+    'modify-file': '修改文件内容',
+    'create-file': '创建/覆盖文件',
+    'sqlmap': 'SQL 注入自动化利用',
+    'metasploit': '漏洞利用框架',
+    'msfvenom': 'payload 生成',
+    'hydra': '暴力破解',
+    'hashcat': '密码哈希破解',
+    'john': '密码破解',
+    'ettercap': '中间人攻击',
+    'arpspoof': 'ARP 欺骗',
+    'responder': 'LLMNR/NBT-NS 毒化',
+    'aircrack-ng': '无线破解',
+    'aireplay-ng': '无线注入（去认证）',
+    'reaver': 'WPS PIN 暴力',
+    'bettercap': '中间人/SNIFF 多合一'
+};
+
+function hitlClassifyToolRisk(toolName) {
+    const key = String(toolName || '').trim().toLowerCase();
+    if (!key) return { level: 'low', label: '低', note: '' };
+    if (Object.prototype.hasOwnProperty.call(HITL_HIGH_IMPACT_TOOLS, key)) {
+        return { level: 'high', label: '高', note: HITL_HIGH_IMPACT_TOOLS[key] };
+    }
+    // 兜底启发式：命令/文件/网络写入类工具判中，其余判低
+    if (/(^|::|_)exec$|shell|terminal|command|run_command|write_file|edit_file|apply_patch|delete_file|move_file|sql|injection|exploit|brute|crack|spoof|poison|sniff/.test(key)) {
+        return { level: 'medium', label: '中', note: '可能涉及系统写入或网络侵入' };
+    }
+    return { level: 'low', label: '低', note: '只读/查询类工具' };
+}
+
+function hitlWhyRiskBadge(riskLevel) {
+    const lvl = String(riskLevel || 'low').trim().toLowerCase();
+    const cls = (lvl === 'high') ? 'high' : (lvl === 'medium' ? 'medium' : 'low');
+    const label = lvl === 'high' ? '高风险' : (lvl === 'medium' ? '中风险' : '低风险');
+    return '<span class="hitl-why-risk hitl-why-risk--' + cls + '">' + escapeHtml(label) + '</span>';
+}
+
+function hitlWhyImpactRadius(toolName, capabilityPlan) {
+    // 优先用 capability provider 的 Plan（将执行什么/动作/目标）
+    const plan = capabilityPlan && typeof capabilityPlan === 'object' ? capabilityPlan : null;
+    if (plan) {
+        const action = String(plan.action || '').trim();
+        const target = String(plan.target || '').trim();
+        const desc = String(plan.description || '').trim();
+        const parts = [];
+        if (desc) parts.push(desc);
+        if (action) parts.push('动作: ' + action);
+        if (target) parts.push('目标: ' + target);
+        if (parts.length) return parts.join(' · ');
+    }
+    // 兜底：按工具名给出影响半径描述
+    const key = String(toolName || '').trim().toLowerCase();
+    if (HITL_HIGH_IMPACT_TOOLS[key]) return HITL_HIGH_IMPACT_TOOLS[key];
+    if (/browser|chrome|navigate|open_url|web/.test(key)) return '网络请求（目标 URL）';
+    if (/read|list|get|search|query|status/.test(key)) return '只读查询（无写入）';
+    return '本机/目标系统';
+}
+
+// 渲染 HITL Why 区折叠面板。payloadObj 为审批 payload（含 reasoning/thinking/
+// planning/capabilityPlan/toolName）。reasoningPayload 来自 buildReasoningRequestPayload
+// （chat 发送时构建，反映本轮 reasoning mode/effort，便于审批人理解模型思考强度）。
+function hitlRenderWhyRegion(payloadObj, reasoningPayload) {
+    if (!payloadObj || typeof payloadObj !== 'object') return '';
+    const toolName = String(payloadObj.toolName || '').trim();
+    const risk = hitlClassifyToolRisk(toolName);
+    const impactRadius = hitlWhyImpactRadius(toolName, payloadObj.capabilityPlan);
+    const reasoningChain = String(payloadObj.reasoningChain || '').trim();
+    const thinking = String(payloadObj.thinking || '').trim();
+    const planning = String(payloadObj.planning || '').trim();
+
+    // P1 数据源修复：优先用后端 payloadObj.reasoning = { mode, effort }（后端在
+    // HITL 中断时记录的 chat 请求 reasoning 意图，审批页/非 chat 页也有数据）；
+    // 读不到再回退 reasoningPayload 参数（chat 页内 buildReasoningRequestPayload 兜底）。
+    let reasoningIntent = null;
+    const pr = payloadObj.reasoning;
+    if (pr && typeof pr === 'object' && !(pr instanceof Array)) {
+        reasoningIntent = pr;
+    } else if (reasoningPayload && typeof reasoningPayload === 'object') {
+        reasoningIntent = reasoningPayload;
+    }
+    let reasoningModeLine = '';
+    if (reasoningIntent) {
+        const mode = String(reasoningIntent.mode || '').trim();
+        const effort = String(reasoningIntent.effort || '').trim();
+        if (mode || effort) {
+            reasoningModeLine = '<div class="hitl-why-row"><span class="hitl-why-label">' +
+                escapeHtml(hitlT('whyReasoningMode', '推理强度')) +
+                '</span><span class="hitl-why-value">' +
+                escapeHtml((mode || 'default') + (effort ? (' · ' + effort) : '')) +
+                '</span></div>';
+        }
+    }
+
+    const reasoningBlock = (reasoningChain || thinking || planning)
+        ? ('<div class="hitl-why-row"><span class="hitl-why-label">' +
+            escapeHtml(hitlT('whyReasoningChain', '为什么请求此工具')) +
+            '</span><div class="hitl-why-value hitl-why-reasoning">' +
+            escapeHtml(reasoningChain || thinking || planning) +
+            '</div></div>')
+        : '';
+
+    const whyLabel = hitlT('whyRegionLabel', '为什么请求此工具？');
+    const riskLabel = hitlT('whyRiskLevel', '风险等级');
+    const impactLabel = hitlT('whyImpactRadius', '影响半径');
+    const toolLabel = hitlT('whyToolName', '工具');
+
+    return '<details class="hitl-why-region">' +
+        '<summary>' + escapeHtml(whyLabel) + '</summary>' +
+        '<div class="hitl-why-body">' +
+        '<div class="hitl-why-row"><span class="hitl-why-label">' + escapeHtml(toolLabel) +
+        '</span><span class="hitl-why-value"><code>' + escapeHtml(toolName || '-') + '</code></span></div>' +
+        '<div class="hitl-why-row"><span class="hitl-why-label">' + escapeHtml(riskLabel) +
+        '</span><span class="hitl-why-value">' + hitlWhyRiskBadge(risk.level) +
+        (risk.note ? ' <span class="hitl-why-value">' + escapeHtml(risk.note) + '</span>' : '') +
+        '</span></div>' +
+        '<div class="hitl-why-row"><span class="hitl-why-label">' + escapeHtml(impactLabel) +
+        '</span><span class="hitl-why-value">' + escapeHtml(impactRadius) + '</span></div>' +
+        reasoningModeLine +
+        reasoningBlock +
+        '</div>' +
+        '</details>';
+}
+
 function hitlRenderExecutionResultBlock(payloadObj) {
     if (!payloadObj || typeof payloadObj !== 'object') return '';
     const exec = payloadObj.executionResult;
@@ -763,10 +899,21 @@ async function followAgentRunAfterHitlDecision(conversationId) {
 function renderHitlPendingList(items) {
     const list = Array.isArray(items) ? items : [];
     if (!list.length) return '';
+    // K4：消费 buildReasoningRequestPayload（chat/render.js:251 已构建但未在审批 UI 消费），
+    // 把本轮 reasoning mode/effort 注入每个 pending item 的 Why 区。
+    let reasoningPayload = null;
+    try {
+        if (typeof window.buildReasoningRequestPayload === 'function') {
+            reasoningPayload = window.buildReasoningRequestPayload();
+        }
+    } catch (e) { /* 审批页可能不在 chat 页，reasoningPayload 留空 */ }
     return list.map(function (item) {
             const payloadObj = hitlParsePayloadObject(item.payload || '');
             const payload = String(item.payload || '');
             const contextHtml = hitlRenderContextBlocks(payloadObj);
+            const whyHtml = hitlRenderWhyRegion(Object.assign({}, payloadObj, {
+                toolName: String(item.toolName || payloadObj.toolName || '')
+            }), reasoningPayload);
             const mode = String(item.mode || '').trim().toLowerCase();
             const allowEdit = mode === 'review_edit';
             var escId = escapeHtml(String(item.id || ''));
@@ -782,6 +929,7 @@ function renderHitlPendingList(items) {
                 '<button class="hitl-dismiss-btn" title="' + escapeHtml(hitlT('dismiss', 'Dismiss')) + '" onclick="dismissHitlItem(' + qId + ')">&times;</button>' +
                 '</div>' +
                 '<div class="hitl-pending-meta">' + escapeHtml(hitlT('conversationLabel', 'Conversation:')) + ' ' + escapeHtml(item.conversationId || '-') + '</div>' +
+                whyHtml +
                 contextHtml +
                 hitlRenderExecutionResultBlock(payloadObj) +
                 '<pre class="hitl-pending-payload">' + escapeHtml(payload) + '</pre>' +
@@ -792,8 +940,8 @@ function renderHitlPendingList(items) {
                 '<div class="hitl-input-help">' + escapeHtml(hitlT('commentHelp', 'Comment (optional): briefly note the approval reason.')) + '</div>' +
                 '<input id="hitl-comment-' + escId + '" class="hitl-config-input hitl-inline-comment" type="text" placeholder="' + escapeHtml(hitlT('commentPlaceholder', 'e.g. allow read-only command')) + '">' +
                 '<div class="hitl-pending-actions">' +
-                '<button class="btn-secondary" onclick="submitHitlDecision(' + qId + ',&quot;reject&quot;,' + qConv + ')">' + escapeHtml(hitlT('reject', 'Reject')) + '</button>' +
-                '<button class="btn-primary" onclick="submitHitlDecision(' + qId + ',&quot;approve&quot;,' + qConv + ')">' + escapeHtml(hitlT('approve', 'Approve')) + '</button>' +
+                '<button class="btn-secondary" data-interrupt-id="' + escId + '" data-decision="reject" onclick="submitHitlDecision(' + qId + ',&quot;reject&quot;,' + qConv + ')">' + escapeHtml(hitlT('reject', 'Reject')) + '</button>' +
+                '<button class="btn-primary" data-interrupt-id="' + escId + '" data-decision="approve" onclick="submitHitlDecision(' + qId + ',&quot;approve&quot;,' + qConv + ')">' + escapeHtml(hitlT('approve', 'Approve')) + '</button>' +
                 '</div>' +
                 '</div>'
             );
@@ -1001,9 +1149,11 @@ async function submitHitlDecision(interruptId, decision, conversationIdOpt) {
 }
 
 async function submitHitlDecisionWithPayload(interruptId, decision, comment, editedArguments, conversationIdForFollow) {
-    // F5：审批按钮 pending 态——点击后 disable，防止重复提交（approve/reject 按钮在 hitlT 渲染处）
-    const approveBtn = document.querySelector('button[onclick*="submitHitlDecision(\'' + interruptId + '\',&quot;approve\'"]');
-    const rejectBtn = document.querySelector('button[onclick*="submitHitlDecision(\'' + interruptId + '\',&quot;reject\'"]');
+    // F5：审批按钮 pending 态——点击后 disable，防止重复提交。
+    // 用 data-interrupt-id 属性选择器（CSS.escape 防 interruptId 含引号/反斜杠破坏选择器）。
+    const safeId = CSS.escape(String(interruptId || ''));
+    const approveBtn = document.querySelector('button[data-interrupt-id="' + safeId + '"][data-decision="approve"]');
+    const rejectBtn = document.querySelector('button[data-interrupt-id="' + safeId + '"][data-decision="reject"]');
     if (approveBtn && decision === 'approve') { approveBtn.disabled = true; approveBtn.textContent = hitlT('submitting', '提交中…'); }
     if (rejectBtn && decision === 'reject') { rejectBtn.disabled = true; rejectBtn.textContent = hitlT('submitting', '提交中…'); }
     const restoreButtons = function () {

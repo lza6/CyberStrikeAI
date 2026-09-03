@@ -33,7 +33,7 @@ func TestMailboxWriteRead(t *testing.T) {
 	}
 	// 确保时间戳递增
 	for i := range msgs {
-		msgs[i].Timestamp = float64(time.Now().UnixNano()+int64(i))/1e9
+		msgs[i].Timestamp = float64(time.Now().UnixNano()+int64(i)) / 1e9
 		time.Sleep(time.Millisecond)
 	}
 	for _, m := range msgs {
@@ -189,7 +189,7 @@ func TestMailboxConcurrentWrite(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(i int) {
 			msg := NewUserMessage("leader@team1", "agent1@team1", "msg")
-			msg.Timestamp = float64(time.Now().UnixNano()+int64(i))/1e9
+			msg.Timestamp = float64(time.Now().UnixNano()+int64(i)) / 1e9
 			done <- mb.Write(ctx, msg)
 		}(i)
 	}

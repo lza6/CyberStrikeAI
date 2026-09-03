@@ -18,21 +18,21 @@ type TurnSink interface {
 
 // TurnSummary turn 结束摘要。
 type TurnSummary struct {
-	ConversationID string
-	Turns          int
-	ToolCalls      int
-	TokensPrompt   int
+	ConversationID   string
+	Turns            int
+	ToolCalls        int
+	TokensPrompt     int
 	TokensCompletion int
-	DurationMS     int64
+	DurationMS       int64
 }
 
 // noopTurnSink 空实现（丢弃全部事件），供不需要消费事件的调用方使用。
 type noopTurnSink struct{}
 
-func (noopTurnSink) OnDelta(string)                              {}
+func (noopTurnSink) OnDelta(string)                                    {}
 func (noopTurnSink) OnToolCall(string, string, map[string]interface{}) {}
-func (noopTurnSink) OnToolResult(string, string)                 {}
-func (noopTurnSink) OnTurnDone(TurnSummary)                      {}
+func (noopTurnSink) OnToolResult(string, string)                       {}
+func (noopTurnSink) OnTurnDone(TurnSummary)                            {}
 
 // NewNoopTurnSink 返回空 TurnSink。
 func NewNoopTurnSink() TurnSink { return noopTurnSink{} }

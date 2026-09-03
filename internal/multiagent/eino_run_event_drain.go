@@ -29,6 +29,9 @@ type einoRunEventDrainConfig struct {
 	FilesystemMonitorAgent  *agent.Agent
 	FilesystemMonitorRecord einomcp.ExecutionRecorder
 	MCPExecutionBinder      *MCPExecutionBinder
+
+	// K9：StuckDetector 适配器（工具错误观测）。nil=未启用。
+	StuckDetector StuckDetectorAdapter
 }
 
 type einoRunEventDrain struct {
@@ -49,6 +52,10 @@ type einoRunEventDrain struct {
 	toolResultHandler          *einoToolResultEventHandler
 	assistantStreamHandler     *einoAssistantStreamEventHandler
 	materializedMessageHandler *einoMaterializedMessageEventHandler
+
+	// stuckStreamObserved K9/P2-2：最近一次助手流事件已由 ObserveStreamComplete 观测。
+	// run loop 据此跳过该轮的 ObserveMaterialized，防止同一次输出双计。
+	stuckStreamObserved bool
 }
 
 func newEinoRunEventDrain(cfg einoRunEventDrainConfig) *einoRunEventDrain {
@@ -120,6 +127,7 @@ func (d *einoRunEventDrain) BindHandlers(confirmRecovery func()) {
 		RunMessages:     d.runMessages,
 		Emitter:         d.toolResultEmitter,
 		ConfirmRecovery: confirmRecovery,
+		StuckDetector:   d.cfg.StuckDetector,
 	})
 	streamToolCallCompletion := newEinoStreamToolCallCompletionHandler(einoStreamToolCallCompletionHandlerConfig{
 		ConversationID: d.cfg.ConversationID,
@@ -147,6 +155,7 @@ func (d *einoRunEventDrain) BindHandlers(confirmRecovery func()) {
 		NextMainStreamID:          d.nextMainStreamID,
 		NextReasoningStreamID:     d.nextReasoningStreamID,
 		NextSubAgentReplyStreamID: d.nextSubAgentReplyStreamID,
+		StuckDetector:             d.cfg.StuckDetector,
 	})
 	d.materializedMessageHandler = newEinoMaterializedMessageEventHandler(einoMaterializedMessageEventHandlerConfig{
 		ConversationID:       d.cfg.ConversationID,
@@ -209,7 +218,25 @@ func (d *einoRunEventDrain) HandleAssistantStream(mv *adk.MessageVariant, agentN
 	if d == nil || d.assistantStreamHandler == nil {
 		return false, nil
 	}
-	return d.assistantStreamHandler.Handle(mv, agentName)
+	handled, err := d.assistantStreamHandler.Handle(mv, agentName)
+	// K9/P2-2：标记本轮已走流式完成观测（ObserveStreamComplete），run loop 据此
+	// 跳过该轮 ObserveMaterialized，防止同一次助手输出双计。仅主代理流（观测目标）置位。
+	if handled && d.cfg.StuckDetector != nil && d.cfg.StreamsMainAssistant != nil && d.cfg.StreamsMainAssistant(agentName) {
+		d.stuckStreamObserved = true
+	} else if handled {
+		// 非主代理流或无 detector：恢复"未观测"语义，后续非流式事件仍走兜底。
+		d.stuckStreamObserved = false
+	}
+	return handled, err
+}
+
+// StuckStreamObserved 返回最近一次助手事件是否已走流式完成观测（P2-2）。
+// 非流式事件始终返回 false，让 run loop 走 ObserveMaterialized 兜底。
+func (d *einoRunEventDrain) StuckStreamObserved() bool {
+	if d == nil {
+		return false
+	}
+	return d.stuckStreamObserved
 }
 
 func (d *einoRunEventDrain) HandleMaterialized(mv *adk.MessageVariant, msg adk.Message, agentName string) bool {

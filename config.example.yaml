@@ -342,6 +342,12 @@ multi_agent:
 database:
   path: data/conversations.db # SQLite 数据库文件路径，用于存储对话历史和消息
   knowledge_db_path: data/knowledge.db # 知识库数据库文件路径（可选，为空则使用会话数据库），用于存储知识库项和向量嵌入，可独立复制和复用
+  # 黑板（blackboard）持久化驱动选择（K0b）：
+  #   memory - 进程内内存黑板（默认，向后兼容），重启后 findings 丢失
+  #   sqlite - SQLite 持久化黑板，findings 落盘到 ~/.cyberstrikeai/blackboard.db
+  #            （home 未配置时回退到 database.path 同目录），重启不丢
+  # 省略或填其他值一律按 memory 处理。
+  blackboard_driver: memory  # memory | sqlite（sqlite 时 findings 持久化到 ~/.cyberstrikeai/ 下）
 # 可选：统一 home 目录迁移。留空（默认）= 继续使用项目根 data/，不破坏现有部署。
 # 配置 home_dir 后，启动时会把 data/ 下的内容迁移到统一 home（已存在目标文件跳过，幂等可重试）。
 # K4：YAML 未配 home_dir 时，自动回退到环境变量 $CYBERSTRIKEAI_HOME 或 $HOME/.cyberstrikeai
@@ -568,6 +574,21 @@ robots:
 # 技能包目录：每个子目录仅标准 SKILL.md（Agent Skills：front matter 仅 name、description）+ 可选附属文件；无 SKILL.yaml
 # 示例：skills/cyberstrike-eino-demo/
 skills_dir: skills # Skills配置文件目录（相对于配置文件所在目录）
+# ============================================
+# 垂直域（vertical）配置 — K0a 奠基
+# ============================================
+# active_vertical 指定当前激活的垂直域。空值或 "security" = 安全渗透测试域（默认，向后兼容）。
+# K0a 阶段只奠基+注册 security vertical，不实际切换；配为非 security 值时启动只 Warn 不改变运行行为。
+# 后续批次接入 vertical 过滤后，此字段决定 agent/skill 目录、prompt 骨架、工具白名单的切换。
+# 可选值（当前只有 security 注册；其他为预留）：security | office | ecommerce | content
+active_vertical: security
+# verticals 可选的 vertical 覆盖配置列表（预留；空=只用 security 默认实现）。
+# 示例（本期不必配置，后续批次启用）：
+# verticals:
+#   - name: office
+#     agent_dir: agents-office
+#     skill_dir: skills-office
+#     tools: [read_file, write_file, search]
 # ============================================
 # 多代理子 Agent（Markdown，唯一维护处）
 # ============================================

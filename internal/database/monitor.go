@@ -12,6 +12,13 @@ import (
 )
 
 // SaveToolExecution 保存工具执行记录
+//
+// 时间列写入用 UTC RFC3339 文本而非 time.Time/sql.NullTime：pure-go modernc 驱动
+// 把 time.Time 序列化为 Go 的 time.String() 文本（含 "m=+..." 单调时钟后缀），SQLite
+// 的 julianday()/strftime() 等无法解析该格式而返回 NULL，直接破坏 PurgeToolExecutionsBefore
+// 的时间过滤与 CancelOrphanedRunningToolExecutions 的时长计算（modernc 下 deleted=0 /
+// duration=0）。mattn 驱动则写 "2006-01-02 15:04:05.999999999-07:00"。统一 RFC3339 UTC
+// 文本后双驱动存储一致；读取侧 Scan(&time.Time) 两种驱动的 parseTime 均兼容 RFC3339。
 func (db *DB) SaveToolExecution(exec *mcp.ToolExecution) error {
 	argsJSON, err := json.Marshal(exec.Arguments)
 	if err != nil {
@@ -65,16 +72,16 @@ func (db *DB) SaveToolExecution(exec *mcp.ToolExecution) error {
 		exec.Status,
 		resultJSON,
 		errorText,
-		exec.StartTime,
-		endTime,
+		formatSQLiteUTC(exec.StartTime),
+		formatNullableSQLiteUTC(endTime),
 		durationMs,
 		sqlNullString(exec.PartialOutput),
 		exec.PartialOutputBytes,
 		partialTruncated,
-		partialUpdatedAt,
+		formatNullableSQLiteUTC(partialUpdatedAt),
 		strings.TrimSpace(exec.OwnerUserID),
 		strings.TrimSpace(exec.ConversationID),
-		time.Now(),
+		formatSQLiteUTC(time.Now()),
 	)
 
 	if err != nil {
@@ -603,24 +610,66 @@ func (db *DB) UserCanAccessToolExecution(userID, scope, executionID string) bool
 }
 
 // CancelOrphanedRunningToolExecutions 将仍为 running 的记录批量标记为 orphaned（如进程重启后无对应执行协程）。
+// duration_ms 在 Go 侧计算：SQL 的 julianday(start_time) 对 pure-go modernc 驱动写入的
+// 旧格式文本会返回 NULL，导致 duration 恒为 0（历史行兼容）；与 FinalizeStaleRunningToolExecutions
+// 的 Go 侧解析模式保持一致，双驱动行为一致。
 func (db *DB) CancelOrphanedRunningToolExecutions(endTime time.Time, errMsg string) (int64, error) {
 	errMsg = strings.TrimSpace(errMsg)
 	if errMsg == "" {
 		errMsg = "执行已中断（服务重启或会话结束）"
 	}
-	query := `
-		UPDATE tool_executions
-		SET status = 'orphaned',
-		    error = ?,
-		    end_time = ?,
-		    duration_ms = MAX(0, CAST((julianday(?) - julianday(start_time)) * 86400000 AS INTEGER))
-		WHERE status = 'running'
-	`
-	res, err := db.Exec(query, errMsg, endTime, endTime)
+	rows, err := db.Query(`SELECT id, start_time FROM tool_executions WHERE status = 'running'`)
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	type orphanRow struct {
+		id        string
+		startTime time.Time
+	}
+	var orphans []orphanRow
+	for rows.Next() {
+		var row orphanRow
+		var startTime interface{}
+		if err := rows.Scan(&row.id, &startTime); err != nil {
+			db.logger.Warn("读取 orphaned running 执行记录失败", zap.Error(err))
+			continue
+		}
+		row.startTime = parseToolExecutionStartTime(startTime)
+		if row.startTime.IsZero() {
+			// start_time 缺失/不可解析时保持旧行为：仍标记 orphaned，时长 0
+			orphans = append(orphans, row)
+			continue
+		}
+		orphans = append(orphans, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, err
+	}
+	rows.Close()
+
+	var affected int64
+	for _, row := range orphans {
+		durationMs := int64(0)
+		if !row.startTime.IsZero() {
+			durationMs = endTime.Sub(row.startTime).Milliseconds()
+			if durationMs < 0 {
+				durationMs = 0
+			}
+		}
+		res, err := db.Exec(`
+			UPDATE tool_executions
+			SET status = 'orphaned', error = ?, end_time = ?, duration_ms = ?
+			WHERE id = ? AND status = 'running'
+		`, errMsg, formatSQLiteUTC(endTime), durationMs, row.id)
+		if err != nil {
+			db.logger.Warn("更新 orphaned running 执行记录失败", zap.Error(err), zap.String("executionId", row.id))
+			continue
+		}
+		n, _ := res.RowsAffected()
+		affected += n
+	}
+	return affected, nil
 }
 
 // FinalizeStaleRunningToolExecutions 将「非活跃且超过 minAge」的 running 记录标记为 orphaned。
@@ -678,7 +727,7 @@ func (db *DB) FinalizeStaleRunningToolExecutions(endTime time.Time, minAge time.
 			UPDATE tool_executions
 			SET status = 'orphaned', error = ?, end_time = ?, duration_ms = ?
 			WHERE id = ? AND status = 'running'
-		`, errMsg, endTime, durationMs, row.id)
+		`, errMsg, formatSQLiteUTC(endTime), durationMs, row.id)
 		if err != nil {
 			db.logger.Warn("更新 stale running 执行记录失败", zap.Error(err), zap.String("executionId", row.id))
 			continue

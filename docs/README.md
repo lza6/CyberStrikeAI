@@ -13,6 +13,10 @@ CyberStrikeAI 文档按用户旅程组织。先看部署，再根据任务选对
 - **接入与自动化**：[API 参考](zh-CN/api-reference.md) → [API Recipes](zh-CN/api-recipes.md) → [MCP 联邦](zh-CN/mcp-federation.md)
 - **参与开发**：[开发者指南](zh-CN/developer-guide.md) → [测试指南](zh-CN/testing.md) → [贡献规范](zh-CN/contributing-guide.md)
 
+### 产品规格
+
+- [产品需求文档与技术规格（PRD）](PRD.md)
+
 ### 核心概念与编排
 
 - [架构说明](zh-CN/architecture.md)

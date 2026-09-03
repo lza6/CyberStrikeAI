@@ -27,9 +27,9 @@ import (
 type MemoryTier string
 
 const (
-	TierHot      MemoryTier = "hot"      // 高强度，应优先注入上下文
-	TierWarm     MemoryTier = "warm"     // 中强度，按需召回
-	TierCold     MemoryTier = "cold"     // 低强度，仅在相关时召回
+	TierHot       MemoryTier = "hot"       // 高强度，应优先注入上下文
+	TierWarm      MemoryTier = "warm"      // 中强度，按需召回
+	TierCold      MemoryTier = "cold"      // 低强度，仅在相关时召回
 	TierEvictable MemoryTier = "evictable" // 候选淘汰/归档
 )
 
@@ -68,7 +68,7 @@ func DefaultDecayConfig() DecayConfig {
 // 对齐 retention.ts typeWeights：architecture=0.9/bug=0.7/pattern=0.8/preference=0.85/workflow=0.6/fact=0.5
 // 主项目 category 语义：target/finding=高(安全事实)，note=低，procedure=中。
 var categorySalienceWeights = map[string]float64{
-	"target":     0.9, // 目标资产事实，高价值
+	"target":     0.9,  // 目标资产事实，高价值
 	"finding":    0.85, // 漏洞/发现，高价值
 	"vuln":       0.85, // 漏洞别名
 	"procedure":  0.8,  // 已固化流程
@@ -90,9 +90,10 @@ func baseSalienceForCategory(category string) float64 {
 // 对齐 retention.ts:46-70。
 //
 // 参数：
-//   category    - project_facts.category
-//   accessCount - 历史访问次数（0 表示从未被召回）
-//   confidence  - project_facts.confidence（confirmed=1.0 / tentative=0.6 / deprecated=0.0）
+//
+//	category    - project_facts.category
+//	accessCount - 历史访问次数（0 表示从未被召回）
+//	confidence  - project_facts.confidence（confirmed=1.0 / tentative=0.6 / deprecated=0.0）
 //
 // 返回 [0,1] 的 salience。
 func ComputeSalience(category string, accessCount int, confidence string) float64 {
@@ -119,11 +120,12 @@ func ComputeSalience(category string, accessCount int, confidence string) float6
 // 上限 1.0。
 //
 // 参数：
-//   salience          - ComputeSalience 输出
-//   createdAt         - 记忆创建时间
-//   accessTimestamps  - 历史访问时间点（空切片表示从未被访问）
-//   now               - 当前时间（注入便于测试）
-//   cfg               - 衰减配置
+//
+//	salience          - ComputeSalience 输出
+//	createdAt         - 记忆创建时间
+//	accessTimestamps  - 历史访问时间点（空切片表示从未被访问）
+//	now               - 当前时间（注入便于测试）
+//	cfg               - 衰减配置
 func ComputeRetention(salience float64, createdAt time.Time, accessTimestamps []time.Time, now time.Time, cfg DecayConfig) float64 {
 	if createdAt.IsZero() {
 		// 无创建时间无法计算时间衰减，回退 salience
@@ -167,13 +169,13 @@ func TierOf(score float64, cfg DecayConfig) MemoryTier {
 
 // RetentionScore 单条记忆的留存评分（持久化用）。
 type RetentionScore struct {
-	MemoryID           string    `json:"memory_id"`
-	Score              float64   `json:"score"`
-	Salience           float64   `json:"salience"`
-	TemporalDecay      float64   `json:"temporal_decay"`
-	ReinforcementBoost float64   `json:"reinforcement_boost"`
-	LastAccessed       time.Time `json:"last_accessed,omitempty"`
-	AccessCount        int       `json:"access_count"`
+	MemoryID           string     `json:"memory_id"`
+	Score              float64    `json:"score"`
+	Salience           float64    `json:"salience"`
+	TemporalDecay      float64    `json:"temporal_decay"`
+	ReinforcementBoost float64    `json:"reinforcement_boost"`
+	LastAccessed       time.Time  `json:"last_accessed,omitempty"`
+	AccessCount        int        `json:"access_count"`
 	Tier               MemoryTier `json:"tier"`
 }
 
@@ -218,7 +220,7 @@ func ScoreProjectFact(f *ProjectFact, accessTimestamps []time.Time, accessCount 
 		TemporalDecay:      temporalDecay,
 		ReinforcementBoost: score - salience*temporalDecay,
 		LastAccessed:       lastAccessed,
-		AccessCount:       accessCount,
+		AccessCount:        accessCount,
 		Tier:               TierOf(score, cfg),
 	}
 }

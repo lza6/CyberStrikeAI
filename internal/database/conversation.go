@@ -1789,6 +1789,54 @@ func (db *DB) GetProcessDetailOffset(messageID, detailID string) (int, error) {
 	return offset, nil
 }
 
+// GetRecentProcessDetailsByConversation 获取对话最近 limit 条过程详情（按时间正序返回）。
+// 供 conversation 级 trace waterfall 轮询端点使用，倒序取最近 N 条后反转为正序，
+// 避免全量加载整段会话的详情流。
+func (db *DB) GetRecentProcessDetailsByConversation(conversationID string, limit int) ([]ProcessDetail, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	if conversationID == "" {
+		return nil, fmt.Errorf("conversationID is required")
+	}
+	if limit <= 0 {
+		limit = 1
+	}
+	rows, err := db.Query(
+		"SELECT id, message_id, conversation_id, event_type, message, data, created_at FROM process_details WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+		conversationID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("查询过程详情失败: %w", err)
+	}
+	defer rows.Close()
+
+	details := make([]ProcessDetail, 0, limit)
+	for rows.Next() {
+		var detail ProcessDetail
+		var createdAt string
+
+		if err := rows.Scan(&detail.ID, &detail.MessageID, &detail.ConversationID, &detail.EventType, &detail.Message, &detail.Data, &createdAt); err != nil {
+			return nil, fmt.Errorf("扫描过程详情失败: %w", err)
+		}
+
+		var parseErr error
+		detail.CreatedAt, parseErr = time.Parse("2006-01-02 15:04:05.999999999-07:00", createdAt)
+		if parseErr != nil {
+			detail.CreatedAt, parseErr = time.Parse("2006-01-02 15:04:05", createdAt)
+		}
+		if parseErr != nil {
+			detail.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		}
+
+		details = append(details, detail)
+	}
+
+	// 倒序取出的窗口反转为时间正序
+	for i, j := 0, len(details)-1; i < j; i, j = i+1, j-1 {
+		details[i], details[j] = details[j], details[i]
+	}
+	return details, nil
+}
+
 // GetProcessDetailsByConversation 获取对话的所有过程详情（按消息分组）
 func (db *DB) GetProcessDetailsByConversation(conversationID string) (map[string][]ProcessDetail, error) {
 	rows, err := db.Query(

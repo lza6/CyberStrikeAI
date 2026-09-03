@@ -35,4 +35,3 @@ func applyBeforeModelRewriteHandlers(
 	}
 	return state.Messages, nil
 }
-

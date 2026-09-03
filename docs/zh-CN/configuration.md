@@ -193,9 +193,17 @@ knowledge:
 database:
   path: data/conversations.db
   knowledge_db_path: data/knowledge.db
+  blackboard_driver: memory # memory | sqlite
 ```
 
 默认使用 SQLite。`knowledge_db_path` 为空时可复用会话数据库；独立文件更便于迁移知识库。
+
+`blackboard_driver` 选择黑板（blackboard，Agent 共享 findings）的持久化驱动：
+
+- `memory`（默认）：进程内内存黑板，重启后 findings 丢失。
+- `sqlite`：findings 持久化到 `~/.cyberstrikeai/blackboard.db`（`storage.home_dir` 未配置时回退到 `database.path` 同目录），重启不丢；SQLite 初始化失败时自动降级回 memory 并记录 Warn。
+
+前端配置页不覆盖 `database` 段，修改后需编辑 config.yaml 并重启进程生效。
 
 ## 审计与监控
 

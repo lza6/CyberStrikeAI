@@ -19,9 +19,13 @@ type fakeNotifier struct {
 	events   []pluginslot.NotifyEvent
 	failWith error // 非 nil 时 Notify 返回该 error（测试容错）
 	delay    time.Duration
+	panicky  bool // true 时 Notify panic（测试 recover 兜底）
 }
 
 func (f *fakeNotifier) Notify(ev pluginslot.NotifyEvent) error {
+	if f.panicky {
+		panic("fakeNotifier panic")
+	}
 	if f.delay > 0 {
 		time.Sleep(f.delay)
 	}
@@ -307,6 +311,87 @@ func TestTrackerKey(t *testing.T) {
 	}
 }
 
+// TestDeriveSessionStatusToolPendingByType P2-3：tool_pending 用真实 finding Type
+// （tool-pending）判定，不再依赖 Detail 含 "pending" 的字符串启发式。
+// hitl-pending 等 finding 的 Detail 是 conversationId=xxx 不含 pending，
+// 启发式永不命中——本测试同时覆盖：hitl-pending finding 不误派生 tool_pending。
+func TestDeriveSessionStatusToolPendingByType(t *testing.T) {
+	eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 真实 pending tool_call finding（securityevents 发布的 tool-pending Type）。
+	board.Publish(ctx, blackboard.Finding{Type: "tool-pending", Title: "exec running", Detail: "conversationId=c1 tool=exec", ProjectID: "p1"})
+	if got := eng.deriveSessionStatus(ctx); got != SessionStatusToolPending {
+		t.Fatalf("tool-pending finding should derive tool_pending, got %q", got)
+	}
+}
+
+// TestDeriveSessionStatusHitlPendingDetailHeuristicRemoved P2-3：Detail 含 "pending"
+// 的 finding 不再误派生 tool_pending（启发式已删除，状态由 Type 决定）。
+func TestDeriveSessionStatusHitlPendingDetailHeuristicRemoved(t *testing.T) {
+	eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Detail 故意含 "pending" 字样，但 Type 不是 tool-pending → 不派生 tool_pending。
+	board.Publish(ctx, blackboard.Finding{Type: "hitl-pending", Title: "await approval", Detail: "conversationId=c2 status=pending", ProjectID: "p1"})
+	if got := eng.deriveSessionStatus(ctx); got != SessionStatusHITLPending {
+		t.Fatalf("hitl-pending should derive hitl_pending (not tool_pending), got %q", got)
+	}
+}
+
+// TestDeriveSessionStatusPriorityChain P2-3 回归：Type 判定改造后优先级链
+// failed > done > hitl_pending > tool_pending > running > idle 不回归。
+func TestDeriveSessionStatusPriorityChain(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("plain finding derives running", func(t *testing.T) {
+		eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+		// 普通 vuln finding（无状态语义，Detail 无 pending 关键字）→ running。
+		// 注意：deriveSessionStatus 不做 startedAt 历史过滤（那是 handleFinding 的语义），
+		// board 里不能有状态型 finding。
+		board.Publish(ctx, blackboard.Finding{Type: "vuln", Title: "plain vuln finding", Detail: "no pending keyword"})
+		if got := eng.deriveSessionStatus(ctx); got != SessionStatusRunning {
+			t.Fatalf("plain vuln finding should derive running, got %q", got)
+		}
+	})
+	t.Run("stale hitl finding still derives hitl", func(t *testing.T) {
+		eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+		// deriveSessionStatus 无时间过滤：board 内存在 hitl-pending 即派生 hitl_pending
+		// （与改造前行为一致，验证 Type 判定不引入回归）。
+		board.Publish(ctx, blackboard.Finding{Type: "hitl-pending", Title: "old", CreatedAt: time.Now().Add(-1 * time.Hour)})
+		if got := eng.deriveSessionStatus(ctx); got != SessionStatusHITLPending {
+			t.Fatalf("hitl-pending finding should derive hitl_pending regardless of age, got %q", got)
+		}
+	})
+	t.Run("failed wins over done", func(t *testing.T) {
+		eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+		board.Publish(ctx, blackboard.Finding{Type: "run-complete", Title: "done"})
+		board.Publish(ctx, blackboard.Finding{Type: "agent-stuck", Title: "stuck"})
+		if got := eng.deriveSessionStatus(ctx); got != SessionStatusFailed {
+			t.Fatalf("failed should win over done, got %q", got)
+		}
+	})
+	t.Run("hitl wins over tool pending", func(t *testing.T) {
+		eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+		board.Publish(ctx, blackboard.Finding{Type: "tool-pending", Title: "exec"})
+		board.Publish(ctx, blackboard.Finding{Type: "hitl-pending", Title: "await"})
+		if got := eng.deriveSessionStatus(ctx); got != SessionStatusHITLPending {
+			t.Fatalf("hitl_pending should win over tool_pending, got %q", got)
+		}
+	})
+	t.Run("done wins over hitl", func(t *testing.T) {
+		eng, board, _ := newTestEngine(t, map[string]config.Reaction{})
+		board.Publish(ctx, blackboard.Finding{Type: "hitl-pending", Title: "await"})
+		board.Publish(ctx, blackboard.Finding{Type: "run-complete", Title: "done"})
+		if got := eng.deriveSessionStatus(ctx); got != SessionStatusDone {
+			t.Fatalf("done should win over hitl, got %q", got)
+		}
+	})
+}
+
 // TestEngineNilSafe New 返回 nil（board/logger 为空）。
 func TestEngineNilSafe(t *testing.T) {
 	if got := New(nil, config.ReactionsConfig{}, nil, zap.NewNop()); got != nil {
@@ -335,3 +420,55 @@ func waitFor(t *testing.T, cond func() bool, timeout time.Duration) {
 type errFake struct{}
 
 func (errFake) Error() string { return "fake notifier error" }
+
+// TestEngineNotifierPanicRecovered notifier panic 不会崩进程（RC9 修复）。
+// 原 notify 对每个 notifier 起 goroutine 无 recover，notifier panic 会崩进程；
+// 修复后 callNotifierSafely 用 defer recover 兜底，记 Warn 不崩。
+func TestEngineNotifierPanicRecovered(t *testing.T) {
+	rules := map[string]config.Reaction{
+		"high-impact-tool": {Auto: true, Action: "notify", Priority: "urgent"},
+	}
+	logger := zap.NewNop()
+	board := blackboard.NewMemoryBoard(logger)
+	cfg := config.ReactionsConfig{Rules: rules}
+	fnPanicky := &fakeNotifier{panicky: true}
+	fnOK := &fakeNotifier{}
+	eng := New(board, cfg, []pluginslot.Notifier{fnPanicky, fnOK}, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eng.Start(ctx)
+	defer eng.Stop()
+
+	board.Publish(ctx, blackboard.Finding{Type: "high-impact-tool", Title: "panic-test", ProjectID: "p1"})
+	// 不应 panic；fnOK 应正常收到通知。
+	waitFor(t, func() bool { return len(fnOK.Events()) >= 1 }, 2*time.Second)
+	if len(fnOK.Events()) != 1 {
+		t.Fatalf("panic notifier 不应影响其他 notifier，fnOK got %d events, want 1", len(fnOK.Events()))
+	}
+}
+
+// TestEngineNotifierTimeoutNotBlocking notifier 阻塞 5s 以上被超时放弃（RC9 修复）。
+// 原 notify 起无超时 goroutine，阻塞 Notify 无限堆积 goroutine；修复后 5s 超时放弃。
+func TestEngineNotifierTimeoutNotBlocking(t *testing.T) {
+	rules := map[string]config.Reaction{
+		"high-impact-tool": {Auto: true, Action: "notify", Priority: "urgent"},
+	}
+	logger := zap.NewNop()
+	board := blackboard.NewMemoryBoard(logger)
+	cfg := config.ReactionsConfig{Rules: rules}
+	// delay=30s 远超 notifierTimeout=5s，模拟阻塞 notifier。
+	fnBlock := &fakeNotifier{delay: 30 * time.Second}
+	fnOK := &fakeNotifier{}
+	eng := New(board, cfg, []pluginslot.Notifier{fnBlock, fnOK}, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eng.Start(ctx)
+	defer eng.Stop()
+
+	board.Publish(ctx, blackboard.Finding{Type: "high-impact-tool", Title: "timeout-test", ProjectID: "p1"})
+	// fnOK 应在 5s 超时窗口内收到通知（fnBlock 被超时放弃不阻塞 fnOK）。
+	waitFor(t, func() bool { return len(fnOK.Events()) >= 1 }, 7*time.Second)
+	if len(fnOK.Events()) != 1 {
+		t.Fatalf("阻塞 notifier 不应阻塞其他 notifier，fnOK got %d events, want 1", len(fnOK.Events()))
+	}
+}

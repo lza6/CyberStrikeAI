@@ -29,7 +29,7 @@ type LLMClient interface {
 type ExtractedFact struct {
 	Memory       string `json:"memory"`
 	AttributedTo string `json:"attributed_to,omitempty"` // "user" | "assistant" | "auto"
-	FactKey      string `json:"fact_key,omitempty"`       // logical grouping key
+	FactKey      string `json:"fact_key,omitempty"`      // logical grouping key
 	EventDate    string `json:"event_date,omitempty"`    // ISO date when the event occurred
 }
 

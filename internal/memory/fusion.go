@@ -10,18 +10,18 @@ import (
 // FusionCandidate is one memory instance paired with its three retrieval signals.
 // The signals are filled by the retriever before ScoreAndRank combines them.
 type FusionCandidate struct {
-	Instance       *FactInstance
-	SemanticScore  float64 // cosine similarity in [0,1], 0 when below threshold
-	BM25RawScore   float64 // raw Okapi BM25 score (unbounded, typically 0..20)
-	EntityBoost    float64 // pre-computed entity boost in [0, 0.5]
+	Instance      *FactInstance
+	SemanticScore float64 // cosine similarity in [0,1], 0 when below threshold
+	BM25RawScore  float64 // raw Okapi BM25 score (unbounded, typically 0..20)
+	EntityBoost   float64 // pre-computed entity boost in [0, 0.5]
 }
 
 // bm25 normalization parameters adapt to query length. This mirrors mem0's
 // get_bm25_params (mem0/mem0/utils/scoring.py:16-40): shorter queries have a
 // lower midpoint and steeper sigmoid so a single strong term still discriminates.
 type bm25Params struct {
-	midpoint   float64
-	steepness  float64
+	midpoint  float64
+	steepness float64
 }
 
 func bm25ParamsForQuery(termCount int) bm25Params {
@@ -62,10 +62,12 @@ const EntityBoostWeight = 0.5
 // maxPossibleDivisor is the adaptive divisor controlling each signal's weight.
 // When fewer signals are present, the divisor shrinks so the combined score
 // stays normalized to [0,1]:
-//   semantic only            → 1.0  (semantic gets full weight)
-//   semantic + BM25           → 2.0  (50% / 50%)
-//   semantic + entity         → 1.5  (66% / 33%)
-//   semantic + BM25 + entity  → 2.5  (40% / 40% / 20%)
+//
+//	semantic only            → 1.0  (semantic gets full weight)
+//	semantic + BM25           → 2.0  (50% / 50%)
+//	semantic + entity         → 1.5  (66% / 33%)
+//	semantic + BM25 + entity  → 2.5  (40% / 40% / 20%)
+//
 // Mirrors mem0/mem0/utils/scoring.py:97-101.
 func maxPossibleDivisor(hasBM25, hasEntity bool) float64 {
 	switch {
@@ -90,14 +92,14 @@ type FusionResult struct {
 // FusionExplanation breaks down the combined score for debugging and evals.
 // It is populated when Explain is true; otherwise zero-valued.
 type FusionExplanation struct {
-	SemanticNorm   float64
-	BM25Norm       float64
-	EntityBoost    float64
-	MaxPossible    float64
-	RawCombined    float64
+	SemanticNorm           float64
+	BM25Norm               float64
+	EntityBoost            float64
+	MaxPossible            float64
+	RawCombined            float64
 	SemanticBelowThreshold bool
 	// Temporal fields are filled by ApplyTemporalAdjustment.
-	TemporalDelta float64
+	TemporalDelta  float64
 	TemporalReason string
 }
 
@@ -159,7 +161,7 @@ func ScoreAndRank(candidates []FusionCandidate, query string, opts ScoreAndRankO
 				results = append(results, FusionResult{
 					Instance:      c.Instance,
 					CombinedScore: 0,
-					Explanation:    exp,
+					Explanation:   exp,
 				})
 			}
 			continue
@@ -188,7 +190,7 @@ func ScoreAndRank(candidates []FusionCandidate, query string, opts ScoreAndRankO
 		results = append(results, FusionResult{
 			Instance:      c.Instance,
 			CombinedScore: combined,
-			Explanation:    exp,
+			Explanation:   exp,
 		})
 	}
 

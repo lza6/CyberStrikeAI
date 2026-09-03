@@ -141,9 +141,9 @@ func routeScore(query, desc string) float64 {
 
 // EvaluateRouteBehavior Tier 3 离线路由评测。
 // 对每条用例：算全部 skill 的 routeScore，目标 skill 需满足：
-//   1) 目标得分 ≥ 0.34（约 1/3 词面命中，description 有可路由证据）；
-//   2) 目标排名并列第一（或差距 < 0.1 视为并列）；
-//   3) 无超过 maxDivergence 个 skill 得分 ≥ 0.5（路由发散度）。
+//  1. 目标得分 ≥ 0.34（约 1/3 词面命中，description 有可路由证据）；
+//  2. 目标排名并列第一（或差距 < 0.1 视为并列）；
+//  3. 无超过 maxDivergence 个 skill 得分 ≥ 0.5（路由发散度）。
 func EvaluateRouteBehavior(skillsDir string, cases []RouteCase) (*RouteBehaviorResult, error) {
 	docs, err := loadSkillDocs(skillsDir)
 	if err != nil {

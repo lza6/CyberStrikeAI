@@ -563,10 +563,10 @@ func TestAccumulateWorkflowMetric_andCollectAgentMetrics(t *testing.T) {
 	collectAgentMetrics(nil, map[string]any{"prompt_tokens": 1}) // nil state safe
 	collectAgentMetrics(state, "not-a-map")
 	collectAgentMetrics(state, map[string]interface{}{
-		"prompt_tokens":    10,
+		"prompt_tokens":     10,
 		"completion_tokens": 5,
-		"total_tokens":     15,
-		"cost":             0.5,
+		"total_tokens":      15,
+		"cost":              0.5,
 	})
 	if state.Metrics["prompt_tokens"] != float64(10) {
 		t.Fatalf("prompt_tokens=%v", state.Metrics["prompt_tokens"])

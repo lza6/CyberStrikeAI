@@ -51,10 +51,10 @@ func GetProvenance(f *ProjectFact) Provenance {
 		return Provenance{SourceType: "unknown"}
 	}
 	p := Provenance{
-		SourceConversationID:  f.SourceConversationID,
-		SourceMessageID:       f.SourceMessageID,
+		SourceConversationID:   f.SourceConversationID,
+		SourceMessageID:        f.SourceMessageID,
 		RelatedVulnerabilityID: f.RelatedVulnerabilityID,
-		Confidence:            f.Confidence,
+		Confidence:             f.Confidence,
 	}
 	// 来源类型推断：有关联漏洞→session+cve 复合；仅有会话→session；都无→manual
 	switch {
@@ -95,10 +95,10 @@ func (db *DB) GetVulnerabilityProvenance(vulnID string) (Provenance, error) {
 		return Provenance{}, fmt.Errorf("获取漏洞 provenance 失败: %w", err)
 	}
 	p := Provenance{
-		SourceConversationID:  conversationID,
+		SourceConversationID:   conversationID,
 		RelatedVulnerabilityID: projectID,
-		VerifiedAt:            verifiedAt,
-		Confidence:            status,
+		VerifiedAt:             verifiedAt,
+		Confidence:             status,
 	}
 	// 类型与引用推断：CVE 优先于 tool，tool 优先于 session
 	switch {
@@ -120,7 +120,7 @@ func (db *DB) GetVulnerabilityProvenance(vulnID string) (Provenance, error) {
 }
 
 // migrateProvenanceColumns 幂等加列 vulnerabilities.source_tool / source_cve / verified_at。
-// 兼容性：pragma_table_info 检查，已存在则跳过；ADD COLUMN NOT NULL DEFAULT ''。
+// 兼容性：pragma_table_info 检查，已存在则跳过；ADD COLUMN NOT NULL DEFAULT ”。
 func (db *DB) migrateProvenanceColumns() error {
 	if db == nil {
 		return fmt.Errorf("db is nil")

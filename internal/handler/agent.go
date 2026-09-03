@@ -428,6 +428,22 @@ func chatReasoningToClientIntent(r *ChatReasoningRequest) *reasoning.ClientInten
 	return &reasoning.ClientIntent{Mode: r.Mode, Effort: r.Effort}
 }
 
+// reasoningIntentMode / reasoningIntentEffort P1：从 ChatRequest.reasoning 提取
+// mode/effort 原值（去空白），供 SetHitlReasoningIntent 记录到 HITL 中断 payload。
+func reasoningIntentMode(r *ChatReasoningRequest) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.Mode)
+}
+
+func reasoningIntentEffort(r *ChatReasoningRequest) string {
+	if r == nil {
+		return ""
+	}
+	return strings.TrimSpace(r.Effort)
+}
+
 type HITLRequest struct {
 	Enabled        bool     `json:"enabled"`
 	Mode           string   `json:"mode,omitempty"`

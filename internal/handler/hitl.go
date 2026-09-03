@@ -15,6 +15,7 @@ import (
 	"cyberstrike-ai/internal/capability"
 	"cyberstrike-ai/internal/database"
 	"cyberstrike-ai/internal/multiagent"
+	"cyberstrike-ai/internal/securityevents"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -671,6 +672,11 @@ func (h *AgentHandler) waitHITLApproval(runCtx context.Context, cancelRun contex
 		h.logger.Warn("创建 HITL 中断失败", zap.Error(err))
 		return nil, err
 	}
+	// P1-3：把 HITL 中断发布到 blackboard（hitl-pending finding）。原来只走
+	// SSE 到前端，reactions lifecycle 的 deriveSessionStatus 依赖 hitl-pending
+	// finding 派生 hitl_pending 状态，但生产代码无发布点 → 状态机空转。
+	// board 未注入（reactions 未启用）时 PublishHitlPending 为 no-op。
+	securityevents.PublishHitlPending(conversationID, toolName, p.InterruptID)
 	emitHITL := func(eventType, message string, eventData map[string]interface{}) {
 		clientData := enrichProgressEventData(eventData, conversationID, assistantMessageID)
 		if sendEventFunc != nil {

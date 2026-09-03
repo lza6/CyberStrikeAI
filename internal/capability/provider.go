@@ -18,17 +18,17 @@ import (
 
 // Plan 执行计划（预演产物）。
 type Plan struct {
-	Description string `json:"description"`            // 将执行什么
-	Target      string `json:"target"`                 // 目标（文件路径/URL 等）
-	Action      string `json:"action"`                 // 动作（modify/delete/create）
-	BackupPath  string `json:"backup_path,omitempty"`  // 备份文件路径（execute 前填充）
+	Description string `json:"description"`           // 将执行什么
+	Target      string `json:"target"`                // 目标（文件路径/URL 等）
+	Action      string `json:"action"`                // 动作（modify/delete/create）
+	BackupPath  string `json:"backup_path,omitempty"` // 备份文件路径（execute 前填充）
 }
 
 // Artifact 证据工件（相对路径 + SHA256 + provenance）。
 type Artifact struct {
-	Path       string `json:"path"`                  // 相对 artifacts 根的路径
-	SHA256     string `json:"sha256"`                // 内容哈希
-	Provenance string `json:"provenance"`            // 来源（工具名+时间）
+	Path       string `json:"path"`       // 相对 artifacts 根的路径
+	SHA256     string `json:"sha256"`     // 内容哈希
+	Provenance string `json:"provenance"` // 来源（工具名+时间）
 	CreatedAt  string `json:"created_at"`
 }
 

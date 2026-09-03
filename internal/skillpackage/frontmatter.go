@@ -36,6 +36,14 @@ func ExtractSkillMDFrontMatterYAML(raw []byte) (fmYAML string, body string, err 
 }
 
 // ParseSkillMD parses SKILL.md YAML head + body.
+//
+// 兼容性说明：`allowed-tools` 官方规范为字符串形式（如 "Bash(belt *)"，
+// https://agentskills.io/specification.md），但 pentesterflow/* 等 11 个存量
+// skill 使用 YAML 列表形式（- http / - shell）。SkillManifest.AllowedTools
+// 声明为 string，直接 Unmarshal 列表会报 "cannot unmarshal !!seq into string"
+// 导致整个 skill 被静默丢弃。这里先容忍任意 front matter 再二次解析宽松
+// manifest：列表形式的 allowed-tools 归一化为逗号串；未声明键（如 routing）
+// 忽略。解析失败（真正损坏的 YAML）仍返回错误。
 func ParseSkillMD(raw []byte) (*SkillManifest, string, error) {
 	fmYAML, body, err := ExtractSkillMDFrontMatterYAML(raw)
 	if err != nil {
@@ -43,6 +51,25 @@ func ParseSkillMD(raw []byte) (*SkillManifest, string, error) {
 	}
 	var m SkillManifest
 	if err := yaml.Unmarshal([]byte(fmYAML), &m); err != nil {
+		// 二次宽松解析：把 allowed-tools 列表归一化为逗号串后重试。
+		var loose map[string]yaml.Node
+		if lerr := yaml.Unmarshal([]byte(fmYAML), &loose); lerr == nil {
+			if norm, ok := loose["allowed-tools"]; ok && norm.Kind == yaml.SequenceNode {
+				var items []string
+				for _, it := range norm.Content {
+					var s string
+					if err := it.Decode(&s); err == nil && strings.TrimSpace(s) != "" {
+						items = append(items, strings.TrimSpace(s))
+					}
+				}
+				loose["allowed-tools"] = yaml.Node{Kind: yaml.ScalarNode, Value: strings.Join(items, ", ")}
+				if reb, merr := yaml.Marshal(loose); merr == nil {
+					if err2 := yaml.Unmarshal(reb, &m); err2 == nil {
+						return &m, body, nil
+					}
+				}
+			}
+		}
 		return nil, "", fmt.Errorf("SKILL.md front matter: %w", err)
 	}
 	return &m, body, nil

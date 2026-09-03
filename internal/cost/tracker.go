@@ -1,7 +1,7 @@
 // Package cost 提供轻量成本跟踪：按 session 聚合 token 用量与美元成本。
 //
 // 设计移植自参考项目 OpenHarness-main 的 src/openharness/engine/cost_tracker.py
-//（24 行 CostTracker.add/total）与 src/openharness/api/usage.py UsageSnapshot。
+// （24 行 CostTracker.add/total）与 src/openharness/api/usage.py UsageSnapshot。
 // 适配 CyberStrikeAI (Go)：
 //   - 复用 internal/agent.TokenCounter（tiktoken）估算 token 数。
 //   - pricing.go 内置 model→price 表（input/output per 1M token，可扩展）。
@@ -20,13 +20,13 @@ import (
 //
 // 移植自 OpenHarness api/usage.py UsageSnapshot，扩展 CostUSD 与 Timestamp。
 type UsageSnapshot struct {
-	Model        string    // 模型名（如 claude-sonnet-4-5）
-	InputTokens  int       // 输入 token
-	OutputTokens int       // 输出 token
-	CacheReadTokens  int   // 缓存命中读取（不计费或低价）
-	CacheWriteTokens int   // 缓存写入（计费）
-	CostUSD      float64   // 本次调用美元成本（由 pricing 算出）
-	Timestamp    time.Time // 调用时间
+	Model            string    // 模型名（如 claude-sonnet-4-5）
+	InputTokens      int       // 输入 token
+	OutputTokens     int       // 输出 token
+	CacheReadTokens  int       // 缓存命中读取（不计费或低价）
+	CacheWriteTokens int       // 缓存写入（计费）
+	CostUSD          float64   // 本次调用美元成本（由 pricing 算出）
+	Timestamp        time.Time // 调用时间
 }
 
 // Tracker 累加 session 级用量。
@@ -92,8 +92,8 @@ func (t *Tracker) Total() UsageSnapshot {
 
 // Report 按 model 分组的用量报告。
 type Report struct {
-	Total   UsageSnapshot              // 全量
-	ByModel map[string]UsageSnapshot   // 按 model 分组
+	Total   UsageSnapshot            // 全量
+	ByModel map[string]UsageSnapshot // 按 model 分组
 }
 
 // Report 返回按 model 分组的用量报告。

@@ -10,10 +10,10 @@ import "strings"
 
 // ModelPrice 是单个模型的定价（每 1M token 美元）。
 type ModelPrice struct {
-	InputPer1M        float64 // 标准 input
-	OutputPer1M       float64 // 标准 output
-	CacheReadPer1M    float64 // 缓存命中读取（通常为 input 的 10%）
-	CacheWritePer1M   float64 // 缓存写入（通常为 input 的 125%）
+	InputPer1M      float64 // 标准 input
+	OutputPer1M     float64 // 标准 output
+	CacheReadPer1M  float64 // 缓存命中读取（通常为 input 的 10%）
+	CacheWritePer1M float64 // 缓存写入（通常为 input 的 125%）
 }
 
 // priceTable 是内置定价表。键为模型名前缀匹配（小写）。
@@ -21,26 +21,26 @@ type ModelPrice struct {
 // 数据为公开定价的近似值，用于估算，非计费依据。更新时以官方文档为准。
 var priceTable = map[string]ModelPrice{
 	// Anthropic Claude（claude-* 前缀）
-	"claude-opus-4":      {InputPer1M: 15, OutputPer1M: 75, CacheReadPer1M: 1.5, CacheWritePer1M: 18.75},
-	"claude-sonnet-4":    {InputPer1M: 3, OutputPer1M: 15, CacheReadPer1M: 0.3, CacheWritePer1M: 3.75},
-	"claude-haiku-4":     {InputPer1M: 0.8, OutputPer1M: 4, CacheReadPer1M: 0.08, CacheWritePer1M: 1},
-	"claude-3-5-sonnet":  {InputPer1M: 3, OutputPer1M: 15, CacheReadPer1M: 0.3, CacheWritePer1M: 3.75},
-	"claude-3-5-haiku":   {InputPer1M: 0.8, OutputPer1M: 4, CacheReadPer1M: 0.08, CacheWritePer1M: 1},
-	"claude-3-opus":      {InputPer1M: 15, OutputPer1M: 75, CacheReadPer1M: 1.5, CacheWritePer1M: 18.75},
-	"claude-3-haiku":     {InputPer1M: 0.25, OutputPer1M: 1.25, CacheReadPer1M: 0.03, CacheWritePer1M: 0.3},
+	"claude-opus-4":     {InputPer1M: 15, OutputPer1M: 75, CacheReadPer1M: 1.5, CacheWritePer1M: 18.75},
+	"claude-sonnet-4":   {InputPer1M: 3, OutputPer1M: 15, CacheReadPer1M: 0.3, CacheWritePer1M: 3.75},
+	"claude-haiku-4":    {InputPer1M: 0.8, OutputPer1M: 4, CacheReadPer1M: 0.08, CacheWritePer1M: 1},
+	"claude-3-5-sonnet": {InputPer1M: 3, OutputPer1M: 15, CacheReadPer1M: 0.3, CacheWritePer1M: 3.75},
+	"claude-3-5-haiku":  {InputPer1M: 0.8, OutputPer1M: 4, CacheReadPer1M: 0.08, CacheWritePer1M: 1},
+	"claude-3-opus":     {InputPer1M: 15, OutputPer1M: 75, CacheReadPer1M: 1.5, CacheWritePer1M: 18.75},
+	"claude-3-haiku":    {InputPer1M: 0.25, OutputPer1M: 1.25, CacheReadPer1M: 0.03, CacheWritePer1M: 0.3},
 	// OpenAI（gpt-* 前缀）
-	"gpt-4o":             {InputPer1M: 2.5, OutputPer1M: 10, CacheReadPer1M: 1.25},
-	"gpt-4o-mini":        {InputPer1M: 0.15, OutputPer1M: 0.6, CacheReadPer1M: 0.075},
-	"gpt-4-turbo":        {InputPer1M: 10, OutputPer1M: 30},
-	"gpt-4":              {InputPer1M: 30, OutputPer1M: 60},
-	"gpt-3.5-turbo":      {InputPer1M: 0.5, OutputPer1M: 1.5},
+	"gpt-4o":        {InputPer1M: 2.5, OutputPer1M: 10, CacheReadPer1M: 1.25},
+	"gpt-4o-mini":   {InputPer1M: 0.15, OutputPer1M: 0.6, CacheReadPer1M: 0.075},
+	"gpt-4-turbo":   {InputPer1M: 10, OutputPer1M: 30},
+	"gpt-4":         {InputPer1M: 30, OutputPer1M: 60},
+	"gpt-3.5-turbo": {InputPer1M: 0.5, OutputPer1M: 1.5},
 	// DeepSeek
-	"deepseek-chat":      {InputPer1M: 0.14, OutputPer1M: 0.28},
-	"deepseek-reasoner":  {InputPer1M: 0.55, OutputPer1M: 2.19},
+	"deepseek-chat":     {InputPer1M: 0.14, OutputPer1M: 0.28},
+	"deepseek-reasoner": {InputPer1M: 0.55, OutputPer1M: 2.19},
 	// 通义千问（qwen-）
-	"qwen-max":           {InputPer1M: 2.8, OutputPer1M: 8.4},
-	"qwen-plus":          {InputPer1M: 0.4, OutputPer1M: 1.2},
-	"qwen-turbo":         {InputPer1M: 0.05, OutputPer1M: 0.2},
+	"qwen-max":   {InputPer1M: 2.8, OutputPer1M: 8.4},
+	"qwen-plus":  {InputPer1M: 0.4, OutputPer1M: 1.2},
+	"qwen-turbo": {InputPer1M: 0.05, OutputPer1M: 0.2},
 }
 
 // LookupPrice 按模型名查价。未知模型返回 (ModelPrice{}, false)。

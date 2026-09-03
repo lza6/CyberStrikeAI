@@ -121,9 +121,9 @@ func TestGetProvenance_fromProjectFact(t *testing.T) {
 	// 有漏洞关联
 	f := &ProjectFact{
 		RelatedVulnerabilityID: "vuln-1",
-		SourceConversationID:  "conv-1",
-		SourceMessageID:       "msg-1",
-		Confidence:            "confirmed",
+		SourceConversationID:   "conv-1",
+		SourceMessageID:        "msg-1",
+		Confidence:             "confirmed",
 	}
 	p := GetProvenance(f)
 	if p.SourceType != "session+vuln" {

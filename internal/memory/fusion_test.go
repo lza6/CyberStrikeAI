@@ -97,7 +97,7 @@ func TestScoreAndRank_ThreeSignalFusionWeights(t *testing.T) {
 	// All three signals at saturation: semantic=1, bm25 raw→sigmoid≈1, entity=0.5.
 	cands := []FusionCandidate{
 		{
-			Instance:     &FactInstance{ID: "full"},
+			Instance:      &FactInstance{ID: "full"},
 			SemanticScore: 1.0,
 			BM25RawScore:  20.0, // well above any midpoint → sigmoid ≈ 1
 			EntityBoost:   0.5,
@@ -117,7 +117,7 @@ func TestScoreAndRank_EntityBoostCappedAtWeight(t *testing.T) {
 	// Entity boost above the cap (0.5) must be clamped.
 	cands := []FusionCandidate{
 		{
-			Instance:     &FactInstance{ID: "x"},
+			Instance:      &FactInstance{ID: "x"},
 			SemanticScore: 0.5,
 			BM25RawScore:  0.0,
 			EntityBoost:   1.0, // over the cap

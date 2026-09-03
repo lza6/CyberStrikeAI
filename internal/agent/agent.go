@@ -302,7 +302,9 @@ func (a *Agent) EinoSingleAgentSystemInstruction() string {
 			}
 		}
 	}
-	return systemPrompt
+	// K3 CL4R1T4S：注入当前日期到 {{date}} 占位符（身份层日期声明）。
+	// 统一对最终 prompt 注入——外部 system_prompt_path 文件中的 {{date}} 同样被替换。
+	return strings.ReplaceAll(systemPrompt, "{{date}}", time.Now().Format("2006-01-02"))
 }
 
 // getAvailableTools 获取可用工具

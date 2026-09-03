@@ -105,6 +105,26 @@ func TestApplyDefaultReactionsMergesDefaults(t *testing.T) {
 	}
 }
 
+// TestApplyDefaultReactionsSessionStatusDefault P2-3：lifecycle 派生的
+// session-status finding 必须有默认规则（log-only），否则触发后 no-op。
+func TestApplyDefaultReactionsSessionStatusDefault(t *testing.T) {
+	cfg := &Config{}
+	applyDefaultReactions(cfg)
+	r, ok := cfg.Reactions.Rules["session-status"]
+	if !ok {
+		t.Fatal("default should include session-status")
+	}
+	if !r.Auto {
+		t.Fatal("session-status default should be auto")
+	}
+	if r.Action != "log-only" {
+		t.Fatalf("session-status default action = %q, want log-only", r.Action)
+	}
+	if r.Priority != "low" {
+		t.Fatalf("session-status default priority = %q, want low", r.Priority)
+	}
+}
+
 // TestApplyDefaultReactionsUserWins K2：用户配的 key 不被默认覆盖（user wins）。
 func TestApplyDefaultReactionsUserWins(t *testing.T) {
 	custom := "custom message"

@@ -51,6 +51,21 @@ type Config struct {
 	Metrics     MetricsConfig         `yaml:"metrics,omitempty" json:"metrics,omitempty"`     // Prometheus 指标采集
 	Storage     StorageConfig         `yaml:"storage,omitempty" json:"storage,omitempty"`     // 可选：统一 home 目录迁移
 	Reactions   ReactionsConfig       `yaml:"reactions,omitempty" json:"reactions,omitempty"` // K2：反应式安全事件配置（移植自 agent-orchestrator）
+	// ActiveVertical K0a：当前激活的垂直域名。空值默认 "security"（向后兼容）。
+	// K0a 只奠基+注册 security；本期不实际切换，非 security 值只触发 Warn。
+	// 后续批次接入 vertical 过滤时，此字段决定 agent/skill 目录、prompt 骨架、工具白名单。
+	ActiveVertical string `yaml:"active_vertical,omitempty" json:"active_vertical,omitempty"`
+	// Verticals K0a：可选的 vertical 配置列表（预留；空=只用 security 默认实现）。
+	Verticals []VerticalConfig `yaml:"verticals,omitempty" json:"verticals,omitempty"`
+}
+
+// VerticalConfig K0a：单个 vertical 的可选配置（预留覆盖默认实现用）。
+// 目前 app 启动只读 ActiveVertical；Verticals 列表为后续批次接入热加载预留。
+type VerticalConfig struct {
+	Name     string   `yaml:"name,omitempty" json:"name,omitempty"`
+	AgentDir string   `yaml:"agent_dir,omitempty" json:"agent_dir,omitempty"`
+	SkillDir string   `yaml:"skill_dir,omitempty" json:"skill_dir,omitempty"`
+	Tools    []string `yaml:"tools,omitempty" json:"tools,omitempty"`
 }
 
 // ReactionsConfig K2：反应式安全事件引擎配置。空=用默认 reactions（applyDefaultReactions 补齐）。
@@ -59,9 +74,9 @@ type Config struct {
 //   - Rules：reaction key → 配置；用户可整 key 覆盖默认（applyDefaultReactions 合并）。
 //   - WebhookURL/WebhookSecret：webhook notifier 的配置（注入 pluginslot.Get 工厂）。
 type ReactionsConfig struct {
-	Enabled       *bool               `yaml:"enabled,omitempty" json:"enabled,omitempty"`              // 默认 true（省略时）
-	Rules         map[string]Reaction `yaml:"rules,omitempty" json:"rules,omitempty"`                  // reaction key → 配置
-	WebhookURL    string              `yaml:"webhook_url,omitempty" json:"webhook_url,omitempty"`      // webhook notifier 目标 URL（空=webhook 通知 no-op）
+	Enabled       *bool               `yaml:"enabled,omitempty" json:"enabled,omitempty"`               // 默认 true（省略时）
+	Rules         map[string]Reaction `yaml:"rules,omitempty" json:"rules,omitempty"`                   // reaction key → 配置
+	WebhookURL    string              `yaml:"webhook_url,omitempty" json:"webhook_url,omitempty"`       // webhook notifier 目标 URL（空=webhook 通知 no-op）
 	WebhookSecret string              `yaml:"webhook_secret,omitempty" json:"webhook_secret,omitempty"` // webhook HMAC 密钥（签名未实现，配置了会拒绝发送，防假签名）
 }
 
@@ -1200,6 +1215,22 @@ type SecurityConfig struct {
 type DatabaseConfig struct {
 	Path            string `yaml:"path"`                        // 会话数据库路径
 	KnowledgeDBPath string `yaml:"knowledge_db_path,omitempty"` // 知识库数据库路径（可选，为空则使用会话数据库）
+	// BlackboardDriver K0b：黑板（blackboard）持久化驱动选择。
+	//   - "memory"（默认，向后兼容）：进程内 MemoryBoard，重启丢 findings。
+	//   - "sqlite"：SQLiteBoard 持久化（与 knowledge 共库管理方式），重启不丢。
+	// 省略或非 "sqlite" 一律按 "memory" 处理（向后兼容，不破坏现有部署）。
+	// SQLite 路径从 storage.HomeDir() 派生（与 knowledge 共库），不在此处配置路径。
+	BlackboardDriver string `yaml:"blackboard_driver,omitempty" json:"blackboard_driver,omitempty"`
+}
+
+// BlackboardDriverEffective 返回生效的黑板驱动名："sqlite" 或 "memory"（默认）。
+// 省略或未知值一律降级为 "memory"，保证向后兼容。
+func (d DatabaseConfig) BlackboardDriverEffective() string {
+	v := strings.ToLower(strings.TrimSpace(d.BlackboardDriver))
+	if v == "sqlite" {
+		return "sqlite"
+	}
+	return "memory"
 }
 
 type AgentConfig struct {
@@ -1689,6 +1720,7 @@ func Load(path string) (*Config, error) {
 //   - 用户未配某 key → 用默认；
 //   - 用户配了某 key（哪怕只填部分字段）→ 整 key 覆盖默认（参考项目是浅合并，非字段级）；
 //   - 用户 Rules 为 nil → 初始化为空 map 后填默认。
+//
 // 默认 reactions 覆盖 CyberStrikeAI 安全事件语义（移植参考项目的 9 个 + 适配本仓）：
 //   - high-impact-tool：HIGH_IMPACT 工具执行（executor.markHighImpact 命中）→ notify urgent
 //   - scope-violation：project scope 拦截（executor/scope_block 越界）→ notify urgent
@@ -1765,6 +1797,14 @@ func defaultReactions() map[string]Reaction {
 			Auto:     true,
 			Action:   "notify",
 			Priority: "info",
+		},
+		// P2-3：session-status 是 lifecycle 状态机派生的状态变更 finding
+		// （idle/running/tool_pending/hitl_pending/done/failed）。无默认规则时
+		// 触发后 no-op，至少记日志可观测。
+		"session-status": {
+			Auto:     true,
+			Action:   "log-only",
+			Priority: "low",
 		},
 	}
 }

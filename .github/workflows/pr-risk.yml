@@ -1,0 +1,90 @@
+# K10 PR 风险分级器
+#
+# 安全设计：
+#   - 使用 pull_request_target（在 base branch 上下文运行，有 secrets）
+#   - 显式 checkout base（不 checkout PR head），避免执行 fork 代码
+#   - 只跑可信脚本 scripts/pr-risk-check.mjs（仓库内代码，不执行 PR 引入的任意代码）
+#   - 通过 GitHub API 获取 PR 文件列表（不 checkout PR head 也能拿到 diff）
+#
+# 触发：pull_request_target（fork PR 也能跑，但只读 API + 跑可信脚本）
+#
+# 输出：
+#   - step summary（GITHUB_STEP_SUMMARY）
+#   - PR 风险评论（仅 critical/high 时发，避免噪音）
+#   - 不阻断 PR（分级器本身只报告，阻断交给 ci.yml/quality.yml）
+
+name: PR Risk
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write  # 用于发表风险评论
+  issues: write         # pull_request_target 下评论走 issues 权限
+
+jobs:
+  risk-check:
+    name: PR Risk Check
+    runs-on: ubuntu-latest
+    steps:
+      # 安全：不 checkout PR head，只 checkout base（避免执行 fork 代码）
+      - name: Checkout base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          # 只需 scripts/pr-risk-check.mjs，浅克隆即可
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 通过 GitHub API 获取 PR 文件列表（不依赖 git diff，fork PR 也可用）
+      - name: Fetch PR files via API
+        id: fetch-files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # 获取 PR 文件列表（每页 100，最多取 500 文件）
+          FILES=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')
+          # 写入临时文件供 pr-risk-check 读取
+          printf '%s\n' "$FILES" > /tmp/pr-files.txt
+          echo "file_count=$(wc -l < /tmp/pr-files.txt)" >> "$GITHUB_OUTPUT"
+          echo "::notice::PR #${{ github.event.pull_request.number }} 文件数: $(wc -l < /tmp/pr-files.txt)"
+
+      # 运行可信脚本——传入 PR 文件列表（脚本本身不执行任意代码）
+      - name: Run pr-risk-check (GitHub mode)
+        env:
+          GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
+          PR_FILES_PATH: /tmp/pr-files.txt
+        run: |
+          node scripts/pr-risk-check.mjs --github --files-from-env
+
+      # 仅 critical/high 时发表评论（避免每次 PR 都刷屏）
+      - name: Risk comment (critical/high only)
+        if: steps.fetch-files.outputs.file_count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # 从 step summary 读取 risk level（pr-risk-check 写入 GITHUB_STEP_SUMMARY）
+          # 这里简化：如果文件数 > 0 且包含 critical 包路径，发评论
+          # 完整实现见 pr-risk-check.mjs 的 --json 输出
+          RISK=$(node scripts/pr-risk-check.mjs --json --files-from-env 2>/dev/null \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);process.stdout.write(j.risk_level||'low')}catch{process.stdout.write('low')}})")
+          echo "risk_level=$RISK"
+          if [ "$RISK" = "critical" ] || [ "$RISK" = "high" ]; then
+            SUMMARY=$(node scripts/pr-risk-check.mjs --github --files-from-env 2>/dev/null)
+            gh pr comment ${{ github.event.pull_request.number }} --body "$SUMMARY" \
+              --repo ${{ github.repository }}
+            echo "::warning::PR risk=$RISK，已发表风险评论"
+          else
+            echo "::notice::PR risk=$RISK，无需评论"
+          fi

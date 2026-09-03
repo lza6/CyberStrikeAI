@@ -2,6 +2,7 @@ package skillpackage
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -52,6 +53,12 @@ func ValidateAgentSkillManifest(m *SkillManifest) error {
 }
 
 // ValidateAgentSkillManifestInPackage checks manifest and that name matches package directory.
+//
+// K0c 递归后语义：packageDirName 是 SKILL.md 所在目录相对 skillsRoot 的路径（ToSlash）。
+// 顶层包为 "name"（无分隔符），嵌套包为 "group/name"（如 "pentesterflow/deserialize"）。
+// Agent Skills 规范只要求 manifest name 与「SKILL.md 所在目录名」一致——即路径的
+// 最后一段。因此这里取 filepath.Base（Windows/Unix 均按分隔符取末段）比对，嵌套包
+// manifest name 只需匹配末段目录名；顶层包 Base 后仍是原名，行为向后兼容不变。
 func ValidateAgentSkillManifestInPackage(m *SkillManifest, packageDirName string) error {
 	if err := ValidateAgentSkillManifest(m); err != nil {
 		return err
@@ -59,7 +66,7 @@ func ValidateAgentSkillManifestInPackage(m *SkillManifest, packageDirName string
 	if strings.TrimSpace(packageDirName) == "" {
 		return nil
 	}
-	if m.Name != packageDirName {
+	if m.Name != filepath.Base(filepath.FromSlash(packageDirName)) {
 		return fmt.Errorf("SKILL.md name %q must match directory name %q (Agent Skills spec)", m.Name, packageDirName)
 	}
 	return nil

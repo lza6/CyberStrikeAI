@@ -15,14 +15,14 @@ import (
 // 生命周期（与 security.Executor 对 modify-file 等的处置一致）。
 //
 // 设计要点：
-// - 仅 write_file 映射到 modify-file provider；edit_file **不映射**（参数语义不同：
-//   edit_file 用 old_string/new_string 局部替换，provider 的 content 整文件写入会把
-//   文件清空——Critic 终审 P0），edit_file 走原 wrapped 路径还原生语义。
-//   read_file/ls/glob/grep 只读不映射；其余工具返回 (不拦) 走原 wrapped 路径（向后兼容）。
-// - 越界/校验失败返回 (拦截文本, blocked=true, success=false)：调用方返回该文本不执行原 wrapped。
-// - provider execute 成功返回 (结果文本, blocked=true, success=true)：调用方返回该文本
-//   （provider 已实际执行含备份），跳过原 wrapped 避免双写。success 用于区分成功与拦截。
-// - execute 失败自动 Rollback（与 security.Executor 一致）；成功路径收集备份 SHA256 工件审计。
+//   - 仅 write_file 映射到 modify-file provider；edit_file **不映射**（参数语义不同：
+//     edit_file 用 old_string/new_string 局部替换，provider 的 content 整文件写入会把
+//     文件清空——Critic 终审 P0），edit_file 走原 wrapped 路径还原生语义。
+//     read_file/ls/glob/grep 只读不映射；其余工具返回 (不拦) 走原 wrapped 路径（向后兼容）。
+//   - 越界/校验失败返回 (拦截文本, blocked=true, success=false)：调用方返回该文本不执行原 wrapped。
+//   - provider execute 成功返回 (结果文本, blocked=true, success=true)：调用方返回该文本
+//     （provider 已实际执行含备份），跳过原 wrapped 避免双写。success 用于区分成功与拦截。
+//   - execute 失败自动 Rollback（与 security.Executor 一致）；成功路径收集备份 SHA256 工件审计。
 type filesystemCapabilityGuard struct{}
 
 // newFilesystemCapabilityGuard 构造能力闸。
@@ -102,4 +102,3 @@ func resolveFilesystemProvider(toolName string) (capability.CapabilityProvider, 
 func capabilityError(prefix string, err error) string {
 	return einomcp.ToolErrorPrefix + fmt.Sprintf("%s: %v", prefix, err)
 }
-

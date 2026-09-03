@@ -174,7 +174,7 @@ func TestRequireMetaInt(t *testing.T) {
 		t.Errorf("missing key should error")
 	}
 	valid := map[string]any{
-		"i":  int(3),
+		"i":   int(3),
 		"i32": int32(3),
 		"i64": int64(3),
 		"f64": float64(3),

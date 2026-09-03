@@ -44,16 +44,16 @@ func RegisterCtxSearchTool(server *Server, index ctxsandbox.Index) {
 			"type": "object",
 			"properties": map[string]interface{}{
 				"queries": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{"type": "string"},
+					"type":        "array",
+					"items":       map[string]interface{}{"type": "string"},
 					"description": "BM25 查询数组（每个 query 内部 OR；多 query 结果合并排序后取 top-N）",
 				},
 				"source": map[string]interface{}{
-					"type": "string",
+					"type":        "string",
 					"description": "限定检索范围，填 ctx_execute 返回的 label（如 \"execute:nmap\"）",
 				},
 				"max_results": map[string]interface{}{
-					"type": "number",
+					"type":        "number",
 					"description": "最多返回 section 数，默认 8，上限 32",
 				},
 			},
@@ -120,7 +120,7 @@ type ctxsandboxHit struct {
 // renderCtxSearchHits. Mirrors context-mode's capBytes (truncate.ts:145).
 const (
 	ctxSearchPerSectionMaxBytes = 12_000
-	ctxSearchTotalMaxBytes     = 48_000
+	ctxSearchTotalMaxBytes      = 48_000
 )
 
 // renderCtxSearchHits renders ranked hits into a bounded, model-facing text.

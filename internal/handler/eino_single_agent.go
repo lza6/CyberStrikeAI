@@ -185,6 +185,10 @@ func (h *AgentHandler) EinoSingleAgentLoopStream(c *gin.Context) {
 		return
 	}
 	taskOwned = true
+	// P1：记录本轮 reasoning 意图，HITL 中断 payload 回放（审批页「推理强度」行）。
+	if h.tasks != nil {
+		h.tasks.SetHitlReasoningIntent(conversationID, reasoningIntentMode(req.Reasoning), reasoningIntentEffort(req.Reasoning))
+	}
 
 	var cumulativeMCPExecutionIDs []string
 	// 同一请求内分段续跑时，主代理 iteration 事件按偏移累计，避免 UI 出现「第3轮 → 第1轮」回跳。

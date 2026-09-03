@@ -78,10 +78,10 @@ func TestNewFromConfigMemoryDriver(t *testing.T) {
 func TestNewFromConfigRedisDowngradesToMemory(t *testing.T) {
 	ctx := context.Background()
 	cfg := CacheConfig{
-		Driver:         "redis",
-		RedisAddr:      "127.0.0.1:1", // 不可达端口
-		RedisPassword:  "",
-		RedisDB:        0,
+		Driver:            "redis",
+		RedisAddr:         "127.0.0.1:1", // 不可达端口
+		RedisPassword:     "",
+		RedisDB:           0,
 		DefaultTTLSeconds: 60,
 	}
 	c := NewFromConfig(ctx, cfg, zap.NewNop())

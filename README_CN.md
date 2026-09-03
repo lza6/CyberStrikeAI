@@ -110,6 +110,9 @@ CyberStrikeAI 将规划、执行、人工监督、证据与复盘连接在同一
 
 - 🤖 **智能体执行层**：将自然语言意图转化为受控、可审计的安全行动。
 - 🧩 **Eino 编排**：支持单智能体及 Deep、Plan-Execute、Supervisor 多智能体模式。
+- 🕸️ **协调者 DAG**：Coordinator 自动分解目标 → 依赖 DAG → 并发派发 → 综合（四调度策略 + 重试退避）。
+- 🧠 **防退化防线**：TurnToolCallLimiter（单轮工具上限）+ StuckDetector（复读/同错/循环/独白四阈值，侦察类工具白名单豁免）。
+- ⚡ **反应式事件**：安全事件（高危工具/越界/回滚/HITL 挂起/会话状态）自动触发通知与升级。
 - 🔀 **工作流**：通过 Agent、工具、条件、审批和输出节点构建可复用流程。
 - 🎭 **角色化测试**：为常见安全场景提供聚焦的提示词和工具策略。
 
@@ -124,10 +127,13 @@ CyberStrikeAI 将规划、执行、人工监督、证据与复盘连接在同一
 
 ### 安全治理与审计
 
-- 🧑‍⚖️ **人机协同**：支持审批模式、工具白名单、审计 Agent 复核和决策追踪。
+- 🧑‍⚖️ **人机协同**：支持审批模式、工具白名单、审计 Agent 复核和决策追踪；审批卡片展示 Agent 推理依据（Why 区：选择原因/风险等级/影响半径/推理强度）。
+- 🕳️ **验证闸门**：漏洞结论过 4-axis 验证（真实/可触发/有影响/通用）+ 证据分级（suspected→corroborated→reproduced→impact_proven）+ Playbook PROVE/RULE_OUT 判据，未过闸强制降级为 open。
+- 🔍 **可观测**：`/healthz`（存活）+ `/readyz`（DB/知识库/黑板就绪聚合）健康探针；Prometheus 指标；前端 Trace Waterfall 工具调用时间线（黑匣子打开）。
 - 🔐 **平台 RBAC**：支持多用户、系统及自定义角色、权限 Scope、资源归属和显式授权。
-- 🔒 **安全与审计**：提供登录保护、审计日志、SQLite 持久化和行动证据留存。
+- 🔒 **安全与审计**：提供登录保护、审计日志、SQLite 持久化和行动证据留存；黑板 findings 支持持久化（`blackboard_driver: sqlite`，WAL + 重启不丢）。
 - 📄 **结果治理**：数据库保存与 Agent 实际看到的同一份兜底后工具结果，恢复路径会再次防御历史超大输出，前端详情也有展示保护。详见[工具执行治理](docs/zh-CN/tool-execution-governance.md)。
+- 🏗️ **垂直域（Vertical）**：平台架构按垂直域抽象（`internal/vertical/`），当前 `security` 为默认垂直域，为通用化扩展（电商/办公/内容）提供容器；skill 目录支持子目录分组（`skills/security/...`），递归扫描 + SHA256 锁全量覆盖。
 
 ### 安全运营管理
 

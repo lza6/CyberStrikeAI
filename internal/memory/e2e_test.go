@@ -365,7 +365,7 @@ func TestE2E_PipelineDegradesGracefullyWithoutSignals(t *testing.T) {
 	store := NewMemoryStore()
 	mustAddFact(t, store, "p", "k1", "the quick brown fox")
 	mustAddFact(t, store, "p", "k2", "totally unrelated content about cooking")
-	llm := &stubLLM{} // not used by Retrieve
+	llm := &stubLLM{}                // not used by Retrieve
 	svc, _ := NewService(store, llm) // no semantic, no entity
 
 	res, err := svc.Retrieve(context.Background(), "p", "fox", RetrieveOptions{TopK: 2})

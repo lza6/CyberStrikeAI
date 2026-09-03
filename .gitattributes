@@ -1,0 +1,11 @@
+# 强制 Go/前端源码 LF 行尾（gofmt gate 兼容 Windows autocrlf）
+*.go text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf

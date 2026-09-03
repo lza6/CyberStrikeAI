@@ -546,14 +546,22 @@ func parseAssetScanTime(value interface{}) (time.Time, bool) {
 	default:
 		raw = fmt.Sprint(typed)
 	}
+	// Go time.String() 文本（modernc 驱动 time.Time 的默认序列化）带 "m=+..." 单调时钟
+	// 后缀，且表达式列上驱动不做 time 解析，先剥掉后缀再按 MST 布局解析。
+	raw = strings.TrimSpace(raw)
+	if idx := strings.Index(raw, " m="); idx > 0 {
+		raw = strings.TrimSpace(raw[:idx])
+	}
 	for _, layout := range []string{
 		time.RFC3339Nano,
 		"2006-01-02 15:04:05.999999999-07:00",
 		"2006-01-02 15:04:05.999999999Z07:00",
 		"2006-01-02 15:04:05-07:00",
 		"2006-01-02 15:04:05",
+		// modernc 历史行/表达式列返回的 Go time.String() 文本布局
+		"2006-01-02 15:04:05.999999999 -0700 MST",
 	} {
-		if parsed, err := time.Parse(layout, strings.TrimSpace(raw)); err == nil {
+		if parsed, err := time.Parse(layout, raw); err == nil {
 			return parsed, true
 		}
 	}

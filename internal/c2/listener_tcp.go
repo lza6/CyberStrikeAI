@@ -29,11 +29,11 @@ type TCPReverseListener struct {
 	manager *Manager
 	logger  *zap.Logger
 
-	mu        sync.Mutex
-	listener  net.Listener
-	stopCh    chan struct{}
-	conns     map[string]*tcpReverseConn // session_id → 连接
-	stopOnce  sync.Once
+	mu       sync.Mutex
+	listener net.Listener
+	stopCh   chan struct{}
+	conns    map[string]*tcpReverseConn // session_id → 连接
+	stopOnce sync.Once
 }
 
 // tcpReverseConn 单个反弹会话的运行时状态

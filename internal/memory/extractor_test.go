@@ -12,8 +12,8 @@ import (
 // can be tested without any network or cost. It records the prompt it received
 // so tests can assert the additive-prompt shape.
 type stubLLM struct {
-	response []byte
-	err      error
+	response   []byte
+	err        error
 	lastPrompt string
 }
 

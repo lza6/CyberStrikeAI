@@ -123,3 +123,93 @@ func TestConcurrentPublish(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestPublishToolPendingE2E P2-3：tool-pending finding 真实广播，Type 与 Detail
+// 符合 reactions deriveSessionStatus 的 Type 判定契约。
+func TestPublishToolPendingE2E(t *testing.T) {
+	logger := zap.NewNop()
+	b := blackboard.NewMemoryBoard(logger)
+	SetBoard(b)
+	t.Cleanup(func() { SetBoard(nil) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := b.Subscribe(ctx, 0)
+
+	PublishToolPending("conv-9", "exec", "tc-1")
+
+	select {
+	case f := <-ch:
+		if f.Type != "tool-pending" {
+			t.Fatalf("Type = %q, want tool-pending", f.Type)
+		}
+		if f.Detail != "conversationId=conv-9 tool=exec toolCallId=tc-1" {
+			t.Fatalf("Detail = %q", f.Detail)
+		}
+		if f.Severity != "info" || f.Source != "executor" {
+			t.Fatalf("finding mismatch: %+v", f)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for tool-pending finding")
+	}
+}
+
+// TestPublishHitlPendingE2E P1-3：hitl-pending finding 真实广播——reactions
+// deriveSessionStatus 的 hitl_pending 状态依赖该 Type（此前生产代码无发布点）。
+func TestPublishHitlPendingE2E(t *testing.T) {
+	logger := zap.NewNop()
+	b := blackboard.NewMemoryBoard(logger)
+	SetBoard(b)
+	t.Cleanup(func() { SetBoard(nil) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := b.Subscribe(ctx, 0)
+
+	PublishHitlPending("conv-7", "execute", "hitl_abc123")
+
+	select {
+	case f := <-ch:
+		if f.Type != "hitl-pending" {
+			t.Fatalf("Type = %q, want hitl-pending", f.Type)
+		}
+		if f.Detail != "conversationId=conv-7 tool=execute interruptId=hitl_abc123" {
+			t.Fatalf("Detail = %q", f.Detail)
+		}
+		if f.Source != "hitl" || f.Severity != "warning" {
+			t.Fatalf("finding mismatch: %+v", f)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for hitl-pending finding")
+	}
+}
+
+// TestPublishRunCompleteE2E P1-3：run-complete finding 真实广播——reactions
+// deriveSessionStatus 的 done 状态依赖该 Type。
+func TestPublishRunCompleteE2E(t *testing.T) {
+	logger := zap.NewNop()
+	b := blackboard.NewMemoryBoard(logger)
+	SetBoard(b)
+	t.Cleanup(func() { SetBoard(nil) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := b.Subscribe(ctx, 0)
+
+	PublishRunComplete("conv-8")
+
+	select {
+	case f := <-ch:
+		if f.Type != "run-complete" {
+			t.Fatalf("Type = %q, want run-complete", f.Type)
+		}
+		if f.Detail != "conversationId=conv-8" {
+			t.Fatalf("Detail = %q", f.Detail)
+		}
+		if f.Source != "multiagent" || f.Severity != "info" {
+			t.Fatalf("finding mismatch: %+v", f)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for run-complete finding")
+	}
+}

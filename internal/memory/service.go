@@ -21,11 +21,11 @@ import (
 // -level orchestration can drive Extract / ScoreAndRank / ApplyTemporalAdjustment
 // directly — each is exported and unit-tested.
 type Service struct {
-	store        Store
-	llm          LLMClient
-	semantic     SemanticSearcher // optional; nil disables vector signal
-	entityIndex  EntitySearcher   // optional; nil disables entity signal
-	now          func() time.Time
+	store       Store
+	llm         LLMClient
+	semantic    SemanticSearcher // optional; nil disables vector signal
+	entityIndex EntitySearcher   // optional; nil disables entity signal
+	now         func() time.Time
 }
 
 // SemanticSearcher returns the semantic (vector cosine) similarity of each

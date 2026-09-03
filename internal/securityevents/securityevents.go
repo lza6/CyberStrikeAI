@@ -11,6 +11,7 @@ package securityevents
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"cyberstrike-ai/internal/blackboard"
 )
@@ -81,4 +82,94 @@ func PublishCapabilityArtifacts(toolName string, count int) {
 		Severity: "info",
 		Source:   "capability",
 	})
+}
+
+// PublishAgentStuck 广播 agent 卡死事件（reaction key: agent-stuck）。
+// K9：StuckDetector 四阈值（sameOutputRepeat/sameErrorRepeat/revisionLoop/monologue）
+// 任一命中时调用，经 blackboard → reactions 引擎触发 agent-stuck 规则（默认 notify urgent）。
+// reason 形如 "same-output-repeat:3" / "same-error-repeat:2" / "revision-loop:4" / "monologue:6"，
+// 供通知正文与 audit 追溯。
+func PublishAgentStuck(conversationID, reason string) {
+	f := blackboard.Finding{
+		Type:     "agent-stuck",
+		Title:    "Agent 卡死检测触发: " + reason,
+		Severity: "high",
+		Source:   "stuck_detector",
+	}
+	if conversationID != "" {
+		f.Detail = "conversationId=" + conversationID
+	}
+	publish(f)
+}
+
+// PublishHitlPending 广播 HITL 中断事件（reaction key: hitl-pending）。
+// P1-3：原 deriveSessionStatus 依赖 hitl-pending finding，但全仓生产代码
+// 从未发布该 Type（HITL 中断只走 SSE 到前端），reactions lifecycle 的
+// hitl_pending 状态永不派生（空转）。由 handler.waitHITLApproval 在
+// CreatePendingInterrupt 成功后调用，补齐事件源。board 未注入时 no-op。
+func PublishHitlPending(conversationID, toolName, interruptID string) {
+	f := blackboard.Finding{
+		Type:     "hitl-pending",
+		Title:    "HITL 中断待审批: " + toolName,
+		Severity: "warning",
+		Source:   "hitl",
+	}
+	parts := make([]string, 0, 3)
+	if conversationID != "" {
+		parts = append(parts, "conversationId="+conversationID)
+	}
+	if toolName != "" {
+		parts = append(parts, "tool="+toolName)
+	}
+	if interruptID != "" {
+		parts = append(parts, "interruptId="+interruptID)
+	}
+	if len(parts) > 0 {
+		f.Detail = strings.Join(parts, " ")
+	}
+	publish(f)
+}
+
+// PublishRunComplete 广播 run 正常完成事件（reaction key: run-complete）。
+// P1-3：deriveSessionStatus 的 done 状态依赖 run-complete finding，原全仓
+// 生产代码无发布点。由 multiagent 的 eino run loop 正常退出前调用。
+// run 异常/取消走 failed finding，不发本事件。board 未注入时 no-op。
+func PublishRunComplete(conversationID string) {
+	f := blackboard.Finding{
+		Type:     "run-complete",
+		Title:    "Agent run 正常完成",
+		Severity: "info",
+		Source:   "multiagent",
+	}
+	if conversationID != "" {
+		f.Detail = "conversationId=" + conversationID
+	}
+	publish(f)
+}
+
+// PublishToolPending 广播工具调用待执行事件（reaction key: tool-pending）。
+// P2-3：reactions lifecycle 状态机 deriveSessionStatus 需要真实 Type 的
+// pending tool_call 信号（原 Detail 含 "pending" 的启发式对 hitl-pending
+// 等 finding 永不命中）。由 executor 工具执行入口调用；board 未注入时 no-op。
+func PublishToolPending(conversationID, toolName, toolCallID string) {
+	f := blackboard.Finding{
+		Type:     "tool-pending",
+		Title:    "工具调用待执行: " + toolName,
+		Severity: "info",
+		Source:   "executor",
+	}
+	parts := make([]string, 0, 3)
+	if conversationID != "" {
+		parts = append(parts, "conversationId="+conversationID)
+	}
+	if toolName != "" {
+		parts = append(parts, "tool="+toolName)
+	}
+	if toolCallID != "" {
+		parts = append(parts, "toolCallId="+toolCallID)
+	}
+	if len(parts) > 0 {
+		f.Detail = strings.Join(parts, " ")
+	}
+	publish(f)
 }

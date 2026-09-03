@@ -10,8 +10,8 @@ import (
 	"cyberstrike-ai/internal/config"
 
 	"github.com/cloudwego/eino/components/embedding"
-	_ "modernc.org/sqlite"
 	"go.uber.org/zap"
+	_ "modernc.org/sqlite"
 )
 
 // 本文件为检索质量测试：用 in-memory SQLite + 伪造 embedding（固定向量，绕过真实 LLM）

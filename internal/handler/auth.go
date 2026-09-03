@@ -235,7 +235,7 @@ func (h *AuthHandler) Validate(c *gin.Context) {
 			"permissions":       permissionKeys(session.Permissions),
 			"permission_scopes": session.PermissionScopes,
 			"scope":             session.Scope,
-			"local_mode":         true,
+			"local_mode":        true,
 		})
 		return
 	}

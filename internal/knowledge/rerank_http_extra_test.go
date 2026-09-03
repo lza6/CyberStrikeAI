@@ -230,9 +230,9 @@ func TestNewHTTPReranker_Errors(t *testing.T) {
 
 func TestHTTPReranker_URLBuilders(t *testing.T) {
 	cases := []struct {
-		provider  string
-		baseURL   string
-		wantPath  string
+		provider string
+		baseURL  string
+		wantPath string
 	}{
 		{"cohere", "", "/v1/rerank"},
 		{"cohere", "https://x.com", "/v1/rerank"},

@@ -72,12 +72,12 @@ type cdcEvent struct {
 	payload   string
 }
 
-func (e *cdcEvent) ID() int64             { return e.id }
-func (e *cdcEvent) Timestamp() time.Time { return e.ts }
+func (e *cdcEvent) ID() int64                       { return e.id }
+func (e *cdcEvent) Timestamp() time.Time            { return e.ts }
 func (e *cdcEvent) Source() eventstream.EventSource { return e.src }
-func (e *cdcEvent) Cause() int64          { return e.cause }
-func (e *cdcEvent) EventType() string     { return e.etype }
-func (e *cdcEvent) SessionID() string     { return e.sessionID }
+func (e *cdcEvent) Cause() int64                    { return e.cause }
+func (e *cdcEvent) EventType() string               { return e.etype }
+func (e *cdcEvent) SessionID() string               { return e.sessionID }
 
 var _ eventstream.Event = (*cdcEvent)(nil)
 
@@ -114,7 +114,9 @@ func TestE2E_WorkerIsolationToDaemonToCDC(t *testing.T) {
 	}
 	defer func() {
 		_ = os.WriteFile(filepath.Join(info2.Path, ".e2e-cleanup"), []byte("x"), 0o644)
-		_ = gitWS.(interface{ ForceDestroy(context.Context, pluginslot.WorkspaceInfo) error }).ForceDestroy(context.Background(), info2)
+		_ = gitWS.(interface {
+			ForceDestroy(context.Context, pluginslot.WorkspaceInfo) error
+		}).ForceDestroy(context.Background(), info2)
 	}()
 	if info2.Isolation != pluginslot.IsolationGitWorktree || info2.Branch != "ao/worker-2" {
 		t.Fatalf("worker-2 info = %+v", info2)
@@ -275,7 +277,9 @@ func TestE2E_WorkerIsolationToDaemonToCDC(t *testing.T) {
 	cdcMu.Unlock()
 
 	// === 收尾：worker-2 ForceDestroy 清理 worktree（注册表同步清）===
-	_ = gitWS.(interface{ ForceDestroy(context.Context, pluginslot.WorkspaceInfo) error }).ForceDestroy(context.Background(), info2)
+	_ = gitWS.(interface {
+		ForceDestroy(context.Context, pluginslot.WorkspaceInfo) error
+	}).ForceDestroy(context.Background(), info2)
 	// 验证 worktree 已从 git 注册表移除。
 	list, _ := exec.Command("git", "-C", repo, "worktree", "list", "--porcelain").Output()
 	if strings.Contains(strings.ReplaceAll(string(list), "\\", "/"), filepath.ToSlash(info2.Path)) {

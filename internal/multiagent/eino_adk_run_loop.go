@@ -16,6 +16,7 @@ import (
 	"cyberstrike-ai/internal/einoobserve"
 	"cyberstrike-ai/internal/mcp"
 	"cyberstrike-ai/internal/security"
+	"cyberstrike-ai/internal/securityevents"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
@@ -108,12 +109,12 @@ func isEinoIterationLimitError(err error) bool {
 
 // einoADKRunLoopArgs 将 Eino adk.Runner 事件循环从 RunDeepAgent / RunEinoSingleChatModelAgent 中抽出复用。
 type einoADKRunLoopArgs struct {
-	OrchMode             string
-	OrchestratorName     string
-	ConversationID       string
+	OrchMode         string
+	OrchestratorName string
+	ConversationID   string
 	// ProjectID J4：会话绑定的项目 ID。run loop 入口注入 ctx，让 Eino 内置工具
 	// （execute 经 einoStreamingShellWrap.scopeGuard）能读到 projectID 做 project scope 硬拦。
-	ProjectID string
+	ProjectID            string
 	Progress             func(eventType, message string, data interface{})
 	Logger               *zap.Logger
 	SnapshotMCPIDs       func() []string
@@ -160,6 +161,14 @@ type einoADKRunLoopArgs struct {
 	// TurnToolCallLimiter J7：单轮工具调用限流器。非 nil 且启用时，
 	// run loop 在每轮新消息入口调 Reset 清零计数，与 ToolsNode 中间件配合。
 	TurnToolCallLimiter *TurnToolCallLimiter
+
+	// StuckDetector K9：agent 卡死检测器（二级防线）。非 nil 时，
+	// run loop 在每轮助手消息物质化后调 ObserveMaterialized，在工具结果错误时
+	// 调 ObserveToolError。触发任一阈值（sameOutputRepeat/sameErrorRepeat/
+	// revisionLoop/monologue）时经 securityevents 发布到 blackboard → reactions。
+	// 与 TurnToolCallLimiter 形成二级防线：TurnLimiter 防单轮退化排队，
+	// StuckDetector 防跨轮退化循环。nil = 未启用（no-op，向后兼容）。
+	StuckDetector *StuckDetector
 }
 
 func runEinoADKAgentLoop(ctx context.Context, args *einoADKRunLoopArgs, baseMsgs []adk.Message) (*RunResult, error) {
@@ -271,6 +280,7 @@ func runEinoADKAgentLoop(ctx context.Context, args *einoADKRunLoopArgs, baseMsgs
 		FilesystemMonitorAgent:  args.FilesystemMonitorAgent,
 		FilesystemMonitorRecord: args.FilesystemMonitorRecord,
 		MCPExecutionBinder:      args.MCPExecutionBinder,
+		StuckDetector:           newEinoStuckDetectorAdapter(args.StuckDetector, conversationID),
 	})
 	session := newEinoRunRuntimeSession(einoRunRuntimeSessionConfig{
 		Context:        ctx,
@@ -347,8 +357,28 @@ func runEinoADKAgentLoop(ctx context.Context, args *einoADKRunLoopArgs, baseMsgs
 			continue
 		}
 		drain.HandleMaterialized(mv, msg, ev.AgentName)
+		// K9：StuckDetector 挂在轮次边界——物质化助手消息后观测（revisionLoop/monologue/sameOutputRepeat）。
+		// 触发任一阈值时经 securityevents 发布到 blackboard → reactions（agent-stuck 规则）。
+		// detector 为 nil 时 no-op（向后兼容）。
+		// P2-2：流式轮次已由 assistantStreamHandler.ObserveStreamComplete 观测（当轮生效），
+		// 此处跳过避免同一次输出双计（物质化消息与流式完成成对出现）；
+		// 非流式轮次仍走 ObserveMaterialized。stuckStreamObserved 由 drain 在
+		// HandleAssistantStream 返回后置位（含流错误路径，避免错误重试轮双计）。
+		if args.StuckDetector != nil && !drain.StuckStreamObserved() {
+			adapter := newEinoStuckDetectorAdapter(args.StuckDetector, conversationID)
+			if adapter != nil {
+				if ev := adapter.ObserveMaterialized(msg); ev != nil {
+					PublishStuckEvent(ev)
+				}
+			}
+		}
 		session.ConfirmRecovery()
 	}
+
+	// P1-3：run 正常结束发布 run-complete finding（reactions lifecycle 的 done
+	// 状态依赖该 Type，此前生产代码无发布点 → 永不派生）。异常/取消路径在上方
+	// return 中提前退出，不会走到这里。board 未注入时 PublishRunComplete 为 no-op。
+	securityevents.PublishRunComplete(conversationID)
 
 	return session.BuildFinalResult(), nil
 }

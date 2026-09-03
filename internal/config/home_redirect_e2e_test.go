@@ -11,7 +11,7 @@ import (
 // 仍指 data"的孤儿数据回归。
 //
 // 本测试验证 Load 层语义：YAML 未配 home_dir 时 HomeDir 必然回退非空
-//（app.go 据此触发迁移 + 重定向 dbPath）。若 HomeDir 为空则 app.go 不会迁移，
+// （app.go 据此触发迁移 + 重定向 dbPath）。若 HomeDir 为空则 app.go 不会迁移，
 // data/ 保持原位——两种情况都与"迁移落点 = 读回点"一致。
 func TestE2EHomeRedirectConsistentWithMigration(t *testing.T) {
 	dir := t.TempDir()

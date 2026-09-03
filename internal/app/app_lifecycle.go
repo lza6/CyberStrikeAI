@@ -204,6 +204,14 @@ func (a *App) Shutdown() {
 		}
 	}
 
+	// K0b：关闭 blackboard SQLite 连接（MemoryBoard 无 Close，type assertion 跳过）。
+	// 在 reactions 引擎停止之后关闭，保证订阅 goroutine 先退出，避免向已关闭 channel 写入。
+	if sb, ok := a.blackboard.(interface{ Close() error }); ok {
+		if err := sb.Close(); err != nil {
+			a.logger.Logger.Warn("关闭 blackboard SQLite 连接失败", zap.Error(err))
+		}
+	}
+
 	// K2：停止 reactions 引擎（取消 blackboard 订阅 goroutine）。
 	if a.reactionsEngine != nil {
 		a.reactionsEngine.Stop()

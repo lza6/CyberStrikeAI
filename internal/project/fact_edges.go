@@ -12,10 +12,10 @@ import (
 var PathGraphCategories = map[string]struct{}{
 	FactCategoryTarget:  {},
 	FactCategoryFinding: {},
-	FactCategoryChain:            {},
-	FactCategoryExploit:          {},
-	FactCategoryPOC:              {},
-	"vuln":                       {},
+	FactCategoryChain:   {},
+	FactCategoryExploit: {},
+	FactCategoryPOC:     {},
+	"vuln":              {},
 }
 
 // GraphNodeType 将 fact category 映射为图节点类型（供前端样式与 ELK 分层）。
