@@ -518,7 +518,7 @@ async function applyWebshellAiProjectSelection(projectId) {
                 );
             }
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             alert(wsProjectT('projects.updateProjectBindingFailed', '更新项目绑定失败') + ': ' + (e.message || e));
             wsUpdateProjectButtonLabel();
             return;
@@ -627,7 +627,7 @@ function getWebshellConnections() {
         .then(function (r) { return r.json(); })
         .then(function (list) { return Array.isArray(list) ? list : []; })
         .catch(function (e) {
-            console.warn('读取 WebShell 连接列表失败', e);
+            logger.warn('读取 WebShell 连接列表失败', e);
             return [];
         });
 }
@@ -817,7 +817,7 @@ function populateWebshellProjectSelect(selectedId) {
         sel.value = selected;
         syncWebshellFormSelect(sel);
     }).catch(function (e) {
-        console.warn('加载 WebShell 项目选项失败', e);
+        logger.warn('加载 WebShell 项目选项失败', e);
     });
 }
 
@@ -2370,13 +2370,13 @@ function fetchAndRenderWebshellAiConvList(conn, listEl) {
                                 } catch (err) { /* ignore */ }
                             }
                         })
-                        .catch(function (e) { console.warn('删除对话失败', e); });
+                        .catch(function (e) { logger.warn('删除对话失败', e); });
                 });
                 row.appendChild(delBtn);
                 listEl.appendChild(row);
             });
         })
-        .catch(function (e) { console.warn('加载对话列表失败', e); });
+        .catch(function (e) { logger.warn('加载对话列表失败', e); });
 }
 
 function webshellAiConvListSelect(conn, convId, messagesContainer, listEl) {
@@ -2429,7 +2429,7 @@ function webshellAiConvListSelect(conn, convId, messagesContainer, listEl) {
             }
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         })
-        .catch(function (e) { console.warn('加载对话失败', e); });
+        .catch(function (e) { logger.warn('加载对话失败', e); });
 }
 
 // 选择连接：渲染终端 + 文件管理 Tab，并初始化终端
@@ -3366,7 +3366,7 @@ function loadWebshellAiHistory(conn, messagesContainer) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         })
         .catch(function (e) {
-            console.warn('加载 WebShell AI 历史失败', conn.id, e);
+            logger.warn('加载 WebShell AI 历史失败', conn.id, e);
         });
 }
 
@@ -3972,10 +3972,24 @@ function runQuickCommand(cmd) {
 // ---------- 虚拟终端（xterm + 按行执行） ----------
 function initWebshellTerminal(conn) {
     const container = document.getElementById('webshell-terminal-container');
-    if (!container || typeof Terminal === 'undefined') {
-        if (container) {
-            container.innerHTML = '<p class="terminal-error">' + escapeHtml('未加载 xterm.js，请刷新页面') + '</p>';
-        }
+    if (!container) {
+        return;
+    }
+
+    // F6：xterm+addon-fit 懒加载——webshell 终端依赖 Terminal/FitAddon 全局
+    if (typeof Terminal === 'undefined' && typeof loadScript === 'function') {
+        Promise.all([
+            loadScript('/static/vendor/xterm.js'),
+            loadScript('/static/vendor/xterm-addon-fit.js')
+        ]).then(function () {
+            initWebshellTerminal(conn);
+        }).catch(function () {
+            container.innerHTML = '<p class="terminal-error">' + escapeHtml('xterm 加载失败') + '</p>';
+        });
+        return;
+    }
+    if (typeof Terminal === 'undefined') {
+        container.innerHTML = '<p class="terminal-error">' + escapeHtml('未加载 xterm.js，请刷新页面') + '</p>';
         return;
     }
 
@@ -4950,7 +4964,7 @@ function deleteWebshell(id) {
             }
         })
         .catch(function (e) {
-            console.warn('删除 WebShell 连接失败', e);
+            logger.warn('删除 WebShell 连接失败', e);
             refreshWebshellConnectionsFromServer();
         });
 }
@@ -5325,7 +5339,7 @@ function saveWebshellConnection() {
             }
         })
         .catch(function (e) {
-            console.warn('保存 WebShell 连接失败', e);
+            logger.warn('保存 WebShell 连接失败', e);
             alert(e && e.message ? e.message : '保存失败');
         });
 }

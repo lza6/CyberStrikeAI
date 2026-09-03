@@ -427,6 +427,41 @@ func (idx *Indexer) GetLastError() (string, time.Time) {
 	return idx.lastError, idx.lastErrorTime
 }
 
+// SplitTextForGraph 用与知识库索引一致的 Eino 分块配置切分任意文本，
+// 供图索引器复用分块逻辑（不写入索引，仅返回 chunk 文本列表）。
+// 失败时返回错误，调用方可回退到 rune 切分。
+func (idx *Indexer) SplitTextForGraph(ctx context.Context, text string) ([]string, error) {
+	if idx == nil {
+		return nil, fmt.Errorf("indexer is nil")
+	}
+	body := strings.TrimSpace(text)
+	if body == "" {
+		return nil, nil
+	}
+	embedModel := ""
+	if idx.embedder != nil {
+		embedModel = idx.embedder.EmbeddingModelName()
+	}
+	splitter, err := newKnowledgeSplitter(idx.chunkSize, idx.overlap, embedModel)
+	if err != nil {
+		return nil, fmt.Errorf("eino splitter: %w", err)
+	}
+	docs, err := splitter.Transform(ctx, []*schema.Document{{Content: body}})
+	if err != nil {
+		return nil, fmt.Errorf("split transform: %w", err)
+	}
+	out := make([]string, 0, len(docs))
+	for _, d := range docs {
+		if d == nil {
+			continue
+		}
+		if s := strings.TrimSpace(d.Content); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
 // GetRebuildStatus 获取重建索引状态
 func (idx *Indexer) GetRebuildStatus() (isRebuilding bool, totalItems int, current int, failed int, lastItemID string, lastChunks int, startTime time.Time) {
 	idx.rebuildMu.RLock()

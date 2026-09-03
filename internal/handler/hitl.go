@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"cyberstrike-ai/internal/capability"
 	"cyberstrike-ai/internal/database"
 	"cyberstrike-ai/internal/multiagent"
 
@@ -954,6 +955,22 @@ func (h *AgentHandler) interceptHITLForEinoTool(runCtx context.Context, cancelRu
 		_ = json.Unmarshal([]byte(arguments), &argsObj)
 		if argsObj != nil {
 			payload["argumentsObj"] = argsObj
+		}
+	}
+	// 缺口1 HITL 盲批：对注册了 capability provider 的破坏性工具，先调 provider.Plan
+	// 把"将执行什么/动作/目标"塞进 payload["capabilityPlan"]，供前端审批面板展示。
+	// Plan 失败不阻塞 HITL（仅不附加该字段），保持 HITL 主流程可用性。
+	if provider := capability.GetProvider(toolName); provider != nil && provider.Supports(toolName) {
+		if plan, perr := provider.Plan(argsObj); perr == nil {
+			payload["capabilityPlan"] = map[string]interface{}{
+				"description": plan.Description,
+				"action":      plan.Action,
+				"target":      plan.Target,
+			}
+		} else {
+			h.logger.Warn("HITL capability Plan 失败（不阻塞审批）",
+				zap.String("toolName", toolName),
+				zap.Error(perr))
 		}
 	}
 	d, err := h.waitHITLApproval(runCtx, cancelRun, conversationID, assistantMessageID, toolName, "", payload, sendEventFunc)

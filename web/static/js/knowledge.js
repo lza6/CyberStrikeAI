@@ -90,7 +90,7 @@ async function loadKnowledgeCategories() {
         
         return knowledgeCategories;
     } catch (error) {
-        console.error('加载分类失败:', error);
+        logger.error('加载分类失败:', error);
         // 只在非功能未启用的情况下显示错误
         if (!error.message.includes('知识库功能未启用')) {
             showNotification('加载分类失败: ' + error.message, 'error');
@@ -159,7 +159,7 @@ async function loadKnowledgeItems(category = '', page = 1, pageSize = 10) {
         }
         return categoriesWithItems;
     } catch (error) {
-        console.error('加载知识项失败:', error);
+        logger.error('加载知识项失败:', error);
         // 只在非功能未启用的情况下显示错误
         if (!error.message.includes('知识库功能未启用')) {
             showNotification('加载知识项失败: ' + error.message, 'error');
@@ -614,7 +614,7 @@ async function updateIndexProgress() {
         }
     } catch (error) {
         // 显示错误信息
-        console.error('获取索引状态失败:', error);
+        logger.error('获取索引状态失败:', error);
         const progressContainer = document.getElementById('knowledge-index-progress');
         if (progressContainer) {
             progressContainer.style.display = 'block';
@@ -807,7 +807,7 @@ async function searchKnowledgeItems() {
         }
         
     } catch (error) {
-        console.error('搜索知识项失败:', error);
+        logger.error('搜索知识项失败:', error);
         showNotification('搜索失败: ' + error.message, 'error');
     }
 }
@@ -852,7 +852,7 @@ async function refreshKnowledgeBase() {
             updateIndexProgress();
         }
     } catch (error) {
-        console.error('刷新知识库失败:', error);
+        logger.error('刷新知识库失败:', error);
         showNotification('刷新知识库失败: ' + error.message, 'error');
     }
 }
@@ -926,7 +926,7 @@ async function buildKnowledgeIndex() {
     try {
         await startKnowledgeIndexJob('missing');
     } catch (error) {
-        console.error('构建索引失败:', error);
+        logger.error('构建索引失败:', error);
         showNotification('构建索引失败: ' + error.message, 'error');
     }
 }
@@ -936,7 +936,7 @@ async function rebuildKnowledgeIndexFull() {
     try {
         await startKnowledgeIndexJob('full');
     } catch (error) {
-        console.error('全量重建索引失败:', error);
+        logger.error('全量重建索引失败:', error);
         showNotification('全量重建索引失败: ' + error.message, 'error');
     }
 }
@@ -945,7 +945,8 @@ async function rebuildKnowledgeIndexFull() {
 function showAddKnowledgeItemModal() {
     if (typeof requirePermission === 'function' && !requirePermission('knowledge:write')) return;
     currentEditingItemId = null;
-    document.getElementById('knowledge-item-modal-title').textContent = '添加知识';
+    // F6：i18n 硬编码 → t()
+    document.getElementById('knowledge-item-modal-title').textContent = (typeof window.t === 'function') ? window.t('knowledge.addTitle') : '添加知识';
     document.getElementById('knowledge-item-category').value = '';
     document.getElementById('knowledge-item-title').value = '';
     document.getElementById('knowledge-item-content').value = '';
@@ -956,7 +957,8 @@ function showAddKnowledgeItemModal() {
 async function editKnowledgeItem(id) {
     try {
         currentEditingItemId = id;
-        document.getElementById('knowledge-item-modal-title').textContent = '编辑知识';
+        // F6：i18n 硬编码 → t()
+        document.getElementById('knowledge-item-modal-title').textContent = (typeof window.t === 'function') ? window.t('knowledge.editTitle') : '编辑知识';
         document.getElementById('knowledge-item-category').value = '';
         document.getElementById('knowledge-item-title').value = '';
         document.getElementById('knowledge-item-content').value = '';
@@ -975,7 +977,7 @@ async function editKnowledgeItem(id) {
     } catch (error) {
         closeAppModal('knowledge-item-modal');
         currentEditingItemId = null;
-        console.error('编辑知识项失败:', error);
+        logger.error('编辑知识项失败:', error);
         showNotification('编辑知识项失败: ' + error.message, 'error');
     }
 }
@@ -1024,9 +1026,10 @@ async function saveKnowledgeItem() {
         saveButton.disabled = true;
         saveButton.style.opacity = '0.6';
         saveButton.style.cursor = 'not-allowed';
-        saveButton.textContent = '保存中...';
+        // F6：i18n 硬编码 → t()
+        saveButton.textContent = (typeof window.t === 'function') ? window.t('knowledge.saving') : '保存中...';
     }
-    
+
     try {
         const url = currentEditingItemId 
             ? `/api/knowledge/items/${currentEditingItemId}`
@@ -1077,9 +1080,7 @@ async function saveKnowledgeItem() {
         
         try {
             // 先刷新分类，再刷新知识项
-            console.log('开始刷新知识库数据...');
             await loadKnowledgeCategories();
-            console.log('分类刷新完成，开始刷新知识项...');
             
             // 如果新添加的知识项不在当前筛选的分类中，切换到该分类显示
             let categoryToShow = selectedCategory;
@@ -1104,9 +1105,8 @@ async function saveKnowledgeItem() {
             
             // 刷新知识项列表（重置到第一页）
             await loadKnowledgeItems(categoryToShow, 1, knowledgePagination.pageSize);
-            console.log('知识项刷新完成');
         } catch (err) {
-            console.error('刷新数据失败:', err);
+            logger.error('刷新数据失败:', err);
             // 如果刷新失败，恢复原内容
             if (itemsListContainer && originalContent) {
                 itemsListContainer.innerHTML = originalContent;
@@ -1115,7 +1115,7 @@ async function saveKnowledgeItem() {
         }
         
     } catch (error) {
-        console.error('保存知识项失败:', error);
+        logger.error('保存知识项失败:', error);
         showNotification('❌ 保存知识项失败: ' + error.message, 'error');
         
         // 如果通知系统不可用，使用alert
@@ -1142,7 +1142,8 @@ async function saveKnowledgeItem() {
 
 // 删除知识项
 async function deleteKnowledgeItem(id) {
-    if (!confirm('确定要删除这个知识项吗？')) {
+    const confirmMsg = (typeof window.t === 'function') ? window.t('knowledge.deleteConfirm') : '确定要删除这个知识项吗？';
+    if (!confirm(confirmMsg)) {
         return;
     }
     
@@ -1218,14 +1219,14 @@ async function deleteKnowledgeItem(id) {
         }
         
         // 显示成功通知
-        showNotification('✅ 删除成功！知识项已从系统中移除。', 'success');
+        showNotification((typeof window.t === 'function') ? window.t('knowledge.deleteSuccess') : '✅ 删除成功！知识项已从系统中移除。', 'success');
         
         // 重新加载数据以确保数据同步（保持当前页码）
         await loadKnowledgeCategories();
         await loadKnowledgeItems(knowledgePagination.currentCategory, knowledgePagination.currentPage, knowledgePagination.pageSize);
         
     } catch (error) {
-        console.error('删除知识项失败:', error);
+        logger.error('删除知识项失败:', error);
         
         // 如果删除失败，恢复该项显示
         if (itemCard && originalDisplay !== 'none') {
@@ -1252,7 +1253,7 @@ async function deleteKnowledgeItem(id) {
             }
         }
         
-        showNotification('❌ 删除知识项失败: ' + error.message, 'error');
+        showNotification(((typeof window.t === 'function') ? window.t('knowledge.deleteFailed') : '删除知识项失败') + ': ' + error.message, 'error');
     }
 }
 
@@ -1313,7 +1314,8 @@ function closeKnowledgeItemModal() {
         saveButton.disabled = false;
         saveButton.style.opacity = '';
         saveButton.style.cursor = '';
-        saveButton.textContent = '保存';
+        // F6：i18n 硬编码 → t()
+        saveButton.textContent = (typeof window.t === 'function') ? window.t('knowledge.save') : '保存';
     }
     if (cancelButton) {
         cancelButton.disabled = false;
@@ -1338,7 +1340,7 @@ async function loadRetrievalLogs(conversationId = '', messageId = '') {
         const data = await response.json();
         renderRetrievalLogs(data.logs || []);
     } catch (error) {
-        console.error('加载检索日志失败:', error);
+        logger.error('加载检索日志失败:', error);
         // 即使加载失败，也显示空状态而不是一直显示"加载中..."
         renderRetrievalLogs([]);
         // 只在非空筛选条件下才显示错误通知（避免在没有数据时显示错误）
@@ -1691,7 +1693,7 @@ async function deleteRetrievalLog(id, index) {
         await loadRetrievalLogs(conversationId, messageId);
         
     } catch (error) {
-        console.error('删除检索日志失败:', error);
+        logger.error('删除检索日志失败:', error);
         
         // 如果删除失败，恢复该项显示
         if (logCard) {
@@ -1791,7 +1793,7 @@ async function showRetrievalLogDetails(index) {
                         }
                         return null;
                     } catch (err) {
-                        console.error(`获取知识项 ${itemId} 失败:`, err);
+                        logger.error(`获取知识项 ${itemId} 失败:`, err);
                         return null;
                     }
                 });
@@ -1799,7 +1801,7 @@ async function showRetrievalLogDetails(index) {
                 const items = await Promise.all(itemPromises);
                 retrievedItemsDetails = items.filter(item => item !== null);
             } catch (err) {
-                console.error('批量获取知识项详情失败:', err);
+                logger.error('批量获取知识项详情失败:', err);
             }
         }
     }
@@ -2066,7 +2068,7 @@ function formatTime(timeStr) {
         if (typeof timeStr === 'string' && (timeStr.includes('0001-01-01') || timeStr.startsWith('0001'))) {
             return '';
         }
-        console.warn('无法解析时间:', timeStr);
+        logger.warn('无法解析时间:', timeStr);
         return '';
     }
     
@@ -2077,7 +2079,7 @@ function formatTime(timeStr) {
         if (year === 1) {
             return '';
         }
-        console.warn('时间值不合理:', timeStr, '解析为:', date);
+        logger.warn('时间值不合理:', timeStr, '解析为:', date);
         return '';
     }
     

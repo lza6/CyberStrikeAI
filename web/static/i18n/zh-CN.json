@@ -28,7 +28,8 @@
     "justNow": "刚刚",
     "minutesAgo": "{{n}} 分钟前",
     "hoursAgo": "{{n}} 小时前",
-    "daysAgo": "{{n}} 天前"
+    "daysAgo": "{{n}} 天前",
+    "deleting": "删除中…"
   },
   "header": {
     "title": "CyberStrikeAI",
@@ -808,7 +809,8 @@
     "hitlTimeoutUnlimited": "不限制",
     "hitlTimeoutHint": "到期未处理将自动拒绝；审批卡片会显示倒计时。",
     "hitlStatusOff": "人机协同：关闭",
-    "rolePanelTitle": "选择角色"
+    "rolePanelTitle": "选择角色",
+    "attackChainLoadFailed": "攻击链组件加载失败"
   },
   "hitl": {
     "pageTitle": "人机协同审批",
@@ -953,7 +955,10 @@
     "approve": "通过",
     "loadFailed": "加载失败",
     "invalidJson": "JSON 参数格式错误",
-    "submitFailedPrefix": "提交失败："
+    "submitFailedPrefix": "提交失败：",
+    "approved": "已通过",
+    "rejected": "已驳回",
+    "submitting": "提交中…"
   },
   "progress": {
     "callingAI": "正在调用AI模型...",
@@ -1097,7 +1102,9 @@
     "updateTaskFailed": "更新任务失败",
     "durationSeconds": "秒",
     "durationMinutes": "分",
-    "durationHours": "小时"
+    "durationHours": "小时",
+    "deleteTaskSuccess": "任务已删除",
+    "deleteQueueSuccess": "队列已删除"
   },
   "infoCollect": {
     "enterFofaQuery": "请输入 FOFA 查询语法",
@@ -1562,7 +1569,8 @@
     "colPerms": "权限",
     "colOwner": "所有者",
     "colGroup": "用户组",
-    "colType": "类型"
+    "colType": "类型",
+    "dirTree": "目录列表"
   },
   "mcp": {
     "monitorTitle": "MCP 状态监控",
@@ -1857,7 +1865,14 @@
     "deleteItemConfirm": "确定要删除这个知识项吗？",
     "notEnabledTitle": "知识库功能未启用",
     "notEnabledHint": "请前往系统设置启用知识检索功能",
-    "goToSettings": "前往设置"
+    "goToSettings": "前往设置",
+    "addTitle": "添加知识",
+    "editTitle": "编辑知识",
+    "saving": "保存中…",
+    "save": "保存",
+    "deleteConfirm": "确定要删除这个知识项吗？",
+    "deleteSuccess": "删除成功！知识项已从系统中移除。",
+    "deleteFailed": "删除知识项失败"
   },
   "roles": {
     "title": "角色管理",
@@ -2341,7 +2356,11 @@
     "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
     "durationMinutesOnly": "{{minutes}} 分",
     "durationHours": "{{hours}} 小时 {{minutes}} 分",
-    "durationHoursOnly": "{{hours}} 小时"
+    "durationHoursOnly": "{{hours}} 小时",
+    "jsonParseError": "JSON 参数格式错误",
+    "submitFailedRetry": "提交失败，请重试",
+    "approvalFnNotLoaded": "审批函数未加载",
+    "submitFailedPrefix": "提交失败"
   },
   "knowledgePage": {
     "totalContent": "总内容",

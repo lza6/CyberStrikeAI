@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J4/J5 安全闸终局闭环 · 变更报告与测验</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 28px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+  h2 { font-size: 21px; margin-top: 44px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 17px; margin-top: 26px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--surface); color: var(--accent); }
+  code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 13px; font-family: Consolas, monospace; }
+  .pill { display: inline-block; border-radius: 12px; padding: 1px 10px; font-size: 12px; font-weight: 600; }
+  .pill.ok { background: rgba(63,185,80,.15); color: var(--ok); }
+  .pill.warn { background: rgba(210,153,34,.15); color: var(--warn); }
+  .pill.bad { background: rgba(248,81,73,.15); color: var(--bad); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+  .quiz { border-left: 3px solid var(--accent); padding-left: 16px; margin: 18px 0; }
+  .quiz .opts label { display: block; margin: 6px 0; cursor: pointer; }
+  .quiz button { margin-top: 10px; background: var(--accent); border: none; color: #0d1117; font-weight: 700; padding: 6px 16px; border-radius: 6px; cursor: pointer; }
+  .feedback { margin-top: 8px; font-weight: 600; }
+  .feedback.right { color: var(--ok); }
+  .feedback.wrong { color: var(--bad); }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 22px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>J4/J5 安全闸终局闭环 · 变更报告</h1>
+<p class="meta">CyberStrikeAI · 2026-09-02/03 · 状态：Critic 两轮审查闭环（R1 REQUEST CHANGES → P0 修复 → R2 APPROVE） · 全量 build/vet/test PASS</p>
+
+<div class="toc">
+<b>目录</b>：
+<a href="#ctx">1 上下文与直觉</a> ·
+<a href="#bugs">2 伪闭环与修复</a> ·
+<a href="#arch">3 架构直觉</a> ·
+<a href="#verify">4 验证证据</a> ·
+<a href="#docs">5 文档同步</a> ·
+<a href="#risk">6 剩余风险</a> ·
+<a href="#quiz">7 变更测验（必须通过）</a>
+</div>
+
+<h2 id="ctx">1. 上下文与直觉：为什么有 J4/J5</h2>
+<p>CyberStrikeAI 是 AI 渗透测试平台：LLM 代理自主调用 100+ 安全工具（nmap、sqlmap、exec…）。这里的根本张力是——<b>模型越自主，越需要确定性（非 LLM）的护栏</b>。LLM 可能被注入、可能误解授权范围、可能把目标写到授权之外。所以项目在 LLM 推理<b>之前</b>叠了一层纯函数安全闸（ADR-0006）。</p>
+<p>本轮的两个任务：</p>
+<ul>
+<li><b>J4 · project scope 授权硬闸</b>：项目（project）上配置的 <code>scope_json</code>（如 <code>{"targets":["192.168.1.0/24"]}</code>）原本只是拼进系统提示词的"软约定"——LLM 看得见但可以违反。本轮把它变成<b>执行前强制校验</b>：越界目标直接拒绝执行。</li>
+<li><b>J5 · Capability Provider 生命周期</b>：破坏性操作（修改/创建文件）走 <code>plan → validate → execute → rollback → collect_artifacts</code> 完整生命周期，执行前自动备份、失败自动回滚。</li>
+</ul>
+
+<h2 id="bugs">2. 伪闭环与修复：初版哪里是"看起来完成"</h2>
+<p>初版交付后，三个并行审计子代理从"假设实现是坏的"出发反向攻击，发现 5 个真问题。这就是"最狠的自我反驳"的价值——初版的测试全绿，但测试恰好绕开了真实断点。</p>
+<table>
+<tr><th>#</th><th>伪闭环</th><th>症状（若上生产）</th><th>修复</th></tr>
+<tr><td><span class="pill bad">P0</span>1</td><td><code>tools/modify-file.yaml</code> 不存在 → executor 的 capability 分支<b>永不可达</b></td><td>生命周期代码全是死代码，破坏性工具无任何回滚</td><td>新建 yaml（<code>internal:capability</code> 路由）</td></tr>
+<tr><td><span class="pill bad">P0</span>2</td><td>Validate 要求"文件已存在" → <b>新文件写入 100% 被误拦</b></td><td>AI 用 write_file 创建报告文件必然失败</td><td>Validate 不存在→视为 create（校验父目录）；Execute 补 MkdirAll</td></tr>
+<tr><td><span class="pill bad">P0</span>3</td><td>Execute 不回写备份路径 → Rollback 拿到空路径，<b>回滚形同虚设</b></td><td>执行失败后文件已损坏且无法恢复</td><td>Execute 写 <code>args["_backup_path"]</code>，调用方回填 plan</td></tr>
+<tr><td><span class="pill bad">P0</span>4</td><td>Eino Runner 的 ctx 从不注入 projectID → execute 命令的 scope 校验<b>恒放行</b></td><td>AI 可以用 execute 扫描授权外任意目标</td><td>runEinoADKAgentLoop 入口 <code>WithMCPProjectID</code> + runner 传 ProjectID</td></tr>
+<tr><td><span class="pill warn">P1</span>5</td><td>scope_json 配错结构（如 targets 是字符串）→ <b>静默退化为无限制</b></td><td>用户以为有边界，实际没有（fail-open）</td><td>后端 <code>validateScopeJSON</code> 400 拒绝 + 前端结构校验（fail-closed）</td></tr>
+<tr><td><span class="pill bad">P0</span>6<br><span class="meta">R1 审查发现</span></td><td>edit_file 被映射到 modify-file provider——但 edit_file 参数是 file_path/old_string/new_string（<b>无 content 键</b>），经 provider 后 content 缺省为空串 → <b>整个文件被清空且假成功</b></td><td>AI 用 edit_file 改一行配置 → 整个配置文件变空，原内容仅存于不可见的 .bak</td><td>edit_file 移出 provider 映射，走原生 Edit 语义；补 2 个回归测试（eino 真实参数形态）</td></tr>
+</table>
+
+<h2 id="arch">3. 架构直觉：两条执行链路</h2>
+<p>理解本设计的关键是：工具执行有<b>两条平行链路</b>，任何安全闸必须两条都覆盖。</p>
+<div class="card">
+<b>链路 A · MCP 工具</b>（nmap、sqlmap 等 yaml 工具）<br>
+<code>handler → ExecuteMCPToolForConversation（注入 projectID）→ executor.ExecuteTool</code>（yaml scope + project scope 硬闸在此）<br><br>
+<b>链路 B · Eino 内置工具</b>（execute、write_file、edit_file——由 Eino ADK filesystem 中间件直接挂载，不经 executor）<br>
+<code>runner（传 ProjectID）→ runEinoADKAgentLoop（注入 ctx）→ scopeGuard.CheckExecute / capGuard.CheckFilesystemTool</code>
+</div>
+<p>初版的 J4 只覆盖了链路 A。链路 B 的 guard 虽然被构造了，但它从 ctx 读 projectID，而 ctx 里根本没有——这就是伪闭环 4 的根源。<b>"组件存在"≠"组件生效"，数据流才是真相。</b></p>
+
+<h2 id="verify">4. 验证证据</h2>
+<table>
+<tr><th>验证</th><th>命令</th><th>结果</th></tr>
+<tr><td>全量构建</td><td><code>CGO_ENABLED=0 go build -tags='sqlite_pure_go' ./...</code></td><td><span class="pill ok">exit 0</span></td></tr>
+<tr><td>静态检查</td><td><code>go vet</code>（security/capability/multiagent/einomcp/agent/handler/app）</td><td><span class="pill ok">exit 0</span></td></tr>
+<tr><td>J4 测试</td><td>scope 解析 4 case + project 集成 3 case + Scope 14 case + executor 越界拦/授权内放行</td><td><span class="pill ok">PASS</span></td></tr>
+<tr><td>J5 测试</td><td>provider 生命周期 3 case（修改/新建/回滚）+ guard 4 case</td><td><span class="pill ok">PASS</span></td></tr>
+<tr><td>fail-closed 测试</td><td>validateScopeJSON 11 case（非法 JSON/非数组/含非字符串全拒）</td><td><span class="pill ok">PASS</span></td></tr>
+<tr><td>前端语法</td><td><code>node --check projects.js</code></td><td><span class="pill ok">OK</span></td></tr>
+<tr><td>生产二进制</td><td><code>go build -o server.exe ./cmd/server</code></td><td><span class="pill ok">重建完成</span></td></tr>
+<tr><td>独立终审 R1</td><td>Critic 六方面（需求完整性/逻辑/边界/质量/测试覆盖/运行结果）</td><td><span class="pill warn">REQUEST CHANGES</span>——发现 P0：edit_file 经 provider 会清空目标文件</td></tr>
+<tr><td>独立终审 R2</td><td>P0 修复复验（方案 A：edit_file 移出 provider 映射 + 2 个回归测试）+ P2 工件收集 + P3 注释清理 + 双文档披露</td><td><span class="pill ok">APPROVE</span>——六项全 PASS，无新问题</td></tr>
+</table>
+
+<h2 id="docs">5. 文档同步</h2>
+<ul>
+<li><code>spec.md</code>：J4/J5 pending → done（注明落地方式）</li>
+<li><code>docs/adr/ADR-0006</code>：四闸 → <b>五闸</b>（增补 project scope_json）</li>
+<li><code>README.md</code>：安全治理段新增"授权范围硬闸""破坏性工具回滚"两条</li>
+<li><code>config.example.yaml</code>：project 段补 scope_json 契约示例</li>
+<li><code>tasks/todo.md</code>：I1 五闸勾选（含 J4/J5 追加项）</li>
+<li>新增复用资产：<code>docs/sop/safety-gate-capability-sop.md</code>（10 条已知坑）、<code>docs/adr/ADR-0007</code>（验证台账规则）、<code>workflow_status.md</code>（全量验证日志）</li>
+</ul>
+
+<h2 id="risk">6. 剩余风险（诚实披露）</h2>
+<table>
+<tr><th>边界</th><th>说明</th><th>处置</th></tr>
+<tr><td>scope_json 不约束文件路径</td><td>scope_json 是网络目标语义（CIDR/域名/端口），write_file 可写进程权限可及的任意路径</td><td>设计边界，HIGH_IMPACT 标记闸 + HITL 管控兜底；ADR-0006 已披露</td></tr>
+<tr><td>edit_file 不走生命周期</td><td>edit_file 参数语义（局部替换）与 provider 整文件写入不兼容，走原生 Edit</td><td>破坏性由 HITL/HIGH_IMPACT 管控；ADR-0006 + SOP 坑 10 已披露</td></tr>
+<tr><td>write_file 父目录收紧</td><td>经 provider 时要求父目录已存在，较原生 MkdirAll 自动建多级目录收紧</td><td>有意决策，ADR-0006 已披露；模型可先 mkdir</td></tr>
+<tr><td>C2 beacon 执行</td><td>C2 任务由 beacon 在远端执行，不经 executor——scope 闸天然不适用</td><td>设计边界，已写入验证日志披露</td></tr>
+<tr><td>命令行目标提取</td><td>execute 命令的目标靠 token 解析（URL/IP/域名 + -u/-target 等参数），复杂管道可能漏提</td><td>保守放行不误拦；shellsafe/HITL 兜底</td></tr>
+<tr><td>历史死代码</td><td><code>Agent.openAIClient</code> 字段无消费者</td><td>留 J10 拆分批次清理</td></tr>
+<tr><td>多会话 WIP</td><td>其他会话的 K2/K4/LightRAG 未完成文件曾阻塞全量 build（本轮已顺手修复其编译错误）</td><td>由对应会话继续收尾</td></tr>
+</table>
+
+<h2 id="quiz">7. 变更测验（必须通过）</h2>
+<p>答完 8 题后点击"提交测验"。至少需答对 7 题。</p>
+
+<div class="quiz" data-answer="B">
+<h3>Q1. J4 之前，project 的 scope_json 在系统里扮演什么角色？</h3>
+<div class="opts">
+<label><input type="radio" name="q1" value="A"> A. 后端强制校验的执行边界</label>
+<label><input type="radio" name="q1" value="B"> B. 拼进系统提示词的软约定——LLM 看得见但可以违反</label>
+<label><input type="radio" name="q1" value="C"> C. 数据库访问控制（RBAC）</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="C">
+<h3>Q2. 为什么初版 executor 里的 capability 分支是死代码？</h3>
+<div class="opts">
+<label><input type="radio" name="q2" value="A"> A. provider 没有在 app.go 注册</label>
+<label><input type="radio" name="q2" value="B"> B. Rollback 方法有 bug</label>
+<label><input type="radio" name="q2" value="C"> C. tools/ 下没有 modify-file.yaml，ExecuteTool 的 toolIndex 查不到该工具，GetProvider 分支永不可达</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="A">
+<h3>Q3. "Eino execute 的 scopeGuard 恒放行"的根因是什么？</h3>
+<div class="opts">
+<label><input type="radio" name="q3" value="A"> A. guard 从 ctx 读 projectID，但 Eino Runner 的 ctx 从未被注入 projectID</label>
+<label><input type="radio" name="q3" value="B"> B. Scope.Allows 算法有 bug，永远返回 true</label>
+<label><input type="radio" name="q3" value="C"> C. scopeGuard 没有被构造（是 nil）</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="B">
+<h3>Q4. 为什么要给越界提示文本加 einomcp.ToolErrorPrefix？</h3>
+<div class="opts">
+<label><input type="radio" name="q4" value="A"> A. 为了日志更好看</label>
+<label><input type="radio" name="q4" value="B"> B. 让 run loop 据此前缀把工具结果标记为 IsError，模型面与 UI 面一致地知道失败了</label>
+<label><input type="radio" name="q4" value="C"> C. 防止提示文本被 XSS</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="C">
+<h3>Q5. scope_json 被配成 {"targets":"10.0.0.1"}（字符串而非数组）时，fail-closed 的行为是？</h3>
+<div class="opts">
+<label><input type="radio" name="q5" value="A"> A. 解析失败就当作无限制，照常执行</label>
+<label><input type="radio" name="q5" value="B"> B. 崩溃重启</label>
+<label><input type="radio" name="q5" value="C"> C. 保存时后端返回 400 拒绝、前端弹窗拦截——非法配置根本进不了库</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="A">
+<h3>Q6. modify-file provider 回滚新建文件的正确行为是？</h3>
+<div class="opts">
+<label><input type="radio" name="q6" value="A"> A. 新建文件无备份可恢复，回滚 = 删除该文件；修改文件才有备份恢复</label>
+<label><input type="radio" name="q6" value="B"> B. 回滚总是报错"无备份路径"</label>
+<label><input type="radio" name="q6" value="C"> C. 回滚把文件内容清空</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="B">
+<h3>Q7. 未来给本项目新增一个安全闸时，最容易重蹈的覆辙是（依据 SOP 已知坑清单）？</h3>
+<div class="opts">
+<label><input type="radio" name="q7" value="A"> A. 忘记写单元测试</label>
+<label><input type="radio" name="q7" value="B"> B. 只覆盖 MCP 链路、漏掉 Eino 内置工具链路（或反之），以及"组件被构造了但依赖的数据没流进去"</label>
+<label><input type="radio" name="q7" value="C"> C. 测试跑得太慢</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<div class="quiz" data-answer="C">
+<h3>Q8. 为什么 edit_file 最终被移出 capability provider 映射（R1 审查发现的 P0）？</h3>
+<div class="opts">
+<label><input type="radio" name="q8" value="A"> A. edit_file 是只读工具，没有破坏性</label>
+<label><input type="radio" name="q8" value="B"> B. provider 的 Execute 方法有并发 bug</label>
+<label><input type="radio" name="q8" value="C"> C. edit_file 的参数是 file_path/old_string/new_string（无 content 键），经 provider 会把 content 缺省为空串，导致整个文件被清空且模型收到假成功——参数语义不匹配的工具不能映射到整文件写入的生命周期</label>
+</div>
+<div class="feedback"></div>
+</div>
+
+<button onclick="gradeQuiz()" style="margin-top:16px">提交测验</button>
+<div id="quizResult" class="feedback" style="font-size:16px"></div>
+
+</div>
+<script>
+function gradeQuiz() {
+  const quizzes = document.querySelectorAll('.quiz');
+  let correct = 0, answered = 0;
+  quizzes.forEach((q) => {
+    const ans = q.dataset.answer;
+    const sel = q.querySelector('input:checked');
+    const fb = q.querySelector('.feedback');
+    if (!sel) { fb.textContent = '⚠ 未作答'; fb.className = 'feedback wrong'; return; }
+    answered++;
+    if (sel.value === ans) { correct++; fb.textContent = '✓ 正确'; fb.className = 'feedback right'; }
+    else { fb.textContent = '✗ 错误，正确答案：' + ans; fb.className = 'feedback wrong'; }
+  });
+  const r = document.getElementById('quizResult');
+  if (answered < quizzes.length) { r.textContent = '还有 ' + (quizzes.length - answered) + ' 题未作答。'; r.className = 'feedback wrong'; return; }
+  if (correct >= 6) { r.textContent = '✅ 通过：' + correct + '/' + quizzes.length + '。你已理解本轮变更的上下文、伪闭环与架构直觉。'; r.className = 'feedback right'; }
+  else { r.textContent = '❌ 未通过：' + correct + '/' + quizzes.length + '（需 ≥7）。请重读第 2、3 节后重试。'; r.className = 'feedback wrong'; }
+}
+</script>
+</body>
+</html>

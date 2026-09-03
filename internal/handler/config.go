@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"cyberstrike-ai/internal/agents"
 	"cyberstrike-ai/internal/audit"
+	"cyberstrike-ai/internal/cache"
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/database"
 	"cyberstrike-ai/internal/knowledge"
@@ -96,10 +98,23 @@ type ConfigHandler struct {
 	logger                     *zap.Logger
 	mu                         sync.RWMutex
 	lastEmbeddingConfig        *config.EmbeddingConfig // 上一次的嵌入模型配置（用于检测变更）
+
+	// configCache 为 GetConfig 响应提供 Cache-Aside 缓存（memory/redis，零外部依赖兜底）。
+	// 失效点集中在 saveConfig 成功落盘后 + ApplyConfig 末尾（因 ApplyConfig 不走 saveConfig）。
+	// nil 时降级为每次实时 marshal，不影响正确性。
+	configCache cache.Cache
 }
 
 func (h *ConfigHandler) SetDB(db *database.DB) {
 	h.db = db
+}
+
+// SetCache 注入 Cache 实例（GetConfig 响应缓存）。
+// 供 app.go 在 NewConfigHandler 后调用；nil 时降级为实时 marshal，不影响正确性。
+func (h *ConfigHandler) SetCache(c cache.Cache) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.configCache = c
 }
 
 func (h *ConfigHandler) validateRobotServiceAccounts(robots config.RobotsConfig) error {
@@ -142,6 +157,16 @@ func NewConfigHandler(configPath string, cfg *config.Config, mcpServer *mcp.Serv
 			APIKey:   cfg.Knowledge.Embedding.APIKey,
 		}
 	}
+	// 自建默认 cache（memory 兜底，driver=redis 不可达时降级 memory + Warn 一次）。
+	// 复用 internal/cache 轮子，不新造。context.Background() 供 janitor goroutine 生命周期，
+	// 进程级语义与 MemoryCache 一致。SetCache 可覆盖（测试/自定义注入）。
+	defaultCache := cache.NewFromConfig(context.Background(), cache.CacheConfig{
+		Driver:            cfg.Cache.Driver,
+		RedisAddr:         cfg.Cache.RedisAddr,
+		RedisPassword:     cfg.Cache.RedisPassword,
+		RedisDB:           cfg.Cache.RedisDB,
+		DefaultTTLSeconds: cfg.Cache.DefaultTTLSeconds,
+	}, logger)
 	return &ConfigHandler{
 		configPath:          configPath,
 		config:              cfg,
@@ -152,6 +177,7 @@ func NewConfigHandler(configPath string, cfg *config.Config, mcpServer *mcp.Serv
 		externalMCPMgr:      externalMCPMgr,
 		logger:              logger,
 		lastEmbeddingConfig: lastEmbeddingConfig,
+		configCache:         defaultCache,
 	}
 }
 
@@ -290,19 +316,47 @@ type ToolConfigInfo struct {
 
 // GetConfig 获取当前配置
 func (h *ConfigHandler) GetConfig(c *gin.Context) {
+	// 禁用客户端缓存：配置变更后必须立即反映，不能命中浏览器磁盘缓存。
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate")
+
+	// Cache-Aside 读：命中时直接回放 marshal 后的 JSON bytes，跳过外部 MCP 网络 IO 与重复 marshal。
+	// key 固定为单 key（GetConfig 无角色参数）；TTL 兜底默认 10min，写路径在 saveConfig/ApplyConfig 失效。
+	if h.configCache != nil {
+		ctx := c.Request.Context()
+		key := cache.KeyHash("cyberstrike:config:get")
+		if cached, ok := h.configCache.Get(ctx, key); ok {
+			c.Data(http.StatusOK, "application/json; charset=utf-8", cached)
+			return
+		}
+	}
+
+	// 快照配置后立即释放读锁，避免外部 MCP 网络 IO（最长 5s）阻塞 UpdateConfig/ApplyConfig 等写者。
+	// 注意：*h.config 仅浅拷贝 slice/map 头，UpdateConfig 会就地改 Security.Tools[i].Enabled，
+	// 故对会被就地修改的 Tools 切片在锁内深拷贝（与 GetTools 范式一致）。
+	// 其余被全量替换（非就地）的切片字段（ModelFailoverChannels 等）读取旧底层数组安全。
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	cfg := *h.config // 值拷贝顶层 Config
+	mcpServer := h.mcpServer
+	externalMCPMgr := h.externalMCPMgr
+	configPath := h.configPath
+	toolDescriptionMode := h.config.Security.ToolDescriptionMode
+	securityTools := append([]config.ToolConfig(nil), h.config.Security.Tools...)
+	h.mu.RUnlock()
+
+	pickDesc := func(shortDesc, fullDesc string) string {
+		return pickToolDescriptionWithMode(toolDescriptionMode, shortDesc, fullDesc)
+	}
 
 	// 获取工具列表（包含内部和外部工具）
 	// 首先从配置文件获取工具
 	configToolMap := make(map[string]bool)
-	tools := make([]ToolConfigInfo, 0, len(h.config.Security.Tools))
+	tools := make([]ToolConfigInfo, 0, len(securityTools))
 
-	for _, tool := range h.config.Security.Tools {
+	for _, tool := range securityTools {
 		configToolMap[tool.Name] = true
 		info := ToolConfigInfo{
 			Name:        tool.Name,
-			Description: h.pickToolDescription(tool.ShortDescription, tool.Description),
+			Description: pickDesc(tool.ShortDescription, tool.Description),
 			Enabled:     tool.Enabled,
 			IsExternal:  false,
 		}
@@ -310,13 +364,13 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 	}
 
 	// 从MCP服务器获取所有已注册的工具（包括直接注册的工具，如知识检索工具）
-	if h.mcpServer != nil {
-		mcpTools := h.mcpServer.GetAllTools()
+	if mcpServer != nil {
+		mcpTools := mcpServer.GetAllTools()
 		for _, mcpTool := range mcpTools {
 			if configToolMap[mcpTool.Name] {
 				continue
 			}
-			description := h.pickToolDescription(mcpTool.ShortDescription, mcpTool.Description)
+			description := pickDesc(mcpTool.ShortDescription, mcpTool.Description)
 			tools = append(tools, ToolConfigInfo{
 				Name:        mcpTool.Name,
 				Description: description,
@@ -326,66 +380,78 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 		}
 	}
 
-	// 获取外部MCP工具（走缓存，持锁期间通常不阻塞）
-	if h.externalMCPMgr != nil {
+	// 获取外部MCP工具（走 ExternalMCPManager 内部缓存，不持有 config 锁）
+	if externalMCPMgr != nil {
 		ctx := context.Background()
-		externalTools := h.getExternalMCPTools(ctx)
+		externalTools := h.getExternalMCPToolsWithManager(ctx, externalMCPMgr, pickDesc)
 		for _, toolInfo := range externalTools {
 			tools = append(tools, toolInfo)
 		}
 	}
 
-	subAgentCount := len(h.config.MultiAgent.SubAgents)
-	agentsDir := strings.TrimSpace(h.config.AgentsDir)
+	subAgentCount := len(cfg.MultiAgent.SubAgents)
+	agentsDir := strings.TrimSpace(cfg.AgentsDir)
 	if agentsDir == "" {
 		agentsDir = "agents"
 	}
 	if !filepath.IsAbs(agentsDir) {
-		agentsDir = filepath.Join(filepath.Dir(h.configPath), agentsDir)
+		agentsDir = filepath.Join(filepath.Dir(configPath), agentsDir)
 	}
 	if load, err := agents.LoadMarkdownAgentsDir(agentsDir); err == nil {
-		subAgentCount = len(agents.MergeYAMLAndMarkdown(h.config.MultiAgent.SubAgents, load.SubAgents))
+		subAgentCount = len(agents.MergeYAMLAndMarkdown(cfg.MultiAgent.SubAgents, load.SubAgents))
 	}
 	multiPub := config.MultiAgentPublic{
-		Enabled:                                    h.config.MultiAgent.Enabled,
-		RobotDefaultAgentMode:                      config.NormalizeRobotAgentMode(h.config.MultiAgent),
-		BatchUseMultiAgent:                         h.config.MultiAgent.BatchUseMultiAgent,
+		Enabled:                                    cfg.MultiAgent.Enabled,
+		RobotDefaultAgentMode:                      config.NormalizeRobotAgentMode(cfg.MultiAgent),
+		BatchUseMultiAgent:                         cfg.MultiAgent.BatchUseMultiAgent,
 		SubAgentCount:                              subAgentCount,
-		Orchestration:                              config.NormalizeMultiAgentOrchestration(h.config.MultiAgent.Orchestration),
-		PlanExecuteLoopMaxIterations:               h.config.MultiAgent.PlanExecuteLoopMaxIterations,
-		SummarizationUserIntentLedgerMaxRunes:      h.config.MultiAgent.EinoMiddleware.SummarizationUserIntentLedgerMaxRunesEffective(),
-		SummarizationUserIntentLedgerEntryMaxRunes: h.config.MultiAgent.EinoMiddleware.SummarizationUserIntentLedgerEntryMaxRunesEffective(),
-		LatestUserMessageMaxRunes:                  h.config.MultiAgent.EinoMiddleware.LatestUserMessageMaxRunesEffective(),
-		LatestUserMessageHeadRunes:                 h.config.MultiAgent.EinoMiddleware.LatestUserMessageHeadRunesEffective(),
-		LatestUserMessageTailRunes:                 h.config.MultiAgent.EinoMiddleware.LatestUserMessageTailRunesEffective(),
-		ModelRetryMaxRetries:                       h.config.MultiAgent.EinoMiddleware.ModelRetryMaxRetries,
-		ModelRetryMaxBackoffSec:                    h.config.MultiAgent.EinoMiddleware.ModelRetryMaxBackoffSec,
-		ModelFailoverChannels:                      append([]string(nil), h.config.MultiAgent.EinoMiddleware.ModelFailoverChannels...),
-		ModelFailoverMaxRetries:                    h.config.MultiAgent.EinoMiddleware.ModelFailoverMaxRetries,
-		ToolSearchAlwaysVisibleTools:               append([]string(nil), h.config.MultiAgent.EinoMiddleware.ToolSearchAlwaysVisibleTools...),
+		Orchestration:                              config.NormalizeMultiAgentOrchestration(cfg.MultiAgent.Orchestration),
+		PlanExecuteLoopMaxIterations:               cfg.MultiAgent.PlanExecuteLoopMaxIterations,
+		SummarizationUserIntentLedgerMaxRunes:      cfg.MultiAgent.EinoMiddleware.SummarizationUserIntentLedgerMaxRunesEffective(),
+		SummarizationUserIntentLedgerEntryMaxRunes: cfg.MultiAgent.EinoMiddleware.SummarizationUserIntentLedgerEntryMaxRunesEffective(),
+		LatestUserMessageMaxRunes:                  cfg.MultiAgent.EinoMiddleware.LatestUserMessageMaxRunesEffective(),
+		LatestUserMessageHeadRunes:                 cfg.MultiAgent.EinoMiddleware.LatestUserMessageHeadRunesEffective(),
+		LatestUserMessageTailRunes:                 cfg.MultiAgent.EinoMiddleware.LatestUserMessageTailRunesEffective(),
+		ModelRetryMaxRetries:                        cfg.MultiAgent.EinoMiddleware.ModelRetryMaxRetries,
+		ModelRetryMaxBackoffSec:                     cfg.MultiAgent.EinoMiddleware.ModelRetryMaxBackoffSec,
+		ModelFailoverChannels:                       append([]string(nil), cfg.MultiAgent.EinoMiddleware.ModelFailoverChannels...),
+		ModelFailoverMaxRetries:                     cfg.MultiAgent.EinoMiddleware.ModelFailoverMaxRetries,
+		ToolSearchAlwaysVisibleTools:                append([]string(nil), cfg.MultiAgent.EinoMiddleware.ToolSearchAlwaysVisibleTools...),
 		ToolSearchAlwaysVisibleEffectiveTools: mergeToolNameLists(
-			h.config.MultiAgent.EinoMiddleware.ToolSearchAlwaysVisibleTools,
+			cfg.MultiAgent.EinoMiddleware.ToolSearchAlwaysVisibleTools,
 			builtin.GetAllBuiltinTools(),
 		),
 	}
 
-	c.JSON(http.StatusOK, GetConfigResponse{
-		AI:         h.config.AI,
-		OpenAI:     h.config.OpenAI,
-		Vision:     h.config.Vision,
-		FOFA:       h.config.FOFA,
-		ZoomEye:    h.config.ZoomEye,
-		Quake:      h.config.Quake,
-		Shodan:     h.config.Shodan,
-		MCP:        h.config.MCP,
+	resp := GetConfigResponse{
+		AI:         cfg.AI,
+		OpenAI:     cfg.OpenAI,
+		Vision:     cfg.Vision,
+		FOFA:       cfg.FOFA,
+		ZoomEye:    cfg.ZoomEye,
+		Quake:      cfg.Quake,
+		Shodan:     cfg.Shodan,
+		MCP:        cfg.MCP,
 		Tools:      tools,
-		Agent:      h.config.Agent,
-		Hitl:       h.config.Hitl,
-		Knowledge:  h.config.Knowledge,
-		C2:         h.config.C2.Public(),
-		Robots:     h.config.Robots,
+		Agent:      cfg.Agent,
+		Hitl:       cfg.Hitl,
+		Knowledge:  cfg.Knowledge,
+		C2:         cfg.C2.Public(),
+		Robots:     cfg.Robots,
 		MultiAgent: multiPub,
-	})
+	}
+
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		// Marshal 失败降级为旧路径（c.JSON 内部仍会 marshal，这里退到 gin 兜底）。
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	if h.configCache != nil {
+		h.configCache.Set(c.Request.Context(), cache.KeyHash("cyberstrike:config:get"), payload, 0)
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
 }
 
 // GetToolsResponse 获取工具列表响应（分页）
@@ -1723,6 +1789,8 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 	h.logger.Info("配置已应用",
 		zap.Int("tools_count", len(h.config.Security.Tools)),
 	)
+	// ApplyConfig 不走 saveConfig，单独失效 GetConfig 响应缓存（工具/描述/嵌入模型等可能已变）。
+	h.invalidateConfigCache()
 
 	if h.audit != nil {
 		h.audit.Record(c, audit.Entry{
@@ -1822,7 +1890,18 @@ func (h *ConfigHandler) saveConfig() error {
 	}
 
 	h.logger.Info("配置已保存", zap.String("path", h.configPath))
+	h.invalidateConfigCache()
 	return nil
+}
+
+// invalidateConfigCache 清除 GetConfig 响应缓存。
+// 在所有写路径成功后调用（saveConfig 末尾 + ApplyConfig 末尾），
+// 保证下次 GET /api/config 返回最新配置。nil cache 时为 no-op。
+func (h *ConfigHandler) invalidateConfigCache() {
+	if h.configCache == nil {
+		return
+	}
+	h.configCache.Delete(context.Background(), cache.KeyHash("cyberstrike:config:get"))
 }
 
 func loadYAMLDocument(path string) (*yaml.Node, error) {

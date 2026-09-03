@@ -14,6 +14,9 @@ var allowedWorkflowNodeTypes = map[string]bool{
 	"hitl":      true,
 	"output":    true,
 	"end":       true,
+	"delay":     true,
+	"loop":      true,
+	"parallel":  true,
 }
 
 func validateGraphDefinition(g *graphDef, idx *graphIndex) error {
@@ -166,6 +169,18 @@ func validateNodeConfigs(idx *graphIndex) error {
 		case "output":
 			if cfgString(node.Config, "output_key") == "" {
 				return fmt.Errorf("输出节点「%s」必须填写输出变量名", label)
+			}
+		case "delay":
+			if readDurationMillis(node.Config) <= 0 {
+				return fmt.Errorf("延时节点「%s」必须配置正整数 duration_ms", label)
+			}
+		case "loop":
+			if readCountFromConfig(node.Config) <= 0 && len(resolveLoopItems(node.Config, &WorkflowLocalState{})) == 0 {
+				return fmt.Errorf("循环节点「%s」必须配置 items/count 中至少一项", label)
+			}
+		case "parallel":
+			if len(readParallelBranches(node.Config)) == 0 {
+				return fmt.Errorf("并行节点「%s」必须配置至少一个 branch", label)
 			}
 		}
 		if err := validateJoinConfig(idx, id, node); err != nil {

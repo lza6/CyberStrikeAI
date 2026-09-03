@@ -11,12 +11,18 @@ import (
 	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/retriever"
 	"github.com/cloudwego/eino/schema"
+	"go.uber.org/zap"
 )
 
 // VectorEinoRetriever implements [retriever.Retriever] on top of SQLite-stored embeddings + cosine similarity.
 // It returns prefetch-sized vector candidates only; rerank and post-process run in [knowledgePipelineRetriever].
 type VectorEinoRetriever struct {
 	inner *Retriever
+	// degraded 标记该实例是否用于"pipeline 未装配"的退化路径。退化路径在 Retrieve
+	// 末尾兜底 rerank（若已注入 DocumentReranker）；pipeline 内层路径（multiquery/vec
+	// 变体检索）**不能**触发兜底，否则 rerank 会被每个查询变体各调一次，再叠加
+	// pipeline.Retrieve 的精排，造成外部 rerank 调用量 N+1 倍放大与候选池被提前截断。
+	degraded bool
 }
 
 // NewVectorEinoRetriever wraps r for Eino compose / tooling.
@@ -25,6 +31,16 @@ func NewVectorEinoRetriever(r *Retriever) *VectorEinoRetriever {
 		return nil
 	}
 	return &VectorEinoRetriever{inner: r}
+}
+
+// NewDegradedVectorEinoRetriever 构造退化路径（pipeline 未装配）专用的裸向量适配器。
+// 仅该模式启用末尾兜底 rerank；见 degraded 字段注释。
+func NewDegradedVectorEinoRetriever(r *Retriever) *VectorEinoRetriever {
+	v := NewVectorEinoRetriever(r)
+	if v != nil {
+		v.degraded = true
+	}
+	return v
 }
 
 // GetType identifies this retriever for Eino callbacks.
@@ -110,6 +126,26 @@ func (h *VectorEinoRetriever) Retrieve(ctx context.Context, query string, opts .
 		return nil, err
 	}
 	out = retrievalResultsToDocuments(results)
+
+	// 退化路径兜底：仅当本实例标记为 degraded（activeEinoRetriever 在 pipeline==nil 时构造）
+	// 且上层注入了 DocumentReranker 时，在此补一次精排。pipeline 内层路径（multiquery
+	// 每个查询变体、或 vec 宽候选）不进入此处——pipeline.Retrieve 已统一 rerank，
+	// 若在此重复触发，rerank 外部调用量会放大 N+1 倍且候选池被提前截断到 finalTopK。
+	if h.degraded {
+		if rr := h.inner.documentReranker(); rr != nil && len(out) > 1 {
+			reranked, rerr := rr.Rerank(ctx, q, out)
+			if rerr != nil {
+				if h.inner.logger != nil {
+					h.inner.logger.Warn("退化路径重排失败，已使用向量检索原序", zap.Error(rerr))
+				}
+			} else if len(reranked) > 0 {
+				out = reranked
+			}
+		}
+		if len(out) > finalTopK {
+			out = out[:finalTopK]
+		}
+	}
 	return out, nil
 }
 

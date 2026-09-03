@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"cyberstrike-ai/internal/database"
 
@@ -100,6 +101,25 @@ func TestEnsureSchemaFinalizesOnlyHistoricalPlaceholdersWithTerminalEvidence(t *
 	}
 	if _, err := db.AddMessage(supersededConversation.ID, "user", "继续", nil); err != nil {
 		t.Fatalf("create later message: %v", err)
+	}
+	// messages.created_at 由 AddMessage 以 Go time.Time 字符串（RFC3339 带
+	// 时区）写入，秒级以下精度各异；全包同秒跑时 "later.created_at >
+	// msg.created_at" 的字符串比较会失效。Go 侧读出 placeholder 时间、
+	// +2 秒后按同格式写回 user 消息，保证 superseded 证据确定性（不 sleep）。
+	var placeholderCreatedStr string
+	if err := db.QueryRow(`SELECT created_at FROM messages WHERE id = ?`, superseded.ID).
+		Scan(&placeholderCreatedStr); err != nil {
+		t.Fatalf("read placeholder created_at: %v", err)
+	}
+	placeholderCreated, perr := time.Parse(time.RFC3339Nano, placeholderCreatedStr)
+	if perr != nil {
+		t.Fatalf("parse placeholder created_at %q: %v", placeholderCreatedStr, perr)
+	}
+	laterCreated := placeholderCreated.Add(2 * time.Second)
+	if _, err := db.Exec(`UPDATE messages SET created_at = ?, updated_at = ?
+		WHERE conversation_id = ? AND role = 'user'`,
+		laterCreated, laterCreated, supersededConversation.ID); err != nil {
+		t.Fatalf("bump later message timestamp: %v", err)
 	}
 
 	timeoutConversation, err := db.CreateConversation("timeout placeholder", database.ConversationCreateMeta{})

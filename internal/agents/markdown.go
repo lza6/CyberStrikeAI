@@ -23,6 +23,10 @@ const OrchestratorPlanExecuteMarkdownFilename = "orchestrator-plan-execute.md"
 // OrchestratorSupervisorMarkdownFilename supervisor 模式主代理专用 Markdown 文件名。
 const OrchestratorSupervisorMarkdownFilename = "orchestrator-supervisor.md"
 
+// OrchestratorCoordinatorMarkdownFilename coordinator 模式主代理专用 Markdown 文件名。
+// J6/K5：coordinator 自动分解 goal→title DAG→并发 dispatch→synthesis 模式。
+const OrchestratorCoordinatorMarkdownFilename = "orchestrator-coordinator.md"
+
 // FrontMatter 对应 Markdown 文件头部字段（与文档示例一致）。
 type FrontMatter struct {
 	Name          string      `yaml:"name"`
@@ -49,10 +53,11 @@ type MarkdownDirLoad struct {
 	Orchestrator            *OrchestratorMarkdown // Deep 主代理
 	OrchestratorPlanExecute *OrchestratorMarkdown // plan_execute 规划主代理
 	OrchestratorSupervisor  *OrchestratorMarkdown // supervisor 监督主代理
+	OrchestratorCoordinator *OrchestratorMarkdown // J6 coordinator 协调主代理
 	FileEntries             []FileAgent           // 含主代理与所有子代理，供管理 API 列表
 }
 
-// OrchestratorMarkdownKind 按固定文件名返回主代理类型：deep、plan_execute、supervisor；否则返回空。
+// OrchestratorMarkdownKind 按固定文件名返回主代理类型：deep、plan_execute、supervisor、coordinator；否则返回空。
 func OrchestratorMarkdownKind(filename string) string {
 	base := filepath.Base(strings.TrimSpace(filename))
 	switch {
@@ -60,6 +65,8 @@ func OrchestratorMarkdownKind(filename string) string {
 		return "plan_execute"
 	case strings.EqualFold(base, OrchestratorSupervisorMarkdownFilename):
 		return "supervisor"
+	case strings.EqualFold(base, OrchestratorCoordinatorMarkdownFilename):
+		return "coordinator"
 	case strings.EqualFold(base, OrchestratorMarkdownFilename):
 		return "deep"
 	default:
@@ -366,6 +373,21 @@ func LoadMarkdownAgentsDir(dir string) (*MarkdownDirLoad, error) {
 				return nil, fmt.Errorf("%s: %w", n, err)
 			}
 			out.OrchestratorSupervisor = orch
+			out.FileEntries = append(out.FileEntries, FileAgent{
+				Filename:       n,
+				Config:         orchestratorConfigFromOrchestrator(orch),
+				IsOrchestrator: true,
+			})
+			continue
+		case "coordinator":
+			if out.OrchestratorCoordinator != nil {
+				return nil, fmt.Errorf("agents: 仅能定义一个 %s，已有 %s", OrchestratorCoordinatorMarkdownFilename, out.OrchestratorCoordinator.Filename)
+			}
+			orch, err := orchestratorFromParsed(n, fm, body)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", n, err)
+			}
+			out.OrchestratorCoordinator = orch
 			out.FileEntries = append(out.FileEntries, FileAgent{
 				Filename:       n,
 				Config:         orchestratorConfigFromOrchestrator(orch),

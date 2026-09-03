@@ -28,9 +28,24 @@ func validateConditionExpression(expr string) error {
 }
 
 func validateConditionAtom(expr string) error {
+	if strings.TrimSpace(expr) == "" {
+		return fmt.Errorf("条件表达式存在空片段")
+	}
+	// 尾随操作符（如 "x matches "）经 TrimSpace 后会丢失尾部空格导致
+	// splitExpressionAtom 匹配不到操作符而逃逸空侧校验（fail-open）。
+	// 先对原串做操作符尾随检测：以操作符（去空格）结尾即视为空右臂。
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
 		return fmt.Errorf("条件表达式存在空片段")
+	}
+	for _, op := range expressionOps {
+		bare := strings.TrimSpace(op)
+		if bare != "" && strings.HasSuffix(expr, bare) {
+			return fmt.Errorf("表达式 %q 两侧不能为空: %s", bare, expr)
+		}
+		if strings.HasPrefix(expr, bare) && bare != "" {
+			return fmt.Errorf("表达式 %q 两侧不能为空: %s", bare, expr)
+		}
 	}
 	if strings.Count(expr, "{{") != strings.Count(expr, "}}") {
 		return fmt.Errorf("条件表达式模板括号不匹配: %s", expr)

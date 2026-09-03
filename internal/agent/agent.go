@@ -35,6 +35,9 @@ type Agent struct {
 	toolNameMapping     map[string]string // 工具名称映射：OpenAI格式 -> 原始格式（用于外部MCP工具）
 	promptBaseDir       string            // 解析 system_prompt_path 时相对路径的基准目录（通常为 config.yaml 所在目录）
 	toolDescriptionMode string            // 工具描述模式: "short" | "full"，默认 short
+	// projectScopeRes J4：会话→projectID 解析器（handler.conversationProjectID），
+	// ExecuteMCPToolForConversation 注入 projectID 到 ctx，executor 据此做授权范围硬拦。
+	projectScopeRes func(conversationID string) string
 }
 
 type agentConversationIDKey struct{}
@@ -756,7 +759,18 @@ func (a *Agent) ToolsForRole(roleTools []string) []Tool {
 func (a *Agent) ExecuteMCPToolForConversation(ctx context.Context, conversationID, toolName string, args map[string]interface{}) (*ToolExecutionResult, error) {
 	ctx = withAgentConversationID(ctx, conversationID)
 	ctx = mcp.WithMCPConversationID(ctx, conversationID)
+	// J4：把会话绑定的 projectID 注入工具执行 ctx，executor 据此读 projects.scope_json
+	// 做会话级授权范围硬拦。会话未绑定时 projectID 为空，project scope 不生效（向后兼容）。
+	if a.projectScopeRes != nil {
+		ctx = mcp.WithMCPProjectID(ctx, a.projectScopeRes(conversationID))
+	}
 	return a.executeToolViaMCP(ctx, toolName, args)
+}
+
+// SetProjectScopeResolver 注入会话→projectID 解析器（J4）。app.go 在 NewAgent 后调用，
+// 传入 handler.AgentHandler.conversationProjectID。未注入时 project scope 不生效（向后兼容）。
+func (a *Agent) SetProjectScopeResolver(f func(conversationID string) string) {
+	a.projectScopeRes = f
 }
 
 // BeginLocalToolExecution 在非 CallTool 路径工具开始时写入 running 状态，供 MCP 监控页展示「执行中」。

@@ -117,6 +117,7 @@ func subAgentAgenticFilesystemMiddleware(
 	toolWaitTimeoutSeconds int,
 	shellNoOutputTimeoutSec int,
 	outputChunk func(toolName, toolCallID, chunk string),
+	scopeGuard *security.ExecuteScopeGuard,
 ) (adk.TypedChatModelAgentMiddleware[*schema.AgenticMessage], error) {
 	if loc == nil {
 		return nil, nil
@@ -128,6 +129,7 @@ func subAgentAgenticFilesystemMiddleware(
 			invokeNotify:            invokeNotify,
 			einoAgentName:           strings.TrimSpace(einoAgentName),
 			outputChunk:             outputChunk,
+			scopeGuard:              scopeGuard,
 			beginMonitor:            beginMonitor,
 			appendPartialMonitor:    appendPartialMonitor,
 			registerCancelMonitor:   registerCancelMonitor,
@@ -148,6 +150,8 @@ func subAgentAgenticFilesystemMiddleware(
 		reductionRootDir:              reductionRootDir,
 		toolMaxBytes:                  toolMaxBytes,
 		binder:                        binder,
+		scopeGuard:                    scopeGuard,
+		capGuard:                      newFilesystemCapabilityGuard(),
 	}, nil
 }
 
@@ -158,6 +162,11 @@ type einoAgenticFilesystemToolMiddleware struct {
 	reductionRootDir string
 	toolMaxBytes     int
 	binder           *MCPExecutionBinder
+	// scopeGuard J4：execute 执行前的授权范围闸。零值=不校验（向后兼容）。
+	scopeGuard *security.ExecuteScopeGuard
+	// capGuard J5：write_file/edit_file 破坏性文件工具能力闸。命中 modify-file
+	// capability provider 时走 plan/validate/execute/rollback 生命周期；其余工具放行。
+	capGuard *filesystemCapabilityGuard
 }
 
 func (m *einoAgenticFilesystemToolMiddleware) WrapInvokableToolCall(ctx context.Context, endpoint adk.InvokableToolCallEndpoint, tCtx *adk.ToolContext) (adk.InvokableToolCallEndpoint, error) {
@@ -172,6 +181,16 @@ func (m *einoAgenticFilesystemToolMiddleware) WrapInvokableToolCall(ctx context.
 		args := parseToolArgumentsObject(argumentsInJSON)
 		if len(args) > 0 && m.binder != nil {
 			m.binder.BindArguments(tCtx.CallID, args)
+		}
+		// J5：破坏性文件工具能力闸。注册了 capability provider 的工具（如 modify-file）
+		// 走 plan→validate→execute→rollback 生命周期；execute 失败自动 Rollback。
+		// 非 provider 工具走原 wrapped 路径，向后兼容。
+		// blocked=true：provider 已处理（成功返回结果文本 / 失败返回带前缀的拦截文本），
+		// 调用方直接返回该文本不执行原 wrapped；einomcp 桥据 ToolErrorPrefix 判定 IsError。
+		if m.capGuard != nil {
+			if hint, blocked, _ := m.capGuard.CheckFilesystemTool(ctx, tCtx.Name, args); blocked {
+				return hint, nil
+			}
 		}
 		result, runErr := wrapped(ctx, argumentsInJSON, opts...)
 		if runErr != nil {

@@ -159,6 +159,9 @@ func permissionForRequest(method, fullPath string) string {
 		return crudPermission(method, "knowledge")
 	case strings.HasPrefix(path, "/vulnerabilities"):
 		return crudPermission(method, "vulnerability")
+	case strings.HasPrefix(path, "/bugbounty"):
+		// 漏洞赏金与 ROI 报告复用 vulnerability 权限（数据源同 vulnerabilities，仅导出形态不同）。
+		return crudPermission(method, "vulnerability")
 	case path == "/assets/batch-delete", path == "/assets/merge":
 		return "asset:delete"
 	case strings.HasPrefix(path, "/assets"):

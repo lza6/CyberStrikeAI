@@ -74,7 +74,7 @@ function scheduleChatConversationFromHash(delayMs) {
         } else if (typeof window.loadConversation === 'function') {
             window.loadConversation(conversationId);
         } else {
-            console.warn('loadConversation function not found');
+            logger.warn('loadConversation function not found');
         }
     }, delayMs);
 }
@@ -423,7 +423,12 @@ async function initPage(pageId) {
             break;
         case 'info-collect':
             // 信息收集页面
-            if (typeof initInfoCollectPage === 'function') {
+            // F6：xlsx 懒加载——info-collect 页导出依赖 XLSX 全局
+            if (typeof loadScript === 'function') {
+                loadScript('/static/vendor/xlsx.full.min.js').then(function () {
+                    if (typeof initInfoCollectPage === 'function') initInfoCollectPage();
+                }).catch(function (e) { console.warn('xlsx 懒加载失败:', e); if (typeof initInfoCollectPage === 'function') initInfoCollectPage(); });
+            } else if (typeof initInfoCollectPage === 'function') {
                 initInfoCollectPage();
             }
             break;
@@ -431,7 +436,14 @@ async function initPage(pageId) {
             if (typeof loadAssetOverview === 'function') loadAssetOverview();
             break;
         case 'asset-library':
-            if (typeof loadAssets === 'function') loadAssets();
+            // F6：xlsx 懒加载——assets 页导入/导出依赖 XLSX 全局
+            if (typeof loadScript === 'function') {
+                loadScript('/static/vendor/xlsx.full.min.js').then(function () {
+                    if (typeof loadAssets === 'function') loadAssets();
+                }).catch(function (e) { console.warn('xlsx 懒加载失败:', e); if (typeof loadAssets === 'function') loadAssets(); });
+            } else if (typeof loadAssets === 'function') {
+                loadAssets();
+            }
             break;
         case 'tasks':
             // 初始化任务管理页面
@@ -461,7 +473,7 @@ async function initPage(pageId) {
                     // 延迟加载，让页面先渲染
                     setTimeout(() => {
                         loadToolsList(1, '').catch(err => {
-                            console.error('加载工具列表失败:', err);
+                            logger.error('加载工具列表失败:', err);
                         });
                     }, 100);
                 }
@@ -470,7 +482,7 @@ async function initPage(pageId) {
                 startLoadMcpTools();
                 if (typeof loadExternalMCPs === 'function') {
                     loadExternalMCPs().catch(err => {
-                        console.warn('加载外部MCP列表失败:', err);
+                        logger.warn('加载外部MCP列表失败:', err);
                     });
                 }
                 if (typeof startExternalMcpPoll === 'function') {
@@ -483,7 +495,7 @@ async function initPage(pageId) {
             if (typeof loadConfig === 'function' && canLoadFullConfig) {
                 loadConfig(false, { silent: true })
                     .catch(err => {
-                        console.warn('加载配置失败（将继续加载 MCP 列表）:', err);
+                        logger.warn('加载配置失败（将继续加载 MCP 列表）:', err);
                     })
                     .finally(afterMcpConfigReady);
             } else {
@@ -491,7 +503,22 @@ async function initPage(pageId) {
             }
             break;
         case 'projects':
-            if (typeof initProjectsPage === 'function') {
+            // F6：cytoscape+elk 懒加载——projects 事实图渲染依赖
+            if (typeof loadScript === 'function') {
+                Promise.all([
+                    loadScript('/static/vendor/cytoscape.min.js'),
+                    loadScript('/static/vendor/elk.bundled.js')
+                ]).then(function () {
+                    // elk.bundled.js 可能暴露 elk 而非 ELK，统一兜底
+                    if (typeof ELK === 'undefined' && typeof elk !== 'undefined') {
+                        window.ELK = elk;
+                    }
+                    if (typeof initProjectsPage === 'function') initProjectsPage();
+                }).catch(function (e) {
+                    console.warn('cytoscape/elk 懒加载失败:', e);
+                    if (typeof initProjectsPage === 'function') initProjectsPage();
+                });
+            } else if (typeof initProjectsPage === 'function') {
                 initProjectsPage();
             }
             break;
@@ -503,7 +530,18 @@ async function initPage(pageId) {
             break;
         case 'webshell':
             // 初始化 WebShell 管理页面
-            if (typeof initWebshellPage === 'function') {
+            // F6：xterm+addon-fit 懒加载——webshell 终端依赖 Terminal/FitAddon 全局
+            if (typeof loadScript === 'function') {
+                Promise.all([
+                    loadScript('/static/vendor/xterm.js'),
+                    loadScript('/static/vendor/xterm-addon-fit.js')
+                ]).then(function () {
+                    if (typeof initWebshellPage === 'function') initWebshellPage();
+                }).catch(function (e) {
+                    console.warn('xterm 懒加载失败:', e);
+                    if (typeof initWebshellPage === 'function') initWebshellPage();
+                });
+            } else if (typeof initWebshellPage === 'function') {
                 initWebshellPage();
             }
             break;
@@ -551,7 +589,15 @@ async function initPage(pageId) {
             }
             break;
         case 'workflows':
-            if (typeof refreshWorkflows === 'function') {
+            // F6：cytoscape 懒加载——工作流画布 initCy 依赖（fact-graph/chat 攻击链共享 vendor）
+            if (typeof loadScript === 'function' && typeof cytoscape === 'undefined') {
+                loadScript('/static/vendor/cytoscape.min.js').then(function () {
+                    if (typeof refreshWorkflows === 'function') refreshWorkflows();
+                }).catch(function (e) {
+                    console.warn('cytoscape 懒加载失败:', e);
+                    if (typeof refreshWorkflows === 'function') refreshWorkflows();
+                });
+            } else if (typeof refreshWorkflows === 'function') {
                 refreshWorkflows();
             }
             break;
@@ -590,9 +636,28 @@ async function initPage(pageId) {
         case 'c2-payloads':
         case 'c2-events':
         case 'c2-profiles':
-            window.currentPageId = pageId;
-            if (window.C2 && typeof window.C2.init === 'function') {
-                window.C2.init();
+            // F6：xterm+addon-fit 懒加载——c2 终端依赖 Terminal/FitAddon 全局
+            if (typeof loadScript === 'function' && (!window.Terminal || !window.FitAddon)) {
+                Promise.all([
+                    loadScript('/static/vendor/xterm.js'),
+                    loadScript('/static/vendor/xterm-addon-fit.js')
+                ]).then(function () {
+                    window.currentPageId = pageId;
+                    if (window.C2 && typeof window.C2.init === 'function') {
+                        window.C2.init();
+                    }
+                }).catch(function (e) {
+                    console.warn('xterm 懒加载失败:', e);
+                    window.currentPageId = pageId;
+                    if (window.C2 && typeof window.C2.init === 'function') {
+                        window.C2.init();
+                    }
+                });
+            } else {
+                window.currentPageId = pageId;
+                if (window.C2 && typeof window.C2.init === 'function') {
+                    window.C2.init();
+                }
             }
             break;
     }

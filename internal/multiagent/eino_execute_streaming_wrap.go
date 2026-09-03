@@ -73,6 +73,9 @@ type einoStreamingShellWrap struct {
 	registerCancelMonitor   func(executionID string, cancel context.CancelFunc)
 	unregisterCancelMonitor func(executionID string)
 	finishMonitor           func(executionID, toolCallID, command, stdout string, success bool, invokeErr error)
+	// scopeGuard J4：execute 执行前的授权范围闸。非 nil 时对命令做 project scope 校验，
+	// 越界返回 IsError 流不执行。零值=不校验（向后兼容）。
+	scopeGuard *security.ExecuteScopeGuard
 }
 
 func (w *einoStreamingShellWrap) ExecuteStreaming(ctx context.Context, input *filesystem.ExecuteRequest) (*schema.StreamReader[*filesystem.ExecuteResponse], error) {
@@ -88,6 +91,19 @@ func (w *einoStreamingShellWrap) ExecuteStreaming(ctx context.Context, input *fi
 	agentTag := strings.TrimSpace(w.einoAgentName)
 	if security.IsBackgroundShellCommand(req.Command) && !req.RunInBackendGround {
 		req.RunInBackendGround = true
+	}
+	// J4/J5 execute 前授权闸：会话 project 声明了 scope_json 且命令含可提取的目标
+	// 时校验是否越界（同 executor 的 project scope 语义）。越界返回 IsError 流，不执行。
+	// hint 带 ToolErrorPrefix：与 einomcp 桥同语义，run loop 据此前缀把结果标记为 IsError，
+	// 模型面与 UI 面一致（invokeNotify.Fire success=false 同步推 tool_result 失败态）。
+	if w.scopeGuard != nil {
+		if hint, blocked := w.scopeGuard.CheckExecute(ctx, "execute", map[string]interface{}{"command": userCmd}, req.RunInBackendGround); blocked {
+			errHint := einomcp.ToolErrorPrefix + hint
+			if tid != "" && w.invokeNotify != nil {
+				w.invokeNotify.Fire(tid, "execute", agentTag, false, hint, nil)
+			}
+			return schema.StreamReaderFromArray([]*filesystem.ExecuteResponse{{Output: errHint}}), nil
+		}
 	}
 	req.Command = prependPythonUnbufferedEnv(req.Command)
 	convID := mcp.MCPConversationIDFromContext(ctx)

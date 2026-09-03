@@ -86,6 +86,8 @@ func TestCreateProgressCallback_HidesInternalEinoDiagnostics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDB: %v", err)
 	}
+	// Windows：t.TempDir 清理前必须关库句柄，否则 unlinkat 撞文件锁。
+	defer func() { _ = db.Close() }()
 	conv, err := db.CreateConversation("diag-hidden", database.ConversationCreateMeta{})
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
@@ -133,6 +135,8 @@ func TestCreateProgressCallback_PersistsRunningResponseBeforeDone(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewDB: %v", err)
 	}
+	// Windows：t.TempDir 清理前必须关库句柄，否则 unlinkat 撞文件锁。
+	defer func() { _ = db.Close() }()
 	conv, err := db.CreateConversation("refresh-running", database.ConversationCreateMeta{})
 	if err != nil {
 		t.Fatalf("CreateConversation: %v", err)
@@ -178,7 +182,11 @@ func TestCreateProgressCallback_FlushesReasoningOnDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDB: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	// Windows：t.TempDir 清理前必须关库句柄，否则 unlinkat 撞文件锁。
+	defer func() {
+		_ = db.Close()
+		_ = os.RemoveAll(tmp)
+	}()
 
 	conv, err := db.CreateConversation("test", database.ConversationCreateMeta{})
 	if err != nil {

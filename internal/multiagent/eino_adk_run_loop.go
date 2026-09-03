@@ -14,6 +14,7 @@ import (
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/einomcp"
 	"cyberstrike-ai/internal/einoobserve"
+	"cyberstrike-ai/internal/mcp"
 	"cyberstrike-ai/internal/security"
 
 	"github.com/cloudwego/eino/adk"
@@ -110,6 +111,9 @@ type einoADKRunLoopArgs struct {
 	OrchMode             string
 	OrchestratorName     string
 	ConversationID       string
+	// ProjectID J4：会话绑定的项目 ID。run loop 入口注入 ctx，让 Eino 内置工具
+	// （execute 经 einoStreamingShellWrap.scopeGuard）能读到 projectID 做 project scope 硬拦。
+	ProjectID string
 	Progress             func(eventType, message string, data interface{})
 	Logger               *zap.Logger
 	SnapshotMCPIDs       func() []string
@@ -227,6 +231,12 @@ func runEinoADKAgentLoop(ctx context.Context, args *einoADKRunLoopArgs, baseMsgs
 	// 限流器未启用时 Reset 空操作。
 	if args.TurnToolCallLimiter != nil {
 		turnToolCallLimiterReset(args.TurnToolCallLimiter, conversationID)
+	}
+
+	// J4：把 projectID 注入 ctx，让 Eino 内置工具（execute/write_file 等）能读到
+	// 会话绑定的项目，进而做 project scope_json 硬拦。projectID 为空时不限制（向后兼容）。
+	if pid := strings.TrimSpace(args.ProjectID); pid != "" {
+		ctx = mcp.WithMCPProjectID(ctx, pid)
 	}
 
 	emptyHint := strings.TrimSpace(args.EmptyResponseMessage)

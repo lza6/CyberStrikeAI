@@ -1,6 +1,8 @@
 package security
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,6 +24,11 @@ func SecureHeaders(isTLS bool) gin.HandlerFunc {
 				"object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 		if isTLS {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		// 静态资源（/static/）由 StaticCacheHeaders 中间件设长缓存；
+		// 此处为根 HTML 与 API 设禁缓存，避免发布新版/配置变更被浏览器或中间代理缓存。
+		if !strings.HasPrefix(c.Request.URL.Path, "/static/") {
+			h.Set("Cache-Control", "no-store, no-cache, must-revalidate")
 		}
 		c.Next()
 	}

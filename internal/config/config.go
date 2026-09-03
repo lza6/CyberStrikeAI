@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"cyberstrike-ai/internal/storage"
 	"cyberstrike-ai/internal/termout"
 
 	"gopkg.in/yaml.v3"
@@ -47,8 +48,50 @@ type Config struct {
 	Project     ProjectConfig         `yaml:"project,omitempty" json:"project,omitempty"`
 	Vision      VisionConfig          `yaml:"vision,omitempty" json:"vision,omitempty"`
 	Cache       CacheConfig           `yaml:"cache,omitempty" json:"cache,omitempty"`
-	Metrics     MetricsConfig         `yaml:"metrics,omitempty" json:"metrics,omitempty"` // Prometheus 指标采集
-	Storage     StorageConfig         `yaml:"storage,omitempty" json:"storage,omitempty"` // 可选：统一 home 目录迁移
+	Metrics     MetricsConfig         `yaml:"metrics,omitempty" json:"metrics,omitempty"`     // Prometheus 指标采集
+	Storage     StorageConfig         `yaml:"storage,omitempty" json:"storage,omitempty"`     // 可选：统一 home 目录迁移
+	Reactions   ReactionsConfig       `yaml:"reactions,omitempty" json:"reactions,omitempty"` // K2：反应式安全事件配置（移植自 agent-orchestrator）
+}
+
+// ReactionsConfig K2：反应式安全事件引擎配置。空=用默认 reactions（applyDefaultReactions 补齐）。
+// 迁移自参考项目 agent-orchestrator-main 的 reactions.yaml（TS）→ Go。语义：
+//   - Enabled：全局开关，false 时引擎只记日志不触发动作（向后兼容）。
+//   - Rules：reaction key → 配置；用户可整 key 覆盖默认（applyDefaultReactions 合并）。
+//   - WebhookURL/WebhookSecret：webhook notifier 的配置（注入 pluginslot.Get 工厂）。
+type ReactionsConfig struct {
+	Enabled       *bool               `yaml:"enabled,omitempty" json:"enabled,omitempty"`              // 默认 true（省略时）
+	Rules         map[string]Reaction `yaml:"rules,omitempty" json:"rules,omitempty"`                  // reaction key → 配置
+	WebhookURL    string              `yaml:"webhook_url,omitempty" json:"webhook_url,omitempty"`      // webhook notifier 目标 URL（空=webhook 通知 no-op）
+	WebhookSecret string              `yaml:"webhook_secret,omitempty" json:"webhook_secret,omitempty"` // webhook HMAC 密钥（签名未实现，配置了会拒绝发送，防假签名）
+}
+
+// EnabledEffective 默认启用：省略或显式 true 都返回 true。
+func (r ReactionsConfig) EnabledEffective() bool {
+	if r.Enabled == nil {
+		return true
+	}
+	return *r.Enabled
+}
+
+// Reaction 单条反应配置。移植自 agent-orchestrator ReactionConfig（TS）→ Go。
+// 关键字段语义对齐参考项目 executeReaction（lifecycle-manager.ts:564-688）：
+//   - Auto：true=自动触发动作；false=只通知不处置（如 approved-and-green）。
+//   - Action：send-to-agent（发消息给 agent）/ notify（通知人类）/ log-only（仅记日志）。
+//   - Message：send-to-agent 的消息内容。
+//   - Priority：notify 的优先级（urgent/action/warning/info）。
+//   - Retries：send-to-agent 重试次数上限，超过升级。
+//   - EscalateAfter：升级阈值。number=次数；string=时长（如 "15m"，time.ParseDuration 解析）。
+//   - Threshold：时间触发型 reaction 的阈值时长（如 agent-stuck "10m"）。
+//   - IncludeSummary：通知是否带 run 摘要。
+type Reaction struct {
+	Auto           bool   `yaml:"auto,omitempty" json:"auto,omitempty"`
+	Action         string `yaml:"action,omitempty" json:"action,omitempty"`
+	Message        string `yaml:"message,omitempty" json:"message,omitempty"`
+	Priority       string `yaml:"priority,omitempty" json:"priority,omitempty"`
+	Retries        *int   `yaml:"retries,omitempty" json:"retries,omitempty"`
+	EscalateAfter  string `yaml:"escalate_after,omitempty" json:"escalate_after,omitempty"` // K2 Go 简化：统一字符串时长，避免 TS 的 number|string 双态
+	Threshold      string `yaml:"threshold,omitempty" json:"threshold,omitempty"`
+	IncludeSummary bool   `yaml:"include_summary,omitempty" json:"include_summary,omitempty"`
 }
 
 // StorageConfig 可选统一 home 目录迁移配置。留空（默认）= 继续使用项目根 data/，不破坏现有部署。
@@ -86,10 +129,10 @@ func (m MetricsConfig) PathEffective() string {
 // CacheConfig 可选缓存层：memory（默认，进程内 TTL map）与 redis（可选）。
 // driver 省略或 memory 时零外部依赖；driver=redis 且连接失败自动降级 memory + Warn。
 type CacheConfig struct {
-	Driver            string `yaml:"driver,omitempty" json:"driver,omitempty"`                         // memory(默认) | redis
-	RedisAddr         string `yaml:"redis_addr,omitempty" json:"redis_addr,omitempty"`                 // 如 127.0.0.1:6379
-	RedisPassword    string `yaml:"redis_password,omitempty" json:"redis_password,omitempty"`
-	RedisDB          int    `yaml:"redis_db,omitempty" json:"redis_db,omitempty"`
+	Driver            string `yaml:"driver,omitempty" json:"driver,omitempty"`         // memory(默认) | redis
+	RedisAddr         string `yaml:"redis_addr,omitempty" json:"redis_addr,omitempty"` // 如 127.0.0.1:6379
+	RedisPassword     string `yaml:"redis_password,omitempty" json:"redis_password,omitempty"`
+	RedisDB           int    `yaml:"redis_db,omitempty" json:"redis_db,omitempty"`
 	DefaultTTLSeconds int    `yaml:"default_ttl_seconds,omitempty" json:"default_ttl_seconds,omitempty"` // 0=用包内默认
 }
 
@@ -165,8 +208,11 @@ type MultiAgentConfig struct {
 	// OrchestratorInstructionPlanExecute plan_execute 主代理（规划侧）系统提示；非空且 agents/orchestrator-plan-execute.md 正文为空或未存在时生效。不与 Deep 的 orchestrator_instruction 混用。
 	OrchestratorInstructionPlanExecute string `yaml:"orchestrator_instruction_plan_execute,omitempty" json:"orchestrator_instruction_plan_execute,omitempty"`
 	// OrchestratorInstructionSupervisor supervisor 主代理系统提示（transfer/exit 说明仍由运行追加）；非空且 agents/orchestrator-supervisor.md 正文为空或未存在时生效。
-	OrchestratorInstructionSupervisor string                `yaml:"orchestrator_instruction_supervisor,omitempty" json:"orchestrator_instruction_supervisor,omitempty"`
-	SubAgents                         []MultiAgentSubConfig `yaml:"sub_agents" json:"sub_agents"`
+	OrchestratorInstructionSupervisor string `yaml:"orchestrator_instruction_supervisor,omitempty" json:"orchestrator_instruction_supervisor,omitempty"`
+	// OrchestratorInstructionCoordinator J6/K5 coordinator 主代理（分解+综合）系统提示；非空且
+	// agents/orchestrator-coordinator.md 正文为空或未存在时生效。不与其他模式混用。
+	OrchestratorInstructionCoordinator string                `yaml:"orchestrator_instruction_coordinator,omitempty" json:"orchestrator_instruction_coordinator,omitempty"`
+	SubAgents                          []MultiAgentSubConfig `yaml:"sub_agents" json:"sub_agents"`
 	// SubAgentUserContextMaxRunes caps user-context supplement for sub-agent task descriptions.
 	// 0 (default) preserves all user turns verbatim; >0 caps total runes; negative disables injection.
 	SubAgentUserContextMaxRunes int `yaml:"sub_agent_user_context_max_runes,omitempty" json:"sub_agent_user_context_max_runes,omitempty"`
@@ -579,6 +625,9 @@ func NormalizeAgentMode(mode string) string {
 		return "plan_execute"
 	case "supervisor", "super", "sv":
 		return "supervisor"
+	case "coordinator", "coord":
+		// J6/K5: agent_mode=coordinator 对话走 CoordinatorRunner。
+		return "coordinator"
 	default:
 		return "eino_single"
 	}
@@ -597,6 +646,11 @@ func NormalizeMultiAgentOrchestration(s string) string {
 		return "plan_execute"
 	case "supervisor", "super", "sv":
 		return "supervisor"
+	case "coordinator", "coord":
+		// J6/K5: coordinator 自动分解 goal→title DAG→并发 dispatch→synthesis。
+		// 迁移自 open-multi-agent-main runTeam 模式。无 case 时请求体
+		// orchestration:"coordinator" 会被静默降级为 deep，分支永远进不到。
+		return "coordinator"
 	default:
 		return "deep"
 	}
@@ -1371,10 +1425,10 @@ func normalizeHitlModeForPrompt(mode string) string {
 }
 
 type AuthConfig struct {
-	SessionDurationHours int  `yaml:"session_duration_hours" json:"session_duration_hours"`
+	SessionDurationHours int `yaml:"session_duration_hours" json:"session_duration_hours"`
 	// LocalMode 本地单机部署模式：开启后所有 API 免登录免 RBAC，以内置 admin 全权限身份执行。
 	// 仅供桌面版/本地部署使用，暴露到公网前必须关闭。
-	LocalMode           bool `yaml:"local_mode" json:"local_mode"`
+	LocalMode bool `yaml:"local_mode" json:"local_mode"`
 }
 
 // MonitorConfig MCP 状态监控（tool_executions）保留策略。
@@ -1511,7 +1565,7 @@ type ToolConfig struct {
 	AllowedExitCodes []int             `yaml:"allowed_exit_codes,omitempty"` // 允许的退出码列表（某些工具在成功时也返回非零退出码）
 	// Scope 可选目标范围限制（CIDR/Domain/Port/Excluded 四元）。nil/空=不限制（向后兼容）。
 	// 声明后 executor 在工具执行前校验目标（target/host/url/ip/domain 参数）是否越界。
-	Scope            *ToolScope        `yaml:"scope,omitempty"`
+	Scope *ToolScope `yaml:"scope,omitempty"`
 }
 
 // ParameterConfig 参数配置
@@ -1610,7 +1664,121 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// K4：统一 home 目录默认接入。YAML 未配 storage.home_dir 时，回退到环境变量
+	// $CYBERSTRIKEAI_HOME 或 $HOME/.cyberstrikeai（Convention over configuration，
+	// 移植自 agent-orchestrator）。空串=无可用的 home，沿用项目根 data/（向后兼容）。
+	// 注意：只回退到 storage.HomeDir()（读环境/家目录），不在此处触发迁移——
+	// 迁移由 app.go 启动时调用 storage.EnsureHome + MigrateLegacyData 完成，
+	// 保持 Load 纯解析、无副作用（与现有职责一致）。
+	if strings.TrimSpace(cfg.Storage.HomeDir) == "" {
+		if hd := storage.HomeDir(); hd != "" {
+			cfg.Storage.HomeDir = hd
+		}
+	}
+
+	// K2：reactions 默认 reactions 接入。YAML 未配 reactions 或只配部分 key 时，
+	// 用默认 reactions 补齐（用户 config 整 key 覆盖默认，移植自 agent-orchestrator
+	// applyDefaultReactions）。nil map 初始化为空，避免下游 nil deref。
+	applyDefaultReactions(&cfg)
+
 	return &cfg, nil
+}
+
+// applyDefaultReactions K2：合并默认 reactions 到用户配置。
+// 语义对齐 agent-orchestrator applyDefaultReactions（config.ts:552-623）：
+//   - 用户未配某 key → 用默认；
+//   - 用户配了某 key（哪怕只填部分字段）→ 整 key 覆盖默认（参考项目是浅合并，非字段级）；
+//   - 用户 Rules 为 nil → 初始化为空 map 后填默认。
+// 默认 reactions 覆盖 CyberStrikeAI 安全事件语义（移植参考项目的 9 个 + 适配本仓）：
+//   - high-impact-tool：HIGH_IMPACT 工具执行（executor.markHighImpact 命中）→ notify urgent
+//   - scope-violation：project scope 拦截（executor/scope_block 越界）→ notify urgent
+//   - capability-rollback：modify-file provider Execute 失败已回滚 → notify warning
+//   - hitl-pending：HITL 审批等待超时 → send-to-agent retries:2 escalateAfter:"15m"
+//   - tool-not-found：工具未注册或未启用 → log-only
+//   - agent-idle：agent 长时间无活动 → send-to-agent retries:2 escalateAfter:"15m"
+//   - agent-stuck：agent 卡死 → notify urgent threshold:"10m"
+//   - run-complete：run 全部完成 → notify info includeSummary:true
+func applyDefaultReactions(cfg *Config) {
+	if cfg.Reactions.Rules == nil {
+		cfg.Reactions.Rules = make(map[string]Reaction, 9)
+	}
+	defaults := defaultReactions()
+	for key, def := range defaults {
+		// 用户已显式配置该 key（含部分字段）→ 整 key 跳过默认（参考项目语义：user wins）。
+		if _, ok := cfg.Reactions.Rules[key]; ok {
+			continue
+		}
+		cfg.Reactions.Rules[key] = def
+	}
+}
+
+// defaultReactions 返回默认 reactions 表（移植自 agent-orchestrator applyDefaultReactions defaults）。
+// 适配 CyberStrikeAI 安全事件语义：把参考项目的 CI/PR 事件换成安全事件。
+func defaultReactions() map[string]Reaction {
+	r2 := func(n int) *int { return &n }
+	return map[string]Reaction{
+		"high-impact-tool": {
+			Auto:     true,
+			Action:   "notify",
+			Priority: "urgent",
+			Message:  "HIGH_IMPACT 破坏性工具被执行，已记 platform audit。请人工复核执行结果。",
+		},
+		"scope-violation": {
+			Auto:     true,
+			Action:   "notify",
+			Priority: "urgent",
+			Message:  "工具目标越界被 project scope 拦截，执行已阻断。请检查会话授权范围配置。",
+		},
+		"capability-rollback": {
+			Auto:     true,
+			Action:   "notify",
+			Priority: "warning",
+			Message:  "Capability Provider 执行失败已自动回滚。请检查 provider 日志与备份文件。",
+		},
+		"hitl-pending": {
+			Auto:          true,
+			Action:        "send-to-agent",
+			Message:       "存在等待人工审批的工具调用。请尽快处理，否则将在 15 分钟后升级通知。",
+			Retries:       r2(2),
+			EscalateAfter: "15m",
+		},
+		"tool-not-found": {
+			Auto:   true,
+			Action: "log-only",
+		},
+		"agent-idle": {
+			Auto:          true,
+			Action:        "send-to-agent",
+			Message:       "Agent 已空闲，如任务未完成请继续；如被阻塞请说明阻塞点。",
+			Retries:       r2(2),
+			EscalateAfter: "15m",
+		},
+		// Critic M2 修复：Threshold/IncludeSummary 当前引擎未消费（伪配置），
+		// 默认表不再赋值，避免"配置文档与行为不符"。字段保留在 Reaction struct
+		// 供未来接入（如 agent-stuck 时间触发检测实现后再启用）。
+		"agent-stuck": {
+			Auto:     true,
+			Action:   "notify",
+			Priority: "urgent",
+		},
+		"run-complete": {
+			Auto:     true,
+			Action:   "notify",
+			Priority: "info",
+		},
+	}
+}
+
+// DefaultReactionsForTest 测试辅助：返回默认 reactions 副本（不依赖 Load）。
+// 供 reactions 包 E2E 测试用（避免 import cycle：reactions→config→...→reactions）。
+// 产物：config 包测试也用此复用。
+func DefaultReactionsForTest() map[string]Reaction {
+	out := defaultReactions()
+	cp := make(map[string]Reaction, len(out))
+	for k, v := range out {
+		cp[k] = v
+	}
+	return cp
 }
 
 func validateOpenAIOutputLimits(openAI OpenAIConfig) error {
@@ -2163,6 +2331,67 @@ type KnowledgeConfig struct {
 	Embedding EmbeddingConfig `yaml:"embedding" json:"embedding"`
 	Retrieval RetrievalConfig `yaml:"retrieval" json:"retrieval"`
 	Indexing  IndexingConfig  `yaml:"indexing,omitempty" json:"indexing,omitempty"` // 索引构建配置
+	Graph     GraphConfig     `yaml:"graph,omitempty" json:"graph,omitempty"`       // 知识图谱配置（LightRAG 迁移）
+}
+
+// GraphConfig 知识图谱配置（对齐 LightRAG：图存储后端可换 + 双层检索 + 增量更新）。
+type GraphConfig struct {
+	// Enabled 是否启用知识图谱（双层检索 + 增量图更新）。默认 false（保持纯向量检索）。
+	Enabled bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// Backend 图存储后端："sqlite"（默认，与知识库共库）| "memory"（进程内，测试用）。
+	// 预留 "neo4j" / "postgres" 扩展点（需实现 GraphStore 接口）。
+	Backend string `yaml:"backend,omitempty" json:"backend,omitempty"`
+	// EntityTypes 实体类型分类列表（对齐 LightRAG entity_types）；空则用默认安全领域类型。
+	EntityTypes []string `yaml:"entity_types,omitempty" json:"entity_types,omitempty"`
+	// DefaultSearchMode 默认双层检索模式："local" | "global" | "hybrid"（默认 hybrid）。
+	DefaultSearchMode string `yaml:"default_search_mode,omitempty" json:"default_search_mode,omitempty"`
+	// TopK 图检索 TopK（实体/关系向量召回数）；0 表示用 Retrieval.TopK。
+	TopK int `yaml:"top_k,omitempty" json:"top_k,omitempty"`
+	// SimilarityThreshold 向量召回余弦阈值（默认 0.2，与 LightRAG cosine_better_than_threshold 一致）。
+	SimilarityThreshold float64 `yaml:"similarity_threshold,omitempty" json:"similarity_threshold,omitempty"`
+	// UseLLMExtractor 是否启用 LLM 抽取实体/关系（需配置 LLM）；false 用启发式正则兜底。
+	UseLLMExtractor bool `yaml:"use_llm_extractor,omitempty" json:"use_llm_extractor,omitempty"`
+}
+
+// EffectiveGraphBackend 返回归一化后端名；空回 sqlite。
+func (c GraphConfig) EffectiveBackend() string {
+	switch strings.TrimSpace(strings.ToLower(c.Backend)) {
+	case "memory":
+		return "memory"
+	case "neo4j", "postgres":
+		return strings.ToLower(strings.TrimSpace(c.Backend))
+	default:
+		return "sqlite"
+	}
+}
+
+// EffectiveDefaultSearchMode 返回归一化检索模式；空回 hybrid。
+func (c GraphConfig) EffectiveDefaultSearchMode() string {
+	switch strings.TrimSpace(strings.ToLower(c.DefaultSearchMode)) {
+	case "local", "global":
+		return strings.ToLower(strings.TrimSpace(c.DefaultSearchMode))
+	default:
+		return "hybrid"
+	}
+}
+
+// EffectiveTopK 返回图检索 TopK；0 回退到传入的 fallback。
+func (c GraphConfig) EffectiveTopK(fallback int) int {
+	if c.TopK > 0 {
+		return c.TopK
+	}
+	if fallback > 0 {
+		return fallback
+	}
+	return 5
+}
+
+// EffectiveSimilarityThreshold 返回向量召回阈值；0 回退默认 0.2。
+func (c GraphConfig) EffectiveSimilarityThreshold() float64 {
+	if c.SimilarityThreshold > 0 {
+		return c.SimilarityThreshold
+	}
+	return 0.2
 }
 
 // IndexingConfig 索引构建配置（用于控制知识库索引构建时的行为）
@@ -2211,10 +2440,21 @@ type PostRetrieveConfig struct {
 	MaxContextTokens int `yaml:"max_context_tokens,omitempty" json:"max_context_tokens,omitempty"`
 }
 
-// MultiQueryConfig Eino MultiQuery 查询改写（始终启用，无关闭开关）。
+// MultiQueryConfig Eino MultiQuery 查询改写（默认启用；可通过 Enabled=false 关闭以绕过 LLM 改写）。
 type MultiQueryConfig struct {
+	// Enabled 为 nil 或 true 表示启用 MultiQuery 查询改写；显式设为 false 时关闭，直接用原查询做向量检索
+	// （绕过 RewriteLLM，节约 LLM 调用成本，与未 wire OpenAI 的退化路径行为一致）。
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
 	// MaxQueries LLM 生成的检索变体上限（含原问语义覆盖）；0 表示默认 4。
 	MaxQueries int `yaml:"max_queries,omitempty" json:"max_queries,omitempty"`
+}
+
+// EnabledEffective 返回 MultiQuery 是否启用；nil 视为 true（向后兼容旧配置）。
+func (c MultiQueryConfig) EnabledEffective() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
 }
 
 func (c MultiQueryConfig) MaxQueriesEffective() int {

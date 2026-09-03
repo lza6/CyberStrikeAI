@@ -74,7 +74,9 @@ func (m *Manager) ScanKnowledgeBase() ([]string, error) {
 		// 读取文件内容
 		content, err := os.ReadFile(path)
 		if err != nil {
-			m.logger.Warn("读取知识库文件失败", zap.String("path", path), zap.Error(err))
+			if m.logger != nil {
+				m.logger.Warn("读取知识库文件失败", zap.String("path", path), zap.Error(err))
+			}
 			return nil // 继续处理其他文件
 		}
 
@@ -98,7 +100,9 @@ func (m *Manager) ScanKnowledgeBase() ([]string, error) {
 			if err != nil {
 				return fmt.Errorf("插入知识项失败: %w", err)
 			}
-			m.logger.Info("添加知识项", zap.String("id", id), zap.String("title", title), zap.String("category", category))
+			if m.logger != nil {
+				m.logger.Info("添加知识项", zap.String("id", id), zap.String("title", title), zap.String("category", category))
+			}
 			// 新添加的项需要索引
 			itemsToIndex = append(itemsToIndex, id)
 		} else if err == nil {
@@ -113,10 +117,12 @@ func (m *Manager) ScanKnowledgeBase() ([]string, error) {
 				if err != nil {
 					return fmt.Errorf("更新知识项失败: %w", err)
 				}
-				m.logger.Info("更新知识项", zap.String("id", existingID), zap.String("title", title))
+				if m.logger != nil {
+					m.logger.Info("更新知识项", zap.String("id", existingID), zap.String("title", title))
+				}
 				// 内容已更新的项需要重新索引
 				itemsToIndex = append(itemsToIndex, existingID)
-			} else {
+			} else if m.logger != nil {
 				m.logger.Debug("知识项未变化，跳过", zap.String("id", existingID), zap.String("title", title))
 			}
 		} else {
@@ -135,6 +141,9 @@ func (m *Manager) ScanKnowledgeBase() ([]string, error) {
 
 // GetCategories 获取所有分类（风险类型）
 func (m *Manager) GetCategories() ([]string, error) {
+	if m == nil || m.db == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
 	rows, err := m.db.Query("SELECT DISTINCT category FROM knowledge_base_items ORDER BY category")
 	if err != nil {
 		return nil, fmt.Errorf("查询分类失败: %w", err)
@@ -349,6 +358,9 @@ func (m *Manager) GetItemsWithOptions(category string, limit, offset int, includ
 
 // GetItemsCount 获取知识项总数
 func (m *Manager) GetItemsCount(category string) (int, error) {
+	if m == nil || m.db == nil {
+		return 0, fmt.Errorf("数据库未初始化")
+	}
 	var count int
 	var err error
 
@@ -846,10 +858,12 @@ func (m *Manager) GetRetrievalLogs(conversationID, messageID string, limit int) 
 
 		// 如果所有格式都失败，记录警告但继续处理
 		if log.CreatedAt.IsZero() {
-			m.logger.Warn("解析检索日志时间失败",
-				zap.String("timeStr", createdAt),
-				zap.Error(err),
-			)
+			if m.logger != nil {
+				m.logger.Warn("解析检索日志时间失败",
+					zap.String("timeStr", createdAt),
+					zap.Error(err),
+				)
+			}
 			// 使用当前时间作为fallback
 			log.CreatedAt = time.Now()
 		}

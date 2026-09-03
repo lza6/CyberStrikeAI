@@ -316,7 +316,7 @@ async function loadRoles() {
         renderRoleSelectionSidebar(); // 渲染侧边栏角色列表
         return roles;
     } catch (error) {
-        console.error('加载角色失败:', error);
+        logger.error('加载角色失败:', error);
         // 提示文案使用 i18n；若此时 i18n 尚未初始化，则回退为可读中文，而不是暴露 key（roles.loadFailed）
         var loadFailedLabel = (typeof window !== 'undefined' && typeof window.t === 'function')
             ? window.t('roles.loadFailed')
@@ -369,7 +369,7 @@ function updateRoleSelectorDisplay() {
                     icon = String.fromCodePoint(codePoint);
                 } catch (e) {
                     // 如果转换失败，使用默认图标
-                    console.warn('转换 icon Unicode 转义失败:', icon, e);
+                    logger.warn('转换 icon Unicode 转义失败:', icon, e);
                     icon = '🔵';
                 }
             }
@@ -410,7 +410,7 @@ function renderRoleSelectionSidebar() {
                     icon = String.fromCodePoint(codePoint);
                 } catch (e) {
                     // 如果转换失败，使用原值
-                    console.warn('转换 icon Unicode 转义失败:', icon, e);
+                    logger.warn('转换 icon Unicode 转义失败:', icon, e);
                 }
             }
             return icon;
@@ -615,7 +615,7 @@ function renderRolesList() {
                     roleIcon = String.fromCodePoint(codePoint);
                 } catch (e) {
                     // 如果转换失败，使用默认图标
-                    console.warn('转换 icon Unicode 转义失败:', roleIcon, e);
+                    logger.warn('转换 icon Unicode 转义失败:', roleIcon, e);
                     roleIcon = '👤';
                 }
             }
@@ -896,7 +896,7 @@ async function loadRoleTools(page = 1, searchKeyword = '') {
         renderRoleToolsPagination();
         updateRoleToolsStats();
     } catch (error) {
-        console.error('加载工具列表失败:', error);
+        logger.error('加载工具列表失败:', error);
         const toolsList = document.getElementById('role-tools-list');
         if (toolsList) {
             toolsList.innerHTML = `<div class="tools-error">${_t('roleModal.loadToolsFailed')}: ${escapeHtml(error.message)}</div>`;
@@ -1633,7 +1633,7 @@ async function loadAllToolsToStateMap() {
             }
         }
     } catch (error) {
-        console.error('加载所有工具到状态映射失败:', error);
+        logger.error('加载所有工具到状态映射失败:', error);
         throw error;
     }
 }
@@ -1810,7 +1810,7 @@ async function saveRole() {
         closeRoleModal();
         await refreshRoles();
     } catch (error) {
-        console.error('保存角色失败:', error);
+        logger.error('保存角色失败:', error);
         showNotification('保存角色失败: ' + error.message, 'error');
     }
 }
@@ -1845,7 +1845,7 @@ async function deleteRole(roleName) {
 
         await refreshRoles();
     } catch (error) {
-        console.error('删除角色失败:', error);
+        logger.error('删除角色失败:', error);
         showNotification('删除角色失败: ' + error.message, 'error');
     }
 }

@@ -655,7 +655,7 @@ async function loadProjectsList() {
         rebuildProjectNameMap(projectsCacheAll);
         _projectsListReady = true;
     } catch (e) {
-        console.warn(e);
+        logger.warn(e);
     }
     if (typeof refreshChatProjectSelector === 'function') {
         refreshChatProjectSelector();
@@ -804,7 +804,7 @@ function filterProjectsList() {
                 renderProjectsSidebar();
                 renderProjectsPagination();
             })
-            .catch((e) => console.warn(e));
+            .catch((e) => logger.warn(e));
     }, 280);
 }
 
@@ -819,7 +819,7 @@ function goProjectsPage(page) {
             const listEl = document.getElementById('projects-list');
             if (listEl) listEl.scrollTop = 0;
         })
-        .catch((e) => console.warn(e));
+        .catch((e) => logger.warn(e));
 }
 
 function changeProjectsPageSize() {
@@ -836,7 +836,7 @@ function changeProjectsPageSize() {
             renderProjectsSidebar();
             renderProjectsPagination();
         })
-        .catch((e) => console.warn(e));
+        .catch((e) => logger.warn(e));
 }
 
 function renderProjectsPagination() {
@@ -1031,7 +1031,7 @@ async function selectProject(id) {
         renderProjectDetailDesc(p.description);
         projectNameById[p.id] = p.name || p.id;
     } catch (e) {
-        console.warn(e);
+        logger.warn(e);
     }
     await refreshProjectHeaderStats();
     switchProjectTab(currentProjectTab);
@@ -1550,7 +1550,7 @@ async function refreshProjectHeaderStats() {
         const stats = await res.json();
         updateProjectStats(stats);
     } catch (e) {
-        console.warn(e);
+        logger.warn(e);
     }
 }
 
@@ -2101,11 +2101,23 @@ async function saveProjectSettings() {
     if (!currentProjectId || !requireProjectWrite()) return;
     const scopeRaw = document.getElementById('project-edit-scope').value.trim();
     if (scopeRaw) {
+        let scopeParsed;
         try {
-            JSON.parse(scopeRaw);
+            scopeParsed = JSON.parse(scopeRaw);
         } catch (e) {
             alert(tp('projects.invalidScopeJson') + ': ' + (e.message || String(e)));
             return;
+        }
+        // 结构校验：targets/exclude 必须是字符串数组（与后端 validateScopeJSON 一致，fail-closed）。
+        // 配错结构会让授权边界静默退化为无限制，必须前端拦下。
+        for (const key of ['targets', 'exclude']) {
+            if (scopeParsed && Object.prototype.hasOwnProperty.call(scopeParsed, key)) {
+                const v = scopeParsed[key];
+                if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) {
+                    alert(`${tp('projects.invalidScopeJson')}: scope_json.${key} 必须是字符串数组（如 ["192.168.1.0/24","example.com"]）`);
+                    return;
+                }
+            }
         }
     }
     const body = {
@@ -2568,9 +2580,9 @@ async function normalizeStaleChatProjectSelection() {
                         body: JSON.stringify({ projectId: '' }),
                     }
                 );
-                if (!res.ok) console.warn(tp('projects.clearStaleProjectBindingFailed'));
+                if (!res.ok) logger.warn(tp('projects.clearStaleProjectBindingFailed'));
             } catch (e) {
-                console.warn(e);
+                logger.warn(e);
             }
         } else {
             setActiveProjectId('');
@@ -3522,7 +3534,7 @@ function removeChatProjectConversation(conversationId) {
 
 function refreshChatProjectFoldersAfterAction() {
     Promise.resolve().then(() => refreshChatProjectFolders()).catch((error) => {
-        console.warn('刷新项目对话列表失败:', error);
+        logger.warn('刷新项目对话列表失败:', error);
     });
 }
 
@@ -4008,7 +4020,7 @@ async function applyChatProjectSelection(projectId) {
                 showNotification(projectId ? tp('projects.projectBound') : tp('projects.projectUnbound'), 'success');
             }
         } catch (e) {
-            console.error(e);
+            logger.error(e);
             alert(tp('projects.updateProjectBindingFailed') + ': ' + (e.message || e));
             updateChatProjectButtonLabel();
             return;
@@ -4030,7 +4042,7 @@ async function refreshChatProjectSelector(options = {}) {
         await normalizeStaleChatProjectSelection();
         await ensureChatProjectButtonLabel();
     } catch (e) {
-        console.warn(e);
+        logger.warn(e);
     }
     if (options.renderFolders !== false) {
         const reloadFolders = options.reloadFolders !== false || !isProjectsCacheReady() || !chatProjectFolderContext.ready;

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -52,11 +53,38 @@ type updateProjectRequest struct {
 	Pinned      *bool   `json:"pinned"`
 }
 
+// validateScopeJSON 校验 scope_json 为合法 JSON 且 targets/exclude（若存在）为数组。
+// 空串放行（不限制）；非法 JSON 或字段类型不符返回错误（fail-closed，防静默退化为无限制）。
+// 与 internal/security/scope_block.go 的 projectScopePayload 解析口径一致。
+func validateScopeJSON(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &probe); err != nil {
+		return fmt.Errorf("scope_json 不是合法 JSON: %w", err)
+	}
+	for _, key := range []string{"targets", "exclude"} {
+		if v, ok := probe[key]; ok {
+			var arr []string
+			if err := json.Unmarshal(v, &arr); err != nil {
+				return fmt.Errorf("scope_json.%s 必须是字符串数组: %w", key, err)
+			}
+		}
+	}
+	return nil
+}
+
 // CreateProject POST /api/projects
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	var req createProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if verr := validateScopeJSON(req.ScopeJSON); verr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
 		return
 	}
 	p := &database.Project{
@@ -206,6 +234,10 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		p.Description = clampProjectDescription(*req.Description)
 	}
 	if req.ScopeJSON != nil {
+		if verr := validateScopeJSON(*req.ScopeJSON); verr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": verr.Error()})
+			return
+		}
 		p.ScopeJSON = *req.ScopeJSON
 	}
 	if req.Status != nil {

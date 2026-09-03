@@ -1,0 +1,35 @@
+name: "ctx_execute"
+command: "internal:ctx_execute"
+args: []
+enabled: true
+short_description: "sandbox 内执行命令，大输出自动索引只回 verdict（省 token）"
+description: |
+  在 sandbox 工作区内执行命令，stdout 超过 intent 阈值（5KB）时自动落索引，
+  只返回匹配的 section 标题 + 首行预览（verdict），避免大输出灌入模型上下文。
+  大输出（>100KB）强制索引并只回指针，用 ctx_search 取回。
+  典型场景：nmap 全端口扫描、subdomain 枚举、爬虫 DOM 等大输出工具的结果裁剪。
+
+  注：本工具走 Go builtin 注册路径（internal/mcp/ctx_execute_tool.go），不经
+  executor ExecuteTool 命令行装配；此 yaml 仅用于工具列表/schema 一致性与文档可见性。
+  command 字段 `internal:ctx_execute` 为声明性占位，真实分发由 mcp.Server.RegisterTool 闭包完成。
+
+  参数：
+    - command（数组，必填）：要执行的命令及参数，如 ["nmap","-sT","-p-","192.168.1.0/24"]
+    - intent（字符串，可选）：你想从输出里定位什么（如 "22 端口" 或 "开放 web 服务"）。
+        输出超过 5KB 时，工具会把全文索引并只返回匹配 intent 的 section 标题+预览（verdict）；
+        不填则小输出直返、大输出落索引返指针。
+    - timeout_seconds（数字，可选）：超时秒数，默认 60，上限 600；超时返回已捕获的部分输出。
+parameters:
+  - name: "command"
+    type: "array"
+    description: "要执行的命令及参数数组（第一项为可执行程序，其余为参数）"
+    required: true
+    item_type: "string"
+  - name: "intent"
+    type: "string"
+    description: "想从输出里定位什么；输出>5KB 时只回匹配 section 标题+预览（verdict）"
+    required: false
+  - name: "timeout_seconds"
+    type: "int"
+    description: "超时秒数，默认 60，上限 600"
+    required: false

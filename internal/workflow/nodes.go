@@ -45,6 +45,12 @@ func runBuiltinNode(ctx context.Context, args RunArgs, node graphNode, state *Wo
 		return runAgentNode(ctx, args, node, state)
 	case "hitl":
 		return runHITLNode(args, node, state)
+	case "delay":
+		return runDelayNode(ctx, args, node, state)
+	case "loop":
+		return runLoopNode(ctx, args, node, state)
+	case "parallel":
+		return runParallelNode(ctx, args, node, state)
 	default:
 		reason := "未知节点类型"
 		out := outputMap(envelope("unknown", node.ID, node.Type, "skipped", ""), map[string]any{"skipped": true, "reason": reason})

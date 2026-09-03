@@ -3,6 +3,8 @@ package multiagent
 import (
 	"sync"
 
+	"cyberstrike-ai/internal/metrics"
+
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 )
@@ -90,6 +92,10 @@ func (a *einoRunUsageAccumulator) EmitOnce(
 		"cachedTokens":     s.CachedTokens,
 		"reasoningTokens":  s.ReasoningTokens,
 	}
+	// 可观测性：把 token 用量桥接到 Prometheus /metrics。
+	// emitted 守卫保证同一 accumulator 只发一次，不会重复计数。
+	metrics.RecordLLMToken(modelName, "prompt", s.PromptTokens)
+	metrics.RecordLLMToken(modelName, "completion", s.CompletionTokens)
 	if progress != nil {
 		progress("eino_usage_summary", "Eino token usage summary", data)
 	}

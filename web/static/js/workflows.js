@@ -53,7 +53,10 @@
         condition: ['条件', 'Condition'],
         hitl: ['审批', 'Approval'],
         output: ['输出', 'Output'],
-        end: ['结束', 'End']
+        end: ['结束', 'End'],
+        delay: ['延时', 'Delay'],
+        loop: ['循环', 'Loop'],
+        parallel: ['并行', 'Parallel']
     };
     const KNOWN_EDGE_LABELS = {
         yes: ['是', 'Yes'],
@@ -155,6 +158,12 @@
                 return { output_key: 'result', source_binding: { from: 'previous', field: 'output' }, join_strategy: 'all_merge' };
             case 'end':
                 return { result_binding: { from: 'outputs', field: 'result' }, join_strategy: 'all_merge' };
+            case 'delay':
+                return { duration_ms: '1000', join_strategy: 'all_merge' };
+            case 'loop':
+                return { count: '3', item_key: 'loop_item', body_instruction: '', output_key: 'loop_result', join_strategy: 'all_merge' };
+            case 'parallel':
+                return { branches: [{ instruction: '并行分支 1' }, { instruction: '并行分支 2' }], output_key: 'parallel_result', join_strategy: 'all_merge' };
             default:
                 return {};
         }
@@ -1117,6 +1126,30 @@
             case 'end':
                 wrap.innerHTML = joinStrategyHtml(cfg) + bindingFieldHtml('workflow-end-result', 'workflows.config.resultBinding', bindingFromConfig(cfg, 'result_binding', 'outputs', 'result'), 'workflows.config.resultBindingHint');
                 break;
+            case 'delay':
+                wrap.innerHTML = `
+                    ${joinStrategyHtml(cfg)}
+                    ${typedField('workflow-delay-duration', _t('workflows.config.durationMs') || '延时 (毫秒)', cfg.duration_ms || '', '1000')}
+                    <p class="workflow-config-hint">${esc(_t('workflows.config.durationHint') || '阻塞指定毫秒数后继续，用于节奏控制。')}</p>
+                `;
+                break;
+            case 'loop':
+                wrap.innerHTML = `
+                    ${joinStrategyHtml(cfg)}
+                    ${typedField('workflow-loop-count', _t('workflows.config.loopCount') || '循环次数', cfg.count || '', '3')}
+                    ${typedField('workflow-loop-item-key', _t('workflows.config.loopItemKey') || '当前项键名', cfg.item_key || '', 'loop_item')}
+                    ${typedTextarea('workflow-loop-body', _t('workflows.config.loopBody') || '循环体指令', cfg.body_instruction || '', _t('workflows.config.instructionPlaceholder') || '')}
+                    ${typedField('workflow-loop-output-key', _t('workflows.config.outputKey') || '输出变量名', cfg.output_key || '', 'loop_result')}
+                `;
+                break;
+            case 'parallel':
+                wrap.innerHTML = `
+                    ${joinStrategyHtml(cfg)}
+                    ${typedField('workflow-parallel-output-key', _t('workflows.config.outputKey') || '输出变量名', cfg.output_key || '', 'parallel_result')}
+                    ${typedTextarea('workflow-parallel-branches', _t('workflows.config.parallelBranches') || '并行分支 (JSON 数组)', JSON.stringify(cfg.branches || []), '[{"instruction":"分支 1"}]')}
+                    <p class="workflow-config-hint">${esc(_t('workflows.config.parallelHint') || '每个分支并发执行，按汇聚策略合并结果。')}</p>
+                `;
+                break;
             default:
                 wrap.innerHTML = '';
         }
@@ -1196,6 +1229,25 @@
                 };
             case 'end':
                 return { result_binding: readBinding('workflow-end-result'), join_strategy };
+            case 'delay':
+                return { duration_ms: (document.getElementById('workflow-delay-duration') || {}).value || '1000', join_strategy };
+            case 'loop':
+                return {
+                    count: (document.getElementById('workflow-loop-count') || {}).value || '3',
+                    item_key: (document.getElementById('workflow-loop-item-key') || {}).value || 'loop_item',
+                    body_instruction: (document.getElementById('workflow-loop-body') || {}).value || '',
+                    output_key: (document.getElementById('workflow-loop-output-key') || {}).value || 'loop_result',
+                    join_strategy
+                };
+            case 'parallel':
+                let branchesValue = [];
+                const branchesRaw = (document.getElementById('workflow-parallel-branches') || {}).value || '[]';
+                try { branchesValue = JSON.parse(branchesRaw) || []; } catch (_) { branchesValue = []; }
+                return {
+                    branches: branchesValue,
+                    output_key: (document.getElementById('workflow-parallel-output-key') || {}).value || 'parallel_result',
+                    join_strategy
+                };
             default:
                 return {};
         }
@@ -2305,7 +2357,6 @@
                 type: item.type,
                 status: item.status
             })));
-            console.log(result);
             console.groupEnd();
             renderWorkflowDryRunTrace(result);
             if (typeof showNotification === 'function') {

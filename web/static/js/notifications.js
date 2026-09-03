@@ -19,7 +19,7 @@
             const n = Number(raw);
             if (Number.isFinite(n) && n > 0) return n;
         } catch (e) {
-            console.warn('读取通知已读时间失败:', e);
+            logger.warn('读取通知已读时间失败:', e);
         }
         return 0;
     }
@@ -28,7 +28,7 @@
         try {
             localStorage.setItem(STORAGE_LAST_SEEN_KEY, String(ts));
         } catch (e) {
-            console.warn('保存通知已读时间失败:', e);
+            logger.warn('保存通知已读时间失败:', e);
         }
     }
 
@@ -277,7 +277,7 @@
             renderBadge(state.unreadCount);
             renderNotificationList(items);
         } catch (e) {
-            console.warn('刷新通知失败:', e);
+            logger.warn('刷新通知失败:', e);
         } finally {
             state.inFlight = false;
         }

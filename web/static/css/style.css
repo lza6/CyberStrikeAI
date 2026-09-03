@@ -32067,8 +32067,218 @@ button.chat-files-dropdown-item:hover:not(:disabled) {
 
 /* 全局 Toast 须高于模态遮罩 (10050) */
 #toast-notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
     z-index: 10100 !important;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+    max-width: min(440px, calc(100vw - 32px));
 }
+
+/* F5 全局 toast 组件（toast.js）—— 四态 + 容器 + skeleton/error-state 统一类
+ * 不覆盖 knowledge.js:2125 的历史内联 toast（已由 ensureContainer 复用同一容器 id），
+ * 仅补齐 .toast-notification / .toast-success|error|info|warning 基类，保证主题适配。
+ */
+.toast-notification {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 240px;
+    max-width: 440px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    word-break: break-word;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+    opacity: 0;
+    transform: translateX(16px);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    background: #ffffff;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+}
+.toast-notification--visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+.toast-notification .toast-icon {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    margin-top: 1px;
+}
+.toast-notification .toast-message {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.toast-notification .toast-close {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.45;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 0 0 6px;
+    margin: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+.toast-notification .toast-close:hover { opacity: 0.85; }
+.toast-notification .toast-close:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 1px;
+    opacity: 0.85;
+}
+
+/* 四态配色（浅色主题） */
+.toast-notification.toast-success {
+    background: #f4fbf6;
+    border-color: #cce8d4;
+    color: #3d6654;
+}
+.toast-notification.toast-success .toast-icon { color: #52a06a; }
+
+.toast-notification.toast-error {
+    background: #fef7f7;
+    border-color: #f3d0d0;
+    color: #8b4444;
+}
+.toast-notification.toast-error .toast-icon { color: #c96a6a; }
+
+.toast-notification.toast-info {
+    background: #f5f9ff;
+    border-color: #cfe0f5;
+    color: #4a6078;
+}
+.toast-notification.toast-info .toast-icon { color: #6b8fbf; }
+
+.toast-notification.toast-warning {
+    background: #fffbf3;
+    border-color: #f0dfc0;
+    color: #7a6535;
+}
+.toast-notification.toast-warning .toast-icon { color: #c4a04a; }
+
+/* 深色主题适配 */
+html[data-theme="dark"] .toast-notification {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+html[data-theme="dark"] .toast-notification.toast-success {
+    background: #14321f;
+    border-color: #1f5a3a;
+    color: #b8e6c8;
+}
+html[data-theme="dark"] .toast-notification.toast-success .toast-icon { color: #6cc48a; }
+html[data-theme="dark"] .toast-notification.toast-error {
+    background: #3a1414;
+    border-color: #6e2424;
+    color: #f5c2c2;
+}
+html[data-theme="dark"] .toast-notification.toast-error .toast-icon { color: #e67878; }
+html[data-theme="dark"] .toast-notification.toast-info {
+    background: #14233a;
+    border-color: #254a7a;
+    color: #cfe0f5;
+}
+html[data-theme="dark"] .toast-notification.toast-info .toast-icon { color: #7aa6d6; }
+html[data-theme="dark"] .toast-notification.toast-warning {
+    background: #3a2e14;
+    border-color: #6e5824;
+    color: #f0dca8;
+}
+html[data-theme="dark"] .toast-notification.toast-warning .toast-icon { color: #d9b65a; }
+
+/* ----------------------------------------------------------------------------
+ * F5 skeleton / error-state 统一类（与 .empty-state 并列）
+ * 用法：<div class="skeleton-line"></div> 或 <div class="error-state">...重试按钮...</div>
+ * ---------------------------------------------------------------------------- */
+.skeleton {
+    background: linear-gradient(90deg, #eef2f6 25%, #e2e8f0 37%, #eef2f6 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border-radius: 6px;
+    color: transparent !important;
+    user-select: none;
+}
+.skeleton-line {
+    height: 14px;
+    margin: 6px 0;
+    background: linear-gradient(90deg, #eef2f6 25%, #e2e8f0 37%, #eef2f6 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border-radius: 6px;
+}
+.skeleton-block {
+    height: 64px;
+    width: 100%;
+    background: linear-gradient(90deg, #eef2f6 25%, #e2e8f0 37%, #eef2f6 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border-radius: 8px;
+}
+@keyframes skeleton-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+html[data-theme="dark"] .skeleton,
+html[data-theme="dark"] .skeleton-line,
+html[data-theme="dark"] .skeleton-block {
+    background: linear-gradient(90deg, #1e293b 25%, #334155 37%, #1e293b 63%);
+    background-size: 400% 100%;
+}
+
+.error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px 16px;
+    color: #b91c1c;
+    border: 1px dashed #f3d0d0;
+    border-radius: 10px;
+    background: #fef7f7;
+    text-align: center;
+}
+.error-state .error-state-title { font-weight: 600; font-size: 0.95rem; }
+.error-state .error-state-desc { font-size: 0.85rem; color: #8b4444; }
+.error-state .error-state-retry {
+    margin-top: 4px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #f3d0d0;
+    background: #fff;
+    color: #8b4444;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+.error-state .error-state-retry:hover { background: #fef0f0; }
+html[data-theme="dark"] .error-state {
+    color: #f5c2c2;
+    border-color: #6e2424;
+    background: #2a1414;
+}
+html[data-theme="dark"] .error-state .error-state-desc { color: #e6a8a8; }
+html[data-theme="dark"] .error-state .error-state-retry {
+    background: #3a1414;
+    border-color: #6e2424;
+    color: #f5c2c2;
+}
+html[data-theme="dark"] .error-state .error-state-retry:hover { background: #4a1818; }
 
 .chat-files-toast {
     position: fixed;

@@ -477,8 +477,8 @@ func (h *OpenAPIHandler) GetOpenAPISpec(c *gin.Context) {
 						},
 						"agentMode": map[string]interface{}{
 							"type":        "string",
-							"description": "代理模式：eino_single（Eino ADK 单代理，默认）| deep | plan_execute | supervisor",
-							"enum":        []string{"eino_single", "deep", "plan_execute", "supervisor"},
+							"description": "代理模式：eino_single（Eino ADK 单代理，默认）| deep | plan_execute | supervisor | coordinator（J6：goal→DAG→并发 dispatch→synthesis）",
+							"enum":        []string{"eino_single", "deep", "plan_execute", "supervisor", "coordinator"},
 						},
 						"scheduleMode": map[string]interface{}{
 							"type":        "string",
@@ -1672,8 +1672,8 @@ func (h *OpenAPIHandler) GetOpenAPISpec(c *gin.Context) {
 										"finalization": finalizationRequestSchema,
 										"orchestration": map[string]interface{}{
 											"type":        "string",
-											"description": "Eino 预置编排：deep | plan_execute | supervisor；缺省 deep",
-											"enum":        []string{"deep", "plan_execute", "supervisor"},
+											"description": "Eino 预置编排：deep | plan_execute | supervisor | coordinator；缺省 deep",
+											"enum":        []string{"deep", "plan_execute", "supervisor", "coordinator"},
 										},
 									},
 									"required": []string{"message"},
@@ -1717,8 +1717,8 @@ func (h *OpenAPIHandler) GetOpenAPISpec(c *gin.Context) {
 										"finalization":         finalizationRequestSchema,
 										"orchestration": map[string]interface{}{
 											"type":        "string",
-											"description": "deep | plan_execute | supervisor；缺省 deep",
-											"enum":        []string{"deep", "plan_execute", "supervisor"},
+											"description": "deep | plan_execute | supervisor | coordinator；缺省 deep",
+											"enum":        []string{"deep", "plan_execute", "supervisor", "coordinator"},
 										},
 									},
 									"required": []string{"message"},
@@ -4607,7 +4607,7 @@ func (h *OpenAPIHandler) GetOpenAPISpec(c *gin.Context) {
 									"properties": map[string]interface{}{
 										"title":     map[string]interface{}{"type": "string", "description": "队列标题"},
 										"role":      map[string]interface{}{"type": "string", "description": "使用的角色名称"},
-										"agentMode": map[string]interface{}{"type": "string", "description": "代理模式", "enum": []string{"eino_single", "deep", "plan_execute", "supervisor"}},
+										"agentMode": map[string]interface{}{"type": "string", "description": "代理模式", "enum": []string{"eino_single", "deep", "plan_execute", "supervisor", "coordinator"}},
 									},
 								},
 							},

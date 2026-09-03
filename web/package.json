@@ -1,0 +1,20 @@
+{
+  "name": "cyberstrikeai-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CyberStrikeAI 前端构建层（渐进增强：压缩 + 文件哈希 + 静态 gzip，不改现有 HTML 结构）",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "preview": "node -e \"console.log('preview 见 web/tests/routes-smoke.sh')\"",
+    "check": "node build.mjs --check"
+  },
+  "devDependencies": {
+    "clean-css": "^5.3.3",
+    "terser": "^5.36.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

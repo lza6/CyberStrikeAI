@@ -19,7 +19,7 @@
                 return stored;
             }
         } catch (e) {
-            console.warn('无法读取语言设置:', e);
+            logger.warn('无法读取语言设置:', e);
         }
 
         const navLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
@@ -41,7 +41,7 @@
                 cache: 'no-cache'
             });
             if (!resp.ok) {
-                console.warn('加载语言包失败:', lang, resp.status);
+                logger.warn('加载语言包失败:', lang, resp.status);
                 return;
             }
             const data = await resp.json();
@@ -50,7 +50,7 @@
             }
             loadedLangs[lang] = true;
         } catch (e) {
-            console.error('加载语言包异常:', lang, e);
+            logger.error('加载语言包异常:', lang, e);
         }
     }
 
@@ -152,7 +152,7 @@
         try {
             localStorage.setItem(STORAGE_KEY, lang);
         } catch (e) {
-            console.warn('无法保存语言设置:', e);
+            logger.warn('无法保存语言设置:', e);
         }
         applyTranslations(document);
         updateLangLabel();
@@ -169,7 +169,7 @@
 
     async function initI18n() {
         if (typeof i18next === 'undefined') {
-            console.warn('i18next 未加载，跳过前端国际化初始化');
+            logger.warn('i18next 未加载，跳过前端国际化初始化');
             if (typeof i18nReadyResolve === 'function') i18nReadyResolve();
             return;
         }
@@ -230,7 +230,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         // i18n 初始化在 DOM Ready 后执行
         initI18n().catch(function (e) {
-            console.error('初始化国际化失败:', e);
+            logger.error('初始化国际化失败:', e);
             if (typeof i18nReadyResolve === 'function') i18nReadyResolve();
         });
     });

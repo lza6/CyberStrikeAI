@@ -399,7 +399,8 @@ func normalizeConversationAgentMode(agentMode string) string {
 	agentMode = strings.ToLower(strings.TrimSpace(agentMode))
 	agentMode = strings.ReplaceAll(agentMode, "-", "_")
 	switch agentMode {
-	case "deep", "plan_execute", "supervisor":
+	case "deep", "plan_execute", "supervisor", "coordinator":
+		// J6/K5: coordinator 是 J6 新增编排模式，需持久化否则刷新后降级为 eino_single。
 		return agentMode
 	default:
 		return "eino_single"

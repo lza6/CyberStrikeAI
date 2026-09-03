@@ -6,8 +6,10 @@
 //   - HTTPRequestDuration    ：HTTP 请求耗时直方图（method/path）
 //   - ActiveSessions         ：当前活跃会话数（gauge）
 //   - ToolExecutionsTotal    ：工具执行计数（tool_name/status）
+//   - ToolCallDuration       ：工具调用耗时直方图（tool_name/status）
 //   - AgentTurnsTotal        ：Agent 轮次计数（orchestration/status）
 //   - LLMTokenUsage          ：LLM token 用量（channel/type=prompt/completion）
+//   - TurnToolCallsDroppedTotal：单轮工具调用限流器累计拦截数
 //
 // /metrics 端点默认公开（不走 RBAC）。生产环境建议在前置反向代理加
 // IP 白名单或 basic auth，限制内网访问。
@@ -63,6 +65,18 @@ var (
 		[]string{"tool_name", "status"},
 	)
 
+	// ToolCallDuration 工具调用耗时直方图，按工具名与成功/失败状态拆分。
+	// 用于定位慢工具与失败分支耗时分布。
+	ToolCallDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      "tool_call_duration_seconds",
+			Help:      "Tool call latency in seconds, by tool name and status.",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"tool_name", "status"},
+	)
+
 	AgentTurnsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -80,6 +94,16 @@ var (
 		},
 		[]string{"channel", "type"},
 	)
+
+	// TurnToolCallsDroppedTotal 单轮工具调用限流器（TurnToolCallLimiter）
+	// 累计拦截的工具调用数。每被拦截一次 +1。
+	TurnToolCallsDroppedTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "turn_tool_calls_dropped_total",
+			Help:      "Total tool calls dropped by TurnToolCallLimiter.",
+		},
+	)
 )
 
 // Register 把所有平台指标注册到默认 Registry。
@@ -90,8 +114,10 @@ func Register() {
 		HTTPRequestDuration,
 		ActiveSessions,
 		ToolExecutionsTotal,
+		ToolCallDuration,
 		AgentTurnsTotal,
 		LLMTokenUsage,
+		TurnToolCallsDroppedTotal,
 	)
 }
 
@@ -146,6 +172,12 @@ func RecordToolExecution(toolName, status string) {
 	ToolExecutionsTotal.WithLabelValues(toolName, status).Inc()
 }
 
+// RecordToolCallDuration 记录一次工具调用耗时（秒）。status 用 "success"/"failure"。
+// 用于定位慢工具与失败分支耗时分布。
+func RecordToolCallDuration(toolName, status string, seconds float64) {
+	ToolCallDuration.WithLabelValues(toolName, status).Observe(seconds)
+}
+
 // RecordAgentTurn 记录一次 Agent 轮次。orchestration 如 "single"/"multi"。
 func RecordAgentTurn(orchestration, status string) {
 	AgentTurnsTotal.WithLabelValues(orchestration, status).Inc()
@@ -157,4 +189,10 @@ func RecordLLMToken(channel, typ string, count int) {
 		return
 	}
 	LLMTokenUsage.WithLabelValues(channel, typ).Add(float64(count))
+}
+
+// RecordTurnToolCallDropped 记录一次单轮工具调用限流器拦截。
+// 在 TurnToolCallLimiter 超限返回合成工具结果前调用。
+func RecordTurnToolCallDropped() {
+	TurnToolCallsDroppedTotal.Inc()
 }

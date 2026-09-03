@@ -126,6 +126,8 @@ CyberStrikeAI 将规划、执行、人工监督、证据与复盘连接在同一
 
 - 🧑‍⚖️ **人机协同**：支持审批模式、工具白名单、审计 Agent 复核和决策追踪。
 - 🔐 **平台 RBAC**：支持多用户、系统及自定义角色、权限 Scope、资源归属和显式授权。
+- 🎯 **授权范围硬闸（project scope）**：为项目配置 `scope_json`（targets/exclude），所有工具目标（扫描/攻击类参数与 execute 命令行目标）在执行前强制校验授权边界，越界目标直接拒绝执行；与工具级 `scope:` 声明叠加生效。详见 [ADR-0006 确定性安全层](docs/adr/ADR-0006-deterministic-safety-layer.md)。
+- ♻️ **破坏性工具回滚（Capability Provider）**：修改/创建文件类破坏性操作走 plan→validate→execute→rollback 生命周期，执行前自动备份、失败自动回滚，备份件可追溯（SHA256）。
 - 🔒 **安全与审计**：提供登录保护、审计日志、SQLite 持久化和行动证据留存。
 - 📄 **结果治理**：数据库保存与 Agent 实际看到的同一份兜底后工具结果，恢复路径会再次防御历史超大输出，前端详情也有展示保护。详见[工具执行治理](docs/zh-CN/tool-execution-governance.md)。
 

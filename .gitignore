@@ -88,3 +88,8 @@ graft/
 .ignore
 .mcp.json
 skills-lock.json
+
+# Temporary Go build caches (created by agent sessions due to corrupted default GOCACHE)
+.gocache-audit/
+server.exe
+mcp-stdio.exe

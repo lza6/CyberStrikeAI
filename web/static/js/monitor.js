@@ -1013,7 +1013,7 @@ async function processSseDataLinesYielding(lines, onEvent, options) {
             try {
                 onEvent(JSON.parse(line.slice(6)));
             } catch (e) {
-                console.error('解析事件数据失败:', e, line);
+                logger.error('解析事件数据失败:', e, line);
             }
         }
         if ((i + 1) % yieldEvery === 0 && i + 1 < lines.length) {
@@ -1418,7 +1418,7 @@ async function submitUserInterruptContinue() {
         }
         loadActiveTasks();
     } catch (error) {
-        console.error('中断并继续失败:', error);
+        logger.error('中断并继续失败:', error);
         alert((typeof window.t === 'function' ? window.t('tasks.cancelTaskFailed') : '操作失败') + ': ' + error.message);
     } finally {
         if (stopBtn) {
@@ -1445,7 +1445,7 @@ async function submitUserInterruptHardCancel() {
         await requestCancel(conversationId);
         loadActiveTasks();
     } catch (error) {
-        console.error('取消任务失败:', error);
+        logger.error('取消任务失败:', error);
         alert((typeof window.t === 'function' ? window.t('tasks.cancelTaskFailed') : '取消任务失败') + ': ' + error.message);
     }
 }
@@ -1481,7 +1481,7 @@ async function performHardCancelProgressTask(progressId, conversationId = '') {
         await requestCancel(targetConversationId);
         loadActiveTasks();
     } catch (error) {
-        console.error('取消任务失败:', error);
+        logger.error('取消任务失败:', error);
         alert((typeof window.t === 'function' ? window.t('tasks.cancelTaskFailed') : '取消任务失败') + ': ' + error.message);
         if (stopBtn) {
             stopBtn.disabled = false;
@@ -2016,7 +2016,7 @@ async function requestProcessDetailsAutoPage(assistantMessageId, backendMessageI
             autoLoadAll: false
         });
     } catch (e) {
-        console.error('自动加载过程详情失败:', e);
+        logger.error('自动加载过程详情失败:', e);
         sentinel.classList.remove('is-loading');
         sentinel.classList.add('is-error');
         sentinel.textContent = processDetailsContinuousLabel('retry');
@@ -2500,7 +2500,7 @@ function triggerLazyProcessDetailsLoad(assistantMessageId, backendMessageId, det
         initialStart: !openAtLatest
     })
         .catch((e) => {
-            console.error('加载过程详情失败:', e);
+            logger.error('加载过程详情失败:', e);
             const tl = detailsContainer.querySelector('.progress-timeline');
             if (tl) {
                 tl.innerHTML = '<div class="progress-timeline-empty">' + ((typeof window.t === 'function') ? window.t('chat.noProcessDetail') : '暂无过程详情（加载失败）') + '</div>';
@@ -4249,6 +4249,39 @@ function hitlApprovalPayload(data) {
     return data && data.payload && typeof data.payload === 'object' ? data.payload : {};
 }
 
+// buildCapabilityPlanHtml 缺口1 HITL 盲批：渲染 capability provider 的 Plan 预演信息。
+// 当 data.payload.capabilityPlan 存在时，展示 Action/Target/Description 三元组，
+// 让审批人在批准前看到"将执行什么/动作/目标"。无 capabilityPlan 返回空串（不影响原布局）。
+function buildCapabilityPlanHtml(data) {
+    const payload = hitlApprovalPayload(data);
+    const plan = payload.capabilityPlan;
+    if (!plan || typeof plan !== 'object') return '';
+    const action = String(plan.action || '').trim();
+    const target = String(plan.target || '').trim();
+    const description = String(plan.description || '').trim();
+    if (!action && !target && !description) return '';
+    const rows = [];
+    if (description) {
+        rows.push('<div class="hitl-capability-plan-row"><span class="hitl-capability-plan-label">' +
+            escapeHtml(hitlApprovalTranslate('hitl.capabilityPlanDescription', '将执行')) +
+            '</span><span class="hitl-capability-plan-value">' + escapeHtml(description) + '</span></div>');
+    }
+    if (action) {
+        rows.push('<div class="hitl-capability-plan-row"><span class="hitl-capability-plan-label">' +
+            escapeHtml(hitlApprovalTranslate('hitl.capabilityPlanAction', '动作')) +
+            '</span><span class="hitl-capability-plan-value hitl-capability-plan-action">' + escapeHtml(action) + '</span></div>');
+    }
+    if (target) {
+        rows.push('<div class="hitl-capability-plan-row"><span class="hitl-capability-plan-label">' +
+            escapeHtml(hitlApprovalTranslate('hitl.capabilityPlanTarget', '目标')) +
+            '</span><span class="hitl-capability-plan-value hitl-capability-plan-target"><code>' + escapeHtml(target) + '</code></span></div>');
+    }
+    return '<div class="hitl-capability-plan">' +
+        '<div class="hitl-capability-plan-title">' +
+        escapeHtml(hitlApprovalTranslate('hitl.capabilityPlanTitle', '能力预演（Capability Plan）')) +
+        '</div>' + rows.join('') + '</div>';
+}
+
 function hitlApprovalArguments(data) {
     const payload = hitlApprovalPayload(data);
     if (payload.argumentsObj && typeof payload.argumentsObj === 'object') return payload.argumentsObj;
@@ -4671,6 +4704,10 @@ function buildInlineHitlApprovalHtml(data, opts) {
     const primary = request.primary
         ? '<div class="hitl-approval-primary hitl-approval-primary--' + request.kind + '"><code>' + escapeHtml(request.primary) + '</code></div>'
         : '';
+    // 缺口1 HITL 盲批：渲染 capability provider 的 Plan（将执行什么/动作/目标），
+    // 让审批人看到破坏性工具预演信息再决定。data.payload.capabilityPlan 由
+    // hitl.go interceptHITLForEinoTool 在 Plan 成功时塞入。
+    const capabilityPlan = buildCapabilityPlanHtml(data);
     const requestDetails = hasArgs
         ? '<details class="hitl-approval-details"' + (allowEdit ? ' open' : '') + '><summary>' + escapeHtml(allowEdit
             ? tr('hitl.editRequestDetails', '查看或修改请求参数')
@@ -4686,6 +4723,7 @@ function buildInlineHitlApprovalHtml(data, opts) {
             <h3>${escapeHtml(request.question)}</h3>
         </div>
         ${primary}
+        ${capabilityPlan}
         ${buildHitlCountdownHtml(data)}
         <div class="hitl-inline-body">
             ${requestDetails}
@@ -4738,7 +4776,8 @@ function bindInlineHitlApproval(panel, data, opts) {
                 try {
                     editedArgs = JSON.parse(raw);
                 } catch (e) {
-                    statusEl.textContent = 'JSON 参数格式错误';
+                    // F6：i18n 硬编码 textContent → t()
+                    statusEl.textContent = typeof window.t === 'function' ? window.t('mcpMonitor.jsonParseError') : 'JSON 参数格式错误';
                     setBusy(false);
                     return;
                 }
@@ -4754,12 +4793,13 @@ function bindInlineHitlApproval(panel, data, opts) {
                 const convFollow = data.conversationId || (typeof window.currentConversationId === 'string' ? window.currentConversationId : '');
                 const ok = await window.submitHitlDecisionWithPayload(data.interruptId, decision, comment, (decision === 'approve' && allowEdit) ? editedArgs : null, convFollow);
                 if (!ok) {
-                    statusEl.textContent = '提交失败，请重试';
+                    // F6：i18n 硬编码 → t()
+                    statusEl.textContent = typeof window.t === 'function' ? window.t('mcpMonitor.submitFailedRetry') : '提交失败，请重试';
                     setBusy(false);
                     return;
                 }
             } else {
-                statusEl.textContent = '审批函数未加载';
+                statusEl.textContent = typeof window.t === 'function' ? window.t('mcpMonitor.approvalFnNotLoaded') : '审批函数未加载';
                 setBusy(false);
                 return;
             }
@@ -4794,7 +4834,9 @@ function bindInlineHitlApproval(panel, data, opts) {
                 window.setProjectConversationApprovalStatus(data.conversationId || window.currentConversationId || '', false);
             }
         } catch (e) {
-            statusEl.textContent = '提交失败：' + (e && e.message ? e.message : 'unknown error');
+            // F6：i18n 硬编码 → t()
+            const prefix = typeof window.t === 'function' ? window.t('mcpMonitor.submitFailedPrefix') : '提交失败';
+            statusEl.textContent = prefix + '：' + (e && e.message ? e.message : 'unknown error');
             setBusy(false);
         }
     };
@@ -5142,7 +5184,9 @@ function renderInlineWorkflowHitlApproval(itemId, data) {
             statusEl.textContent = approved ? '已通过，工作流继续执行' : '已拒绝';
             panel.classList.add('hitl-inline-done');
         } catch (e) {
-            statusEl.textContent = '提交失败：' + (e && e.message ? e.message : 'unknown error');
+            // F6：i18n 硬编码 → t()
+            const prefix = typeof window.t === 'function' ? window.t('mcpMonitor.submitFailedPrefix') : '提交失败';
+            statusEl.textContent = prefix + '：' + (e && e.message ? e.message : 'unknown error');
             setBusy(false);
         }
     };
@@ -5235,7 +5279,7 @@ async function restoreWorkflowHitlInlineForConversation(conversationId) {
                     }
                 }
             } catch (e) {
-                console.error('加载过程详情失败（工作流 HITL 恢复）:', e);
+                logger.error('加载过程详情失败（工作流 HITL 恢复）:', e);
             } finally {
                 detailsContainer.dataset.loading = '0';
             }
@@ -5263,7 +5307,7 @@ async function restoreWorkflowHitlInlineForConversation(conversationId) {
             }
         }
     } catch (e) {
-        console.error('restoreWorkflowHitlInlineForConversation failed', e);
+        logger.error('restoreWorkflowHitlInlineForConversation failed', e);
     }
 }
 
@@ -5277,7 +5321,8 @@ window.submitWorkflowHitlDecision = async function submitWorkflowHitlDecision(ru
     });
     const body = response && typeof response.json === 'function' ? await response.json() : null;
     if (!response || !response.ok) {
-        throw new Error((body && body.error) ? body.error : '提交失败');
+        // F6：i18n 硬编码 → t()
+        throw new Error((body && body.error) ? body.error : (typeof window.t === 'function' ? window.t('mcpMonitor.submitFailedPrefix') : '提交失败'));
     }
     return body;
 };
@@ -5425,7 +5470,7 @@ async function restoreHitlInlineForConversation(conversationId) {
                         }
                     }
                 } catch (e) {
-                    console.error('加载过程详情失败（HITL 恢复）:', e);
+                    logger.error('加载过程详情失败（HITL 恢复）:', e);
                 } finally {
                     detailsContainer.dataset.loading = '0';
                 }
@@ -5460,7 +5505,7 @@ async function restoreHitlInlineForConversation(conversationId) {
             await restoreWorkflowHitlInlineForConversation(conversationId);
         }
     } catch (e) {
-        console.error('restoreHitlInlineForConversation failed', e);
+        logger.error('restoreHitlInlineForConversation failed', e);
     } finally {
         hitlInlineRestoreInFlight.delete(conversationId);
     }
@@ -5505,7 +5550,7 @@ async function refreshLastAssistantProcessDetails(conversationId) {
             expandProcessDetailsTimeline(clientId);
         }
     } catch (e) {
-        console.warn('refreshLastAssistantProcessDetails', e);
+        logger.warn('refreshLastAssistantProcessDetails', e);
     }
 }
 
@@ -5797,7 +5842,7 @@ async function attachRunningTaskEventStream(conversationId) {
             return true;
         } catch (e) {
             if (!(e && e.name === 'AbortError')) {
-                console.warn('attachRunningTaskEventStream', e);
+                logger.warn('attachRunningTaskEventStream', e);
             }
             const ownsCurrentAttach = taskEventReplayAttachState.inFlightPromise === attachPromise;
             if (ownsCurrentAttach && window.csTaskReplay && window.csTaskReplay.conversationId === conversationId) {
@@ -6914,7 +6959,7 @@ function loadActiveTasks(showErrors = false) {
             if (typeof window.syncProjectConversationApprovalStatuses === 'function') {
                 window.syncProjectConversationApprovalStatuses([]);
             }
-            console.error('获取活跃任务失败:', error);
+            logger.error('获取活跃任务失败:', error);
             if (showErrors && bar) {
                 bar.style.display = 'block';
                 const cannotGetStatus = typeof window.t === 'function' ? window.t('tasks.cannotGetTaskStatus') : '无法获取任务状态：';
@@ -6979,7 +7024,7 @@ function syncVisibleConversationTaskReplay(tasks) {
             return false;
         })
         .catch(function (error) {
-            console.warn('同步其他标签页的运行中对话失败:', error);
+            logger.warn('同步其他标签页的运行中对话失败:', error);
             return false;
         })
         .finally(function () {
@@ -7355,7 +7400,7 @@ async function refreshMonitorPanel(page = null) {
         applyMonitorTimelinePayload(timeline, timelineError, range);
         initializeMonitorPageSize();
     } catch (error) {
-        console.error('刷新监控面板失败:', error);
+        logger.error('刷新监控面板失败:', error);
         monitorState.timelineLoading = false;
         if (statsContainer) {
             statsContainer.innerHTML = `<div class="monitor-error">${escapeHtml(typeof window.t === 'function' ? window.t('mcpMonitor.loadStatsError') : '无法加载统计信息')}：${escapeHtml(error.message)}</div>`;
@@ -7588,7 +7633,7 @@ async function refreshMonitorPanelWithFilter(statusFilter = 'all', toolFilter = 
         applyMonitorTimelinePayload(timeline, timelineError, range);
         initializeMonitorPageSize();
     } catch (error) {
-        console.error('刷新监控面板失败:', error);
+        logger.error('刷新监控面板失败:', error);
         monitorState.timelineLoading = false;
         if (statsContainer) {
             statsContainer.innerHTML = `<div class="monitor-error">${escapeHtml(typeof window.t === 'function' ? window.t('mcpMonitor.loadStatsError') : '无法加载统计信息')}：${escapeHtml(error.message)}</div>`;
@@ -9257,7 +9302,7 @@ async function deleteExecution(executionId) {
         const execDeletedMsg = typeof window.t === 'function' ? window.t('mcpMonitor.execDeleted') : '执行记录已删除';
         alert(execDeletedMsg);
     } catch (error) {
-        console.error('删除执行记录失败:', error);
+        logger.error('删除执行记录失败:', error);
         const deleteFailedMsg = typeof window.t === 'function' ? window.t('mcpMonitor.deleteExecFailed') : '删除执行记录失败';
         alert(deleteFailedMsg + ': ' + error.message);
     }
@@ -9397,7 +9442,7 @@ async function batchDeleteExecutions() {
         const batchSuccessMsg = typeof window.t === 'function' ? window.t('mcpMonitor.batchDeleteSuccess', { count: deletedCount }) : `成功删除 ${deletedCount} 条执行记录`;
         alert(batchSuccessMsg);
     } catch (error) {
-        console.error('批量删除执行记录失败:', error);
+        logger.error('批量删除执行记录失败:', error);
         const batchFailedMsg = typeof window.t === 'function' ? window.t('mcp.batchDeleteFailed') : '批量删除执行记录失败';
         alert(batchFailedMsg + ': ' + error.message);
     }

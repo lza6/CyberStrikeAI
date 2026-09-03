@@ -152,6 +152,33 @@ func dryRunNode(node graphNode, state *WorkflowLocalState) (map[string]any, bool
 	case "hitl":
 		prompt := resolveHITLPromptBinding(node.Config, state)
 		return hitlOutputMap(node, "simulated", prompt, prompt, firstNonEmpty(cfgString(node.Config, "reviewer"), "human"), true), true, "simulated", ""
+	case "delay":
+		ms := readDurationMillis(node.Config)
+		return outputMap(envelope("delay", node.ID, node.Type, "simulated", ""), map[string]any{"duration_ms": ms, "simulated": true}), true, "simulated", ""
+	case "loop":
+		items := resolveLoopItems(node.Config, state)
+		outputKey := cfgString(node.Config, "output_key")
+		if outputKey == "" {
+			outputKey = node.ID + "_loop"
+		}
+		results := make([]any, 0, len(items))
+		for i := range items {
+			results = append(results, fmt.Sprintf("[dry-run] loop step %d skipped", i+1))
+		}
+		state.Outputs[outputKey] = results
+		return outputMap(envelope("loop", node.ID, node.Type, "simulated", results), map[string]any{"results": results, "output_key": outputKey, "item_count": len(results), "simulated": true}), true, "simulated", ""
+	case "parallel":
+		branches := readParallelBranches(node.Config)
+		outputKey := cfgString(node.Config, "output_key")
+		if outputKey == "" {
+			outputKey = node.ID + "_parallel"
+		}
+		results := make([]any, 0, len(branches))
+		for i := range branches {
+			results = append(results, fmt.Sprintf("[dry-run] parallel branch %d skipped", i+1))
+		}
+		state.Outputs[outputKey] = results
+		return outputMap(envelope("parallel", node.ID, node.Type, "simulated", results), map[string]any{"results": results, "output_key": outputKey, "branch_count": len(branches), "simulated": true}), true, "simulated", ""
 	default:
 		return outputMap(envelope("unknown", node.ID, node.Type, "skipped", ""), map[string]any{"reason": "未知节点类型"}), true, "skipped", "未知节点类型"
 	}

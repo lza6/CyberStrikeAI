@@ -35,7 +35,7 @@ function saveAuth(token, expiresAt, meta = {}) {
             scope: authScope,
         }));
     } catch (error) {
-        console.warn('无法持久化认证信息:', error);
+        logger.warn('无法持久化认证信息:', error);
     }
     renderUserMenuProfile();
 }
@@ -50,7 +50,7 @@ function clearAuthStorage() {
     try {
         localStorage.removeItem(AUTH_STORAGE_KEY);
     } catch (error) {
-        console.warn('无法清除认证信息:', error);
+        logger.warn('无法清除认证信息:', error);
     }
     renderUserMenuProfile();
 }
@@ -79,7 +79,7 @@ function loadAuthFromStorage() {
         authScope = stored.scope || '';
         return isTokenValid();
     } catch (error) {
-        console.error('读取认证信息失败:', error);
+        logger.error('读取认证信息失败:', error);
         clearAuthStorage();
         return false;
     }
@@ -306,7 +306,7 @@ async function submitLogin(event) {
             await refreshAppData();
         }
     } catch (error) {
-        console.error('登录失败:', error);
+        logger.error('登录失败:', error);
         if (errorBox) {
             const fallback = (typeof window !== 'undefined' && typeof window.t === 'function')
                 ? window.t('auth.loginFailedRetry')
@@ -326,7 +326,7 @@ async function refreshAppData(showTaskErrors = false) {
         try {
             await initChatAgentModeFromConfig();
         } catch (error) {
-            console.warn('刷新对话模式配置失败:', error);
+            logger.warn('刷新对话模式配置失败:', error);
         }
     }
     await Promise.allSettled([
@@ -339,7 +339,7 @@ async function refreshAppData(showTaskErrors = false) {
         try {
             await window.refreshChatProjectSelector({ reloadFolders: true });
         } catch (error) {
-            console.warn('刷新项目侧栏失败:', error);
+            logger.warn('刷新项目侧栏失败:', error);
         }
     }
 }
@@ -352,7 +352,7 @@ async function bootstrapApp() {
                 await window.i18nReady;
             }
         } catch (e) {
-            console.warn('等待 i18n 就绪失败，继续初始化聊天', e);
+            logger.warn('等待 i18n 就绪失败，继续初始化聊天', e);
         }
         initializeChatUI();
         isAppInitialized = true;
@@ -749,7 +749,7 @@ async function initializeApp() {
                 return;
             }
         } catch (error) {
-            console.warn('本地会话已失效，需重新登录');
+            logger.warn('本地会话已失效，需重新登录');
         }
     }
 
@@ -982,7 +982,7 @@ async function logout() {
             });
         }
     } catch (error) {
-        console.error('退出登录API调用失败:', error);
+        logger.error('退出登录API调用失败:', error);
     } finally {
         // 无论如何都清除本地认证信息
         clearAuthStorage();

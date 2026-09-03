@@ -112,6 +112,14 @@ func RegisterExecutionControlTools(server *Server, external *ExternalMCPManager)
 		}
 		return textToolResult("未找到进行中的 execution，或该 execution 已结束: "+id, true), nil
 	})
+
+	// CTX: context-mode token 高效迁移闭环（ctx_execute 写索引 + ctx_search 读索引，
+	// 共享同一进程级 MemoryIndex，见 ctx_engine_singleton.go）。注册放在
+	// RegisterExecutionControlTools 末尾，与同类 builtin 工具（get/wait/cancel
+	// _tool_execution）同批挂载，不改 app.go 注册块，避免与并发会话冲突。
+	engine := defaultCtxEngine()
+	RegisterCtxExecuteTool(server, engine)
+	RegisterCtxSearchTool(server, defaultCtxIndex())
 }
 
 func waitToolExecutionSnapshot(ctx context.Context, server *Server, external *ExternalMCPManager, id string, wait time.Duration) (*ExecutionSnapshot, error) {

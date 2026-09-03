@@ -13,6 +13,7 @@ import (
 
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/retriever"
 	"github.com/cloudwego/eino/flow/retriever/multiquery"
 	"go.uber.org/zap"
 )
@@ -72,20 +73,28 @@ func WireRetrieverPipeline(ctx context.Context, r *Retriever, openAI *config.Ope
 	r.SetDocumentReranker(reranker)
 
 	vec := NewVectorEinoRetriever(r)
-	mq, err := multiquery.NewRetriever(ctx, &multiquery.Config{
-		RewriteLLM:    rewriteLLM,
-		MaxQueriesNum: r.config.MultiQuery.MaxQueriesEffective(),
-		OrigRetriever: vec,
-	})
-	if err != nil {
-		return fmt.Errorf("multi_query: %w", err)
+	// multi_query 关闭开关：Enabled=false（或未 wire LLM）时直接用原查询做向量检索，
+	// 绕过 RewriteLLM 改写，与未配 OpenAI 的退化路径行为一致，节约 LLM 调用成本。
+	var inner retriever.Retriever = vec
+	mqEnabled := r.config.MultiQuery.EnabledEffective()
+	if mqEnabled {
+		mq, err := multiquery.NewRetriever(ctx, &multiquery.Config{
+			RewriteLLM:    rewriteLLM,
+			MaxQueriesNum: r.config.MultiQuery.MaxQueriesEffective(),
+			OrigRetriever: vec,
+		})
+		if err != nil {
+			return fmt.Errorf("multi_query: %w", err)
+		}
+		inner = mq
 	}
 
-	r.pipeline = newKnowledgePipelineRetriever(mq, r)
+	r.pipeline = newKnowledgePipelineRetriever(inner, r)
 	if r.logger != nil {
 		provider := r.config.Rerank.ProviderEffective(strings.TrimSpace(openAI.BaseURL))
 		r.logger.Info("知识库检索流水线已启用",
 			zap.String("pipeline", "MultiQuery→Vector→Rerank→PostRetrieve"),
+			zap.Bool("multi_query_enabled", mqEnabled),
 			zap.Int("multi_query_max", r.config.MultiQuery.MaxQueriesEffective()),
 			zap.String("rerank_provider", provider),
 			zap.String("rerank_model", r.config.Rerank.ModelEffective(provider)),

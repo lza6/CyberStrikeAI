@@ -18,14 +18,14 @@ function bindAgentsMdListDelegation() {
         if (editBtn) {
             var f = editBtn.getAttribute('data-agent-file');
             if (f) {
-                try { editMarkdownAgent(decodeURIComponent(f)); } catch (err) { console.warn(err); }
+                try { editMarkdownAgent(decodeURIComponent(f)); } catch (err) { logger.warn(err); }
             }
             return;
         }
         if (delBtn) {
             var f2 = delBtn.getAttribute('data-agent-file');
             if (f2) {
-                try { deleteMarkdownAgent(decodeURIComponent(f2)); } catch (err2) { console.warn(err2); }
+                try { deleteMarkdownAgent(decodeURIComponent(f2)); } catch (err2) { logger.warn(err2); }
             }
         }
     });
@@ -79,7 +79,7 @@ async function loadMarkdownAgents() {
             );
         }).join('');
     } catch (e) {
-        console.error(e);
+        logger.error(e);
         listEl.innerHTML = '<div class="empty-state">' + escapeHtml(e.message || String(e)) + '</div>';
         showNotification(_agentsT('agentsPage.loadFailed') + ': ' + e.message, 'error');
     }

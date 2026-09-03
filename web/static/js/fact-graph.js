@@ -446,7 +446,7 @@
                 try {
                     _cy.resize();
                 } catch (e) {
-                    console.warn('graph resize', e);
+                    logger.warn('graph resize', e);
                 }
             }
         });
@@ -463,7 +463,7 @@
                 _cy.center();
             }
         } catch (e) {
-            console.warn('centerGraph', e);
+            logger.warn('centerGraph', e);
         }
     }
 

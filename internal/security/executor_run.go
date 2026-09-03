@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"cyberstrike-ai/internal/authctx"
 	"cyberstrike-ai/internal/capability"
 	"cyberstrike-ai/internal/config"
+	"cyberstrike-ai/internal/metrics"
 	"cyberstrike-ai/internal/mcp"
 	"cyberstrike-ai/internal/tooloutput"
 
@@ -34,20 +34,6 @@ type toolOutputCallbackCtxKey struct{}
 // ToolOutputCallbackCtxKey 是 context 中的 key，供 Agent 写入回调，Executor 读取并流式回调。
 var ToolOutputCallbackCtxKey = toolOutputCallbackCtxKey{}
 
-// highImpactAuditRecorder 由上层（app.go）注入，用于在 HIGH_IMPACT 工具执行时
-// 写一条 platform audit 记录。第二道"标记闸"：不阻断执行，仅审计留痕。
-// 不依赖 audit 包类型，避免 security→audit→security 循环依赖。
-type highImpactAuditRecorder interface {
-	RecordHighImpactTool(executor, conversationID, toolName, risk string)
-}
-
-// hitlWhitelistChecker 由上层（handler）注入，回答"该工具是否在 HITL 免审批白名单"。
-// 用于 HIGH_IMPACT 标记闸判定：白名单内的工具（如 tool_search/exit 等元工具）不打 high_impact 标。
-// 返回 (inWhitelist, available)：available=false 表示未注入 checker，此时保守地标记。
-type hitlWhitelistChecker interface {
-	IsToolWhitelisted(conversationID, toolName string) bool
-}
-
 // Executor 安全工具执行器
 type Executor struct {
 	config                  *config.SecurityConfig
@@ -63,18 +49,12 @@ type Executor struct {
 	hitlWhitelist hitlWhitelistChecker
 	// auditRecorder 在 HIGH_IMPACT 工具执行时写一条 platform audit 记录；nil 时仅日志。
 	auditRecorder highImpactAuditRecorder
+	// projectScope J4：按 projectID 解析会话级授权 Scope，工具执行前硬拦越界目标。
+	// nil 时跳过 project scope 校验（向后兼容）。
+	projectScope projectScopeResolver
 }
 
-// SetHITLWhitelist 注入 HITL 免审批白名单判定器；用于 HIGH_IMPACT 标记闸。
-// 由 app.go 在 NewExecutor 后调用，传入 AgentHandler 的 NeedsToolApproval 反查能力。
-func (e *Executor) SetHITLWhitelist(c hitlWhitelistChecker) {
-	e.hitlWhitelist = c
-}
-
-// SetHighImpactAuditRecorder 注入审计记录器，HIGH_IMPACT 工具执行时记一条 audit。
-func (e *Executor) SetHighImpactAuditRecorder(r highImpactAuditRecorder) {
-	e.auditRecorder = r
-}
+// SetHITLWhitelist / SetHighImpactAuditRecorder / SetProjectScopeResolver 见 executor_policy.go
 
 // NewExecutor 创建新的执行器
 func NewExecutor(cfg *config.SecurityConfig, mcpServer *mcp.Server, logger *zap.Logger) *Executor {
@@ -160,7 +140,22 @@ func (e *Executor) buildToolIndex() {
 }
 
 // ExecuteTool 执行安全工具
-func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (*mcp.ToolResult, error) {
+func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}) (result *mcp.ToolResult, err error) {
+	// 可观测性：统一在 defer 里记录工具执行计数 + 耗时，覆盖所有出口
+	// （exec / internal / capability provider / scope 拦截 / 工具未找到）。
+	// status 用 "success"/"failure"：err != nil 或返回的 ToolResult.IsError=true 算 failure。
+	start := time.Now()
+	defer func() {
+		status := "success"
+		if err != nil {
+			status = "failure"
+		} else if result != nil && result.IsError {
+			status = "failure"
+		}
+		metrics.RecordToolExecution(toolName, status)
+		metrics.RecordToolCallDuration(toolName, status, time.Since(start).Seconds())
+	}()
+
 	e.logger.Debug("ExecuteTool被调用",
 		zap.String("toolName", toolName),
 		zap.Any("args", args),
@@ -219,6 +214,28 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		}
 	}
 
+	// J4 project 级授权边界硬闸：会话绑定的 project 声明了 scope_json 时，工具目标
+	// 必须落在授权范围内（targets 内且不在 exclude）。与工具 yaml scope 叠加校验：
+	// 任一不通过即拦。project scope 解析器未注入或 project 无 scope_json 时不限制（向后兼容）。
+	if e.projectScope != nil {
+		projectID := mcp.MCPProjectIDFromContext(ctx)
+		if projectID != "" {
+			ps := e.projectScope.ResolveProjectScope(projectID)
+			if host, port, found := ExtractTarget(args); found {
+				if allowed, reason := ps.Allows(host, port); !allowed {
+					e.logger.Warn("工具目标越界被 project scope 拦截",
+						zap.String("toolName", toolName),
+						zap.String("host", host),
+						zap.Int("port", port),
+						zap.String("projectId", projectID),
+						zap.String("reason", reason),
+					)
+					return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "工具目标越界被项目授权范围拦截: " + reason}}, IsError: true}, nil
+				}
+			}
+		}
+	}
+
 	// 特殊处理：exec工具直接执行系统命令
 	e.logger.Debug("找到工具配置",
 		zap.String("toolName", toolName),
@@ -230,27 +247,10 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 	// provider 时走 plan→validate→execute→rollback→collect_artifacts 完整生命周期；
 	// 其余工具走原路径（向后兼容）。execute 失败自动 Rollback。
 	if cap := capability.GetProvider(toolName); cap != nil && cap.Supports(toolName) {
-		plan, perr := cap.Plan(args)
-		if perr != nil {
-			return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "Capability Plan 失败: " + perr.Error()}}, IsError: true}, nil
-		}
-		if verr := cap.Validate(args); verr != nil {
-			return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "Capability Validate 失败: " + verr.Error()}}, IsError: true}, nil
-		}
-		result, xerr := cap.Execute(ctx, args)
-		if xerr != nil {
-			if rberr := cap.Rollback(ctx, plan); rberr != nil {
-				e.logger.Error("Capability Rollback 失败", zap.Error(rberr))
-			}
-			return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "执行失败已回滚: " + xerr.Error()}}, IsError: true}, nil
-		}
-		if arts, aerr := cap.CollectArtifacts(plan); aerr == nil && len(arts) > 0 {
-			e.logger.Info("Capability Artifacts", zap.Int("count", len(arts)))
-		}
+		result, err := e.executeCapabilityProvider(ctx, toolName, args)
 		e.markHighImpact(result, highImpactHit, highImpactRisk)
-		return result, nil
+		return result, err
 	}
-
 	// 特殊处理：内部工具（command 以 "internal:" 开头）
 	if strings.HasPrefix(toolConfig.Command, "internal:") {
 		e.logger.Debug("执行内部工具",
@@ -300,37 +300,37 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 	)
 
 	var output string
-	var err error
+	var execErr error
 	spill := e.spillOptsFromContext(ctx)
 	// 如果上层提供了 stdout/stderr 增量回调，或当前处于 MCP execution 中，则边执行边读取并回调。
 	if cb, ok := ctx.Value(ToolOutputCallbackCtxKey).(ToolOutputCallback); (ok && cb != nil) || mcp.MCPExecutionIDFromContext(ctx) != "" {
 		cb = e.wrapToolOutputCallback(ctx, cb)
-		output, err = streamCommandOutput(ctx, cmd, cb, ResolveShellNoOutputTimeoutSeconds(e.shellNoOutputTimeoutSec), e.toolOutputMaxBytes, spill)
-		if err != nil && shouldRetryWithPTY(output) {
+		output, execErr = streamCommandOutput(ctx, cmd, cb, ResolveShellNoOutputTimeoutSeconds(e.shellNoOutputTimeoutSec), e.toolOutputMaxBytes, spill)
+		if execErr != nil && shouldRetryWithPTY(output) {
 			e.logger.Info("检测到工具需要 TTY，使用 PTY 重试",
 				zap.String("tool", toolName),
 			)
 			cmd2 := exec.CommandContext(ctx, toolConfig.Command, cmdArgs...)
 			applyDefaultTerminalEnv(cmd2)
 			_ = prepareShellCmdSession(cmd2)
-			output, err = runCommandWithPTY(ctx, cmd2, cb, e.toolOutputMaxBytes, spill)
+			output, execErr = runCommandWithPTY(ctx, cmd2, cb, e.toolOutputMaxBytes, spill)
 		}
 	} else {
 		// 非流式：内存缓冲 + ctx 取消杀进程组；行为对齐原 CombinedOutput，避免双流管道 fan-in 死锁。
-		output, err = combinedOutputCancellableWithLimit(ctx, cmd, e.toolOutputMaxBytes, spill)
-		if err != nil && shouldRetryWithPTY(output) {
+		output, execErr = combinedOutputCancellableWithLimit(ctx, cmd, e.toolOutputMaxBytes, spill)
+		if execErr != nil && shouldRetryWithPTY(output) {
 			e.logger.Info("检测到工具需要 TTY，使用 PTY 重试",
 				zap.String("tool", toolName),
 			)
 			cmd2 := exec.CommandContext(ctx, toolConfig.Command, cmdArgs...)
 			applyDefaultTerminalEnv(cmd2)
 			_ = prepareShellCmdSession(cmd2)
-			output, err = runCommandWithPTY(ctx, cmd2, nil, e.toolOutputMaxBytes, spill)
+			output, execErr = runCommandWithPTY(ctx, cmd2, nil, e.toolOutputMaxBytes, spill)
 		}
 	}
-	if err != nil {
+	if execErr != nil {
 		// 检查退出码是否在允许列表中
-		exitCode := getExitCode(err)
+		exitCode := getExitCode(execErr)
 		if exitCode != nil && toolConfig.AllowedExitCodes != nil {
 			for _, allowedCode := range toolConfig.AllowedExitCodes {
 				if *exitCode == allowedCode {
@@ -354,8 +354,8 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 
 		e.logger.Error("工具执行失败",
 			zap.String("tool", toolName),
-			zap.Error(err),
-			zap.Int("exitCode", getExitCodeValue(err)),
+			zap.Error(execErr),
+			zap.Int("exitCode", getExitCodeValue(execErr)),
 			zap.String("output", string(output)),
 		)
 		return e.markHighImpact(&mcp.ToolResult{
@@ -383,36 +383,6 @@ func (e *Executor) ExecuteTool(ctx context.Context, toolName string, args map[st
 		},
 		IsError: false,
 	}, highImpactHit, highImpactRisk), nil
-}
-
-// markHighImpact 在 ToolResult 上打 HIGH_IMPACT 标记（元数据，不阻断）。
-// 仅当工具命中 HighImpactTools 且非白名单时打标；否则原样返回 result。
-// nil-safe：result 为 nil 时返回 nil。
-func (e *Executor) markHighImpact(result *mcp.ToolResult, hit bool, risk string) *mcp.ToolResult {
-	if result == nil || !hit {
-		return result
-	}
-	result.HighImpact = true
-	result.RiskNote = risk
-	return result
-}
-
-// isToolWhitelisted 判断工具是否在 HITL 免审批白名单内（白名单内不打标）。
-// 未注入 checker 时保守返回 false（即标记为非白名单 → 打标）。
-func (e *Executor) isToolWhitelisted(conversationID, toolName string) bool {
-	if e == nil || e.hitlWhitelist == nil {
-		return false
-	}
-	return e.hitlWhitelist.IsToolWhitelisted(conversationID, toolName)
-}
-
-// currentActor 从 ctx 中提取当前操作者（principal username），用于审计记录。
-// 无 principal 时返回空串，由 audit.RecordSystem 兜底为 "admin"。
-func (e *Executor) currentActor(ctx context.Context) string {
-	if p, ok := authctx.PrincipalFromContext(ctx); ok {
-		return p.Username
-	}
-	return ""
 }
 
 // RegisterTools 注册工具到MCP服务器
@@ -485,403 +455,6 @@ func (e *Executor) RegisterTools(mcpServer *mcp.Server) {
 	)
 }
 
-// buildCommandArgs 构建命令参数
-func (e *Executor) buildCommandArgs(toolName string, toolConfig *config.ToolConfig, args map[string]interface{}) []string {
-	cmdArgs := make([]string, 0)
-
-	// 如果配置中定义了参数映射，使用配置中的映射规则
-	if len(toolConfig.Parameters) > 0 {
-		// 检查是否有 scan_type 参数，如果有则替换默认的扫描类型参数
-		hasScanType := false
-		var scanTypeValue string
-		if scanType, ok := args["scan_type"].(string); ok && scanType != "" {
-			hasScanType = true
-			scanTypeValue = scanType
-		}
-
-		// 添加固定参数（如果指定了 scan_type，可能需要过滤掉默认的扫描类型参数）
-		if hasScanType && toolName == "nmap" {
-			// 对于 nmap，如果指定了 scan_type，跳过默认的 -sT -sV -sC
-			// 这些参数会被 scan_type 参数替换
-		} else {
-			cmdArgs = append(cmdArgs, toolConfig.Args...)
-		}
-
-		// 按位置参数排序
-		positionalParams := make([]config.ParameterConfig, 0)
-		flagParams := make([]config.ParameterConfig, 0)
-
-		for _, param := range toolConfig.Parameters {
-			if param.Position != nil {
-				positionalParams = append(positionalParams, param)
-			} else {
-				flagParams = append(flagParams, param)
-			}
-		}
-
-		// 对于需要子命令的工具（如 gobuster dir），position 0 必须紧跟在命令名后、所有 flag 之前
-		for _, param := range positionalParams {
-			if param.Name == "additional_args" || param.Name == "scan_type" || param.Name == "action" {
-				continue
-			}
-			if param.Position != nil && *param.Position == 0 {
-				value := e.getParamValue(args, param)
-				if value == nil && param.Default != nil {
-					value = param.Default
-				}
-				if value != nil {
-					cmdArgs = append(cmdArgs, e.formatParamValue(param, value))
-				}
-				break
-			}
-		}
-
-		// 处理标志参数
-		for _, param := range flagParams {
-			// 跳过特殊参数，它们会在后面单独处理
-			// action 参数仅用于工具内部逻辑，不传递给命令
-			if param.Name == "additional_args" || param.Name == "scan_type" || param.Name == "action" {
-				continue
-			}
-
-			value := e.getParamValue(args, param)
-			if value == nil {
-				if param.Required {
-					// 必需参数缺失，返回空数组让上层处理错误
-					e.logger.Warn("缺少必需的标志参数",
-						zap.String("tool", toolName),
-						zap.String("param", param.Name),
-					)
-					return []string{}
-				}
-				continue
-			}
-
-			// 布尔值特殊处理：如果为 false，跳过；如果为 true，只添加标志
-			if param.Type == "bool" {
-				var boolVal bool
-				var ok bool
-
-				// 尝试多种类型转换
-				if boolVal, ok = value.(bool); ok {
-					// 已经是布尔值
-				} else if numVal, ok := value.(float64); ok {
-					// JSON 数字类型（float64）
-					boolVal = numVal != 0
-					ok = true
-				} else if numVal, ok := value.(int); ok {
-					// int 类型
-					boolVal = numVal != 0
-					ok = true
-				} else if strVal, ok := value.(string); ok {
-					// 字符串类型
-					boolVal = strVal == "true" || strVal == "1" || strVal == "yes"
-					ok = true
-				}
-
-				if ok {
-					if !boolVal {
-						continue // false 时不添加任何参数
-					}
-					// true 时只添加标志，不添加值
-					if param.Flag != "" {
-						cmdArgs = append(cmdArgs, param.Flag)
-					}
-					continue
-				}
-			}
-
-			formattedValue := e.formatParamValue(param, value)
-			if strings.TrimSpace(formattedValue) == "" {
-				if param.Required {
-					e.logger.Warn("必需参数为空",
-						zap.String("tool", toolName),
-						zap.String("param", param.Name),
-					)
-					return []string{}
-				}
-				continue
-			}
-
-			format := param.Format
-			if format == "" {
-				format = "flag" // 默认格式
-			}
-
-			switch format {
-			case "flag":
-				// --flag value 或 -f value
-				if param.Flag != "" {
-					cmdArgs = append(cmdArgs, param.Flag)
-				}
-				cmdArgs = append(cmdArgs, formattedValue)
-			case "combined":
-				// --flag=value 或 -f=value
-				if param.Flag != "" {
-					cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", param.Flag, formattedValue))
-				} else {
-					cmdArgs = append(cmdArgs, formattedValue)
-				}
-			case "template":
-				// 使用模板字符串
-				if param.Template != "" {
-					template := param.Template
-					template = strings.ReplaceAll(template, "{flag}", param.Flag)
-					template = strings.ReplaceAll(template, "{value}", formattedValue)
-					template = strings.ReplaceAll(template, "{name}", param.Name)
-					cmdArgs = append(cmdArgs, strings.Fields(template)...)
-				} else {
-					// 如果没有模板，使用默认格式
-					if param.Flag != "" {
-						cmdArgs = append(cmdArgs, param.Flag)
-					}
-					cmdArgs = append(cmdArgs, formattedValue)
-				}
-			case "positional":
-				// 位置参数（已在上面处理）
-				cmdArgs = append(cmdArgs, formattedValue)
-			default:
-				// 默认：直接添加值
-				cmdArgs = append(cmdArgs, formattedValue)
-			}
-		}
-
-		// 然后处理位置参数（位置参数通常在标志参数之后）
-		// 对位置参数按位置排序
-		// 首先找到最大的位置值，确定需要处理多少个位置
-		maxPosition := -1
-		for _, param := range positionalParams {
-			if param.Position != nil && *param.Position > maxPosition {
-				maxPosition = *param.Position
-			}
-		}
-
-		// 按位置顺序处理参数，确保即使某些位置没有参数或使用默认值，也能正确传递
-		// position 0 已在前面插入（子命令优先），此处从 1 开始
-		for i := 0; i <= maxPosition; i++ {
-			if i == 0 {
-				continue
-			}
-			for _, param := range positionalParams {
-				// 跳过特殊参数，它们会在后面单独处理
-				// action 参数仅用于工具内部逻辑，不传递给命令
-				if param.Name == "additional_args" || param.Name == "scan_type" || param.Name == "action" {
-					continue
-				}
-
-				if param.Position != nil && *param.Position == i {
-					value := e.getParamValue(args, param)
-					if value == nil {
-						if param.Required {
-							// 必需参数缺失，返回空数组让上层处理错误
-							e.logger.Warn("缺少必需的位置参数",
-								zap.String("tool", toolName),
-								zap.String("param", param.Name),
-								zap.Int("position", *param.Position),
-							)
-							return []string{}
-						}
-						// 对于非必需参数，如果值为 nil，尝试使用默认值
-						if param.Default != nil {
-							value = param.Default
-						} else {
-							// 如果没有默认值，跳过这个位置，继续处理下一个位置
-							break
-						}
-					}
-					// 只有当值不为 nil 时才添加到命令参数中
-					if value != nil {
-						cmdArgs = append(cmdArgs, e.formatParamValue(param, value))
-					}
-					break
-				}
-			}
-			// 如果某个位置没有找到对应的参数，继续处理下一个位置
-			// 这样可以确保位置参数的顺序正确
-		}
-
-		// 特殊处理：additional_args 参数（需要按空格分割成多个参数）
-		if additionalArgs, ok := args["additional_args"].(string); ok && additionalArgs != "" {
-			// 按空格分割，但保留引号内的内容
-			additionalArgsList := e.parseAdditionalArgs(additionalArgs)
-			cmdArgs = append(cmdArgs, additionalArgsList...)
-		}
-
-		// 特殊处理：scan_type 参数（需要按空格分割并插入到合适位置）
-		if hasScanType {
-			scanTypeArgs := e.parseAdditionalArgs(scanTypeValue)
-			if len(scanTypeArgs) > 0 {
-				// 对于 nmap，scan_type 应该替换默认的扫描类型参数
-				// 由于我们已经跳过了默认的 args，现在需要将 scan_type 插入到合适位置
-				// 找到 target 参数的位置（通常是最后一个位置参数）
-				insertPos := len(cmdArgs)
-				for i := len(cmdArgs) - 1; i >= 0; i-- {
-					// target 通常是最后一个非标志参数
-					if !strings.HasPrefix(cmdArgs[i], "-") {
-						insertPos = i
-						break
-					}
-				}
-				// 在 target 之前插入 scan_type 参数
-				newArgs := make([]string, 0, len(cmdArgs)+len(scanTypeArgs))
-				newArgs = append(newArgs, cmdArgs[:insertPos]...)
-				newArgs = append(newArgs, scanTypeArgs...)
-				newArgs = append(newArgs, cmdArgs[insertPos:]...)
-				cmdArgs = newArgs
-			}
-		}
-
-		return cmdArgs
-	}
-
-	// 如果没有定义参数配置，使用固定参数和通用处理
-	// 添加固定参数
-	cmdArgs = append(cmdArgs, toolConfig.Args...)
-
-	// 通用处理：将参数转换为命令行参数
-	for key, value := range args {
-		if key == "_tool_name" {
-			continue
-		}
-		// 使用 --key value 格式
-		cmdArgs = append(cmdArgs, fmt.Sprintf("--%s", key))
-		if strValue, ok := value.(string); ok {
-			cmdArgs = append(cmdArgs, strValue)
-		} else {
-			cmdArgs = append(cmdArgs, fmt.Sprintf("%v", value))
-		}
-	}
-
-	return cmdArgs
-}
-
-// parseAdditionalArgs 解析 additional_args 字符串，按空格分割但保留引号内的内容
-func (e *Executor) parseAdditionalArgs(argsStr string) []string {
-	if argsStr == "" {
-		return []string{}
-	}
-
-	result := make([]string, 0)
-	var current strings.Builder
-	inQuotes := false
-	var quoteChar rune
-	escapeNext := false
-
-	runes := []rune(argsStr)
-	for i := 0; i < len(runes); i++ {
-		r := runes[i]
-
-		if escapeNext {
-			current.WriteRune(r)
-			escapeNext = false
-			continue
-		}
-
-		if r == '\\' {
-			// 检查下一个字符是否是引号
-			if i+1 < len(runes) && (runes[i+1] == '"' || runes[i+1] == '\'') {
-				// 转义的引号：跳过反斜杠，将引号作为普通字符写入
-				i++
-				current.WriteRune(runes[i])
-			} else {
-				// 其他转义字符：写入反斜杠，下一个字符会在下次迭代处理
-				escapeNext = true
-				current.WriteRune(r)
-			}
-			continue
-		}
-
-		if !inQuotes && (r == '"' || r == '\'') {
-			inQuotes = true
-			quoteChar = r
-			continue
-		}
-
-		if inQuotes && r == quoteChar {
-			inQuotes = false
-			quoteChar = 0
-			continue
-		}
-
-		if !inQuotes && (r == ' ' || r == '\t' || r == '\n') {
-			if current.Len() > 0 {
-				result = append(result, current.String())
-				current.Reset()
-			}
-			continue
-		}
-
-		current.WriteRune(r)
-	}
-
-	// 处理最后一个参数（如果存在）
-	if current.Len() > 0 {
-		result = append(result, current.String())
-	}
-
-	// 如果解析结果为空，使用简单的空格分割作为降级方案
-	if len(result) == 0 {
-		result = strings.Fields(argsStr)
-	}
-
-	return result
-}
-
-// getParamValue 获取参数值，支持默认值
-func (e *Executor) getParamValue(args map[string]interface{}, param config.ParameterConfig) interface{} {
-	// 从参数中获取值
-	if value, ok := args[param.Name]; ok && value != nil {
-		return value
-	}
-
-	// 如果参数是必需的但没有提供，返回 nil（让上层处理错误）
-	if param.Required {
-		return nil
-	}
-
-	// 返回默认值
-	return param.Default
-}
-
-// formatParamValue 格式化参数值
-func (e *Executor) formatParamValue(param config.ParameterConfig, value interface{}) string {
-	switch param.Type {
-	case "bool":
-		// 布尔值应该在上层处理，这里不应该被调用
-		if boolVal, ok := value.(bool); ok {
-			return fmt.Sprintf("%v", boolVal)
-		}
-		return "false"
-	case "array":
-		// 数组：转换为逗号分隔的字符串
-		if arr, ok := value.([]interface{}); ok {
-			strs := make([]string, 0, len(arr))
-			for _, item := range arr {
-				strs = append(strs, fmt.Sprintf("%v", item))
-			}
-			return strings.Join(strs, ",")
-		}
-		return fmt.Sprintf("%v", value)
-	case "object":
-		// 对象/字典：序列化为 JSON 字符串
-		if jsonBytes, err := json.Marshal(value); err == nil {
-			return string(jsonBytes)
-		}
-		// 如果 JSON 序列化失败，回退到默认格式化
-		return fmt.Sprintf("%v", value)
-	default:
-		formattedValue := fmt.Sprintf("%v", value)
-		// 特殊处理：对于 ports 参数（通常是 nmap 等工具的端口参数），清理空格
-		// nmap 不接受端口列表中有空格，例如 "80,443, 22" 应该变成 "80,443,22"
-		if param.Name == "ports" {
-			// 移除所有空格，但保留逗号和其他字符
-			formattedValue = strings.ReplaceAll(formattedValue, " ", "")
-		}
-		return formattedValue
-	}
-}
-
-// IsBackgroundShellCommand 检测命令是否为完全后台命令（末尾有独立 &，且不在引号内）。
 // command1 & command2 不算完全后台（command2 仍在前台执行）。
 func IsBackgroundShellCommand(command string) bool {
 	command = strings.TrimSpace(command)
@@ -1631,6 +1204,55 @@ func runCommandWithPTY(ctx context.Context, cmd *exec.Cmd, cb ToolOutputCallback
 	return finalizeBoundedOutput(outBuilder, maxBytes, tee), waitErr
 }
 
+
+// executeCapabilityProvider 执行 Capability Provider 完整生命周期（J5）：
+// plan→validate→execute→rollback→collect_artifacts。ExecuteTool 与 executeInternalTool
+// 的 internal:capability 分支共用，确保 modify-file 不论从哪条路径进入都走完整生命周期。
+func (e *Executor) executeCapabilityProvider(ctx context.Context, toolName string, args map[string]interface{}) (*mcp.ToolResult, error) {
+	cap := capability.GetProvider(toolName)
+	if cap == nil || !cap.Supports(toolName) {
+		// 未注册 provider：退化为原 internal tool 行为（向后兼容），不阻断。
+		return nil, fmt.Errorf("工具 %s 未注册 capability provider", toolName)
+	}
+	plan, perr := cap.Plan(args)
+	if perr != nil {
+		return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "Capability Plan 失败: " + perr.Error()}}, IsError: true}, nil
+	}
+	if verr := cap.Validate(args); verr != nil {
+		return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "Capability Validate 失败: " + verr.Error()}}, IsError: true}, nil
+	}
+	result, xerr := cap.Execute(ctx, args)
+	if xerr != nil {
+		// Execute 暂存在 args 里的备份路径回填到 plan，让 Rollback 真正可执行
+		//（否则 plan.BackupPath 为空，Rollback 恒失败成死代码）。
+		if bp, ok := args["_backup_path"].(string); ok && bp != "" {
+			plan.BackupPath = bp
+		}
+		if rberr := cap.Rollback(ctx, plan); rberr != nil {
+			e.logger.Error("Capability Rollback 失败", zap.Error(rberr))
+		}
+		return &mcp.ToolResult{Content: []mcp.Content{{Type: "text", Text: "执行失败已回滚: " + xerr.Error()}}, IsError: true}, nil
+	}
+	if result == nil {
+		result = &mcp.ToolResult{}
+	}
+	// CollectArtifacts：把证据回写到 result.Content。
+	// ToolResult 无 Metadata 字段，故追加为文本段（保留 provider 原结果 + 证据并列）。
+	if arts, aerr := cap.CollectArtifacts(plan); aerr != nil {
+		e.logger.Warn("Capability CollectArtifacts 失败", zap.String("toolName", toolName), zap.Error(aerr))
+	} else if len(arts) > 0 {
+		e.logger.Info("Capability Artifacts", zap.Int("count", len(arts)), zap.String("toolName", toolName))
+		artJSON, _ := json.Marshal(arts)
+		extra := fmt.Sprintf("\n备份证据: %s", string(artJSON))
+		if len(result.Content) > 0 {
+			result.Content[0].Text += extra
+		} else {
+			result.Content = []mcp.Content{{Type: "text", Text: extra}}
+		}
+	}
+	return result, nil
+}
+
 // executeInternalTool 执行内部工具（不执行外部命令）
 func (e *Executor) executeInternalTool(ctx context.Context, toolName string, command string, args map[string]interface{}) (*mcp.ToolResult, error) {
 	internalToolType := strings.TrimPrefix(command, "internal:")
@@ -1647,103 +1269,6 @@ func (e *Executor) executeInternalTool(ctx context.Context, toolName string, com
 		},
 		IsError: true,
 	}, nil
-}
-
-// buildInputSchema 构建输入模式
-func (e *Executor) buildInputSchema(toolConfig *config.ToolConfig) map[string]interface{} {
-	schema := map[string]interface{}{
-		"type":       "object",
-		"properties": map[string]interface{}{},
-		"required":   []string{},
-	}
-
-	// 如果配置中定义了参数，优先使用配置中的参数定义
-	if len(toolConfig.Parameters) > 0 {
-		properties := make(map[string]interface{})
-		required := []string{}
-
-		for _, param := range toolConfig.Parameters {
-			// 跳过 name 为空的参数（避免 YAML 中 name: null 或空导致非法 schema）
-			if strings.TrimSpace(param.Name) == "" {
-				e.logger.Debug("跳过无名称的参数",
-					zap.String("tool", toolConfig.Name),
-					zap.String("type", param.Type),
-				)
-				continue
-			}
-			// 转换类型为OpenAI/JSON Schema标准类型（空类型默认为 string）
-			openAIType := e.convertToOpenAIType(param.Type)
-
-			prop := map[string]interface{}{
-				"type":        openAIType,
-				"description": param.Description,
-			}
-
-			// JSON Schema/OpenAI 要求 array 类型必须包含 items，否则 API 报 invalid_function_parameters
-			if openAIType == "array" {
-				itemType := strings.TrimSpace(param.ItemType)
-				if itemType == "" {
-					itemType = "string"
-				}
-				prop["items"] = map[string]interface{}{
-					"type": e.convertToOpenAIType(itemType),
-				}
-			}
-
-			// 添加默认值
-			if param.Default != nil {
-				prop["default"] = param.Default
-			}
-
-			// 添加枚举选项
-			if len(param.Options) > 0 {
-				prop["enum"] = param.Options
-			}
-
-			properties[param.Name] = prop
-
-			// 添加到必需参数列表
-			if param.Required {
-				required = append(required, param.Name)
-			}
-		}
-
-		schema["properties"] = properties
-		schema["required"] = required
-		return schema
-	}
-
-	// 如果没有定义参数配置，返回空schema
-	// 这种情况下工具可能只使用固定参数（args字段）
-	// 或者需要通过YAML配置文件定义参数
-	e.logger.Warn("工具未定义参数配置，返回空schema",
-		zap.String("tool", toolConfig.Name),
-	)
-	return schema
-}
-
-// convertToOpenAIType 将配置中的类型转换为OpenAI/JSON Schema标准类型
-func (e *Executor) convertToOpenAIType(configType string) string {
-	// 空或 null 类型统一视为 string，避免非法 schema 导致工具调用失败
-	if strings.TrimSpace(configType) == "" {
-		return "string"
-	}
-	switch configType {
-	case "bool":
-		return "boolean"
-	case "int", "integer":
-		return "number"
-	case "float", "double":
-		return "number"
-	case "string", "array", "object":
-		return configType
-	default:
-		// 默认返回原类型，但记录警告
-		e.logger.Warn("未知的参数类型，使用原类型",
-			zap.String("type", configType),
-		)
-		return configType
-	}
 }
 
 // getExitCode 从错误中提取退出码，如果不是ExitError则返回nil

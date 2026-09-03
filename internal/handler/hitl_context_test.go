@@ -16,7 +16,11 @@ func TestEnrichHitlApprovalPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db: %v", err)
 	}
-	defer os.RemoveAll(tmp)
+	// Windows：t.TempDir 清理前必须关库句柄，否则 unlinkat 撞文件锁。
+	defer func() {
+		_ = db.Close()
+		_ = os.RemoveAll(tmp)
+	}()
 
 	conv, err := db.CreateConversation("hitl ctx", database.ConversationCreateMeta{})
 	if err != nil {

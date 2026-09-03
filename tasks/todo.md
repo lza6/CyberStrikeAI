@@ -4,10 +4,10 @@
 
 - [x] I0: spec.md 落盘（六要素：Objective/Stack/Commands/Structure/Style/Testing/Boundaries/Criteria）
   - Verify: 文件存在且覆盖六核心域
-- [ ] I1: 确定性安全五闸（shellsafe/HIGH_IMPACT/scope/TurnLimiter/tool_call_ids）
-  - Accept: 22+ 注入 case 拦截；高危工具标记；scope 14 case；单 turn 限流生效
-  - Verify: go test ./internal/security/ -run "TestShellSafe|TestHighImpact|TestScope" + ./internal/multiagent/ -run TestTurnLimiter；go vet/build
-  - Files: internal/security/shellsafe.go+test, highimpact.go+test, scope.go+test, executor.go 接线, config.go, internal/multiagent/eino_turn_limiter.go+test
+- [x] I1: 确定性安全五闸（shellsafe/HIGH_IMPACT/scope/TurnLimiter/tool_call_ids）+ J4 project scope_json 会话级硬闸 + J5 Capability Provider 生命周期
+  - Accept: 22+ 注入 case 拦截；高危工具标记；scope 14 case；单 turn 限流生效；project scope 越界硬拦（executor + Eino execute guard）；modify-file 生命周期（plan/validate/execute/rollback）
+  - Verify: go test ./internal/security/ -run "TestShellSafe|TestHighImpact|TestScope" + ./internal/multiagent/ -run TestTurnLimiter + scope_block/filesystem_capability_guard 全套；go vet/build
+  - Files: internal/security/shellsafe.go+test, highimpact.go+test, scope.go+test, executor.go 接线, config.go, internal/multiagent/eino_turn_limiter.go+test, internal/security/scope_block.go+test, tools/modify-file.yaml, internal/multiagent/filesystem_capability_guard.go+test, execute_scope_guard.go
 - [ ] I2: skill 供应链双闸（skills-lock.json + verbs-gate）
   - Accept: 锁覆盖全部 skill（SHA256）；Verify 三型违规；幽灵工具清单产出；CI job
   - Verify: go test ./internal/skillpackage/ -v；skills-lock.json 落盘；verbs-gate 实跑报告

@@ -149,7 +149,7 @@ function loadCompletedTasksHistory() {
             saveCompletedTasksHistory();
         }
     } catch (error) {
-        console.error('加载已完成任务历史失败:', error);
+        logger.error('加载已完成任务历史失败:', error);
         tasksState.completedTasksHistory = [];
     }
 }
@@ -159,7 +159,7 @@ function saveCompletedTasksHistory() {
     try {
         localStorage.setItem('tasks-completed-history', JSON.stringify(tasksState.completedTasksHistory));
     } catch (error) {
-        console.error('保存已完成任务历史失败:', error);
+        logger.error('保存已完成任务历史失败:', error);
     }
 }
 
@@ -240,7 +240,7 @@ async function loadTasks() {
                 const completedResult = await completedResponse.value.json();
                 completedTasks = completedResult.tasks || [];
             } catch (e) {
-                console.warn('解析已完成任务历史失败:', e);
+                logger.warn('解析已完成任务历史失败:', e);
             }
         }
         
@@ -284,7 +284,7 @@ async function loadTasks() {
         filterAndSortTasks();
         startDurationUpdates();
     } catch (error) {
-        console.error('加载任务失败:', error);
+        logger.error('加载任务失败:', error);
         listContainer.innerHTML = `
             <div class="tasks-empty">
                 <p>${_t('tasks.loadFailedRetry')}: ${escapeHtml(error.message)}</p>
@@ -643,7 +643,7 @@ async function batchCancelTasks() {
                 failCount++;
             }
         } catch (error) {
-            console.error('取消任务失败:', conversationId, error);
+            logger.error('取消任务失败:', conversationId, error);
             failCount++;
         }
     }
@@ -672,7 +672,7 @@ function copyTaskId(conversationId) {
         document.body.appendChild(tooltip);
         setTimeout(() => tooltip.remove(), 1000);
     }).catch(err => {
-        console.error('复制失败:', err);
+        logger.error('复制失败:', err);
     });
 }
 
@@ -705,7 +705,7 @@ async function cancelTask(conversationId, button) {
         // 重新加载任务列表
         await loadTasks();
     } catch (error) {
-        console.error('取消任务失败:', error);
+        logger.error('取消任务失败:', error);
         alert(_t('tasks.cancelTaskFailed') + ': ' + error.message);
         button.disabled = false;
         button.textContent = originalText;
@@ -729,7 +729,6 @@ function viewConversation(conversationId) {
             } else {
                 // 如果函数不存在，尝试通过URL跳转
                 window.location.hash = `chat?conversation=${conversationId}`;
-                console.log('切换到对话页面，对话ID:', conversationId);
             }
         }, 500);
     }
@@ -874,7 +873,7 @@ async function refreshBatchProjectSelectOptions() {
             projectSelect.appendChild(option);
         });
     } catch (error) {
-        console.warn('加载项目列表失败:', error);
+        logger.warn('加载项目列表失败:', error);
     }
 }
 
@@ -939,7 +938,7 @@ async function showBatchImportModal() {
                     }
                 });
             } catch (error) {
-                console.error('加载角色列表失败:', error);
+                logger.error('加载角色列表失败:', error);
             }
         }
         await refreshBatchProjectSelectOptions();
@@ -1081,7 +1080,7 @@ async function createBatchQueue() {
         // 刷新批量队列列表
         refreshBatchQueues();
     } catch (error) {
-        console.error('创建批量任务队列失败:', error);
+        logger.error('创建批量任务队列失败:', error);
         alert(_t('tasks.createBatchQueueFailed') + ': ' + error.message);
     }
 }
@@ -1104,7 +1103,7 @@ function getRoleIconForDisplay(roleName, rolesList) {
                     icon = String.fromCodePoint(codePoint);
                 } catch (e) {
                     // 转换失败，使用默认图标
-                    console.warn('转换 icon Unicode 转义失败:', icon, e);
+                    logger.warn('转换 icon Unicode 转义失败:', icon, e);
                     return '👤';
                 }
             }
@@ -1130,7 +1129,7 @@ async function loadBatchQueues(page) {
         try {
             loadedRoles = await loadRoles();
         } catch (error) {
-            console.warn('加载角色列表失败，将使用默认图标:', error);
+            logger.warn('加载角色列表失败，将使用默认图标:', error);
         }
     }
     batchQueuesState.loadedRoles = loadedRoles; // 保存到状态中供渲染使用
@@ -1158,7 +1157,7 @@ async function loadBatchQueues(page) {
         batchQueuesState.totalPages = result.total_pages || 1;
         renderBatchQueues();
     } catch (error) {
-        console.error('加载批量任务队列失败:', error);
+        logger.error('加载批量任务队列失败:', error);
         section.style.display = 'block';
         const list = document.getElementById('batch-queues-list');
         if (list) {
@@ -1744,7 +1743,7 @@ async function showBatchQueueDetail(queueId) {
             try {
                 loadedRoles = await loadRoles();
             } catch (error) {
-                console.warn('加载角色列表失败，将使用默认图标:', error);
+                logger.warn('加载角色列表失败，将使用默认图标:', error);
             }
         }
         
@@ -1928,7 +1927,7 @@ async function showBatchQueueDetail(queueId) {
             stopBatchQueueRefresh();
         }
     } catch (error) {
-        console.error('获取队列详情失败:', error);
+        logger.error('获取队列详情失败:', error);
         closeBatchQueueDetailModal();
         alert(_t('tasks.getQueueDetailFailed') + ': ' + error.message);
     }
@@ -1967,7 +1966,7 @@ async function startBatchQueue() {
         showBatchQueueDetail(queueId);
         refreshBatchQueues();
     } catch (error) {
-        console.error('启动批量任务失败:', error);
+        logger.error('启动批量任务失败:', error);
         alert(_t('tasks.startBatchQueueFailed') + ': ' + error.message);
     } finally {
         if (btn) { btn.disabled = false; }
@@ -1998,7 +1997,7 @@ async function pauseBatchQueue() {
         showBatchQueueDetail(queueId);
         refreshBatchQueues();
     } catch (error) {
-        console.error('暂停批量任务失败:', error);
+        logger.error('暂停批量任务失败:', error);
         alert(_t('tasks.pauseQueueFailed') + ': ' + error.message);
     } finally {
         if (btn) { btn.disabled = false; }
@@ -2028,7 +2027,7 @@ async function rerunBatchQueue() {
         showBatchQueueDetail(queueId);
         refreshBatchQueues();
     } catch (error) {
-        console.error('重跑批量任务失败:', error);
+        logger.error('重跑批量任务失败:', error);
         alert(_t('tasks.rerunQueueFailed') + ': ' + error.message);
     } finally {
         if (btn) { btn.disabled = false; }
@@ -2044,55 +2043,78 @@ async function deleteBatchQueue() {
         return;
     }
     const btn = document.getElementById('batch-queue-delete-btn');
-    if (btn) { btn.disabled = true; }
+    const originalText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = _t('common.deleting', '删除中…'); }
     try {
         const response = await apiFetch(`/api/batch-tasks/${queueId}`, {
             method: 'DELETE',
         });
-        
+
         if (!response.ok) {
             const result = await response.json().catch(() => ({}));
             throw new Error(result.error || _t('tasks.deleteQueueFailed'));
         }
-        
+
+        // F5：成功 toast
+        if (typeof window.showToast === 'function') {
+            window.showToast(_t('tasks.deleteQueueSuccess', '队列已删除'), 'success');
+        }
         closeBatchQueueDetailModal();
         refreshBatchQueues();
     } catch (error) {
-        console.error('删除批量任务队列失败:', error);
-        alert(_t('tasks.deleteQueueFailed') + ': ' + error.message);
+        logger.error('删除批量任务队列失败:', error);
+        // F5：失败 toast 替代 alert
+        const msg = _t('tasks.deleteQueueFailed') + ': ' + error.message;
+        if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+        else alert(msg);
     } finally {
-        if (btn) { btn.disabled = false; }
+        if (btn) { btn.disabled = false; btn.textContent = originalText; }
     }
 }
 
 // 从列表删除批量任务队列
 async function deleteBatchQueueFromList(queueId) {
     if (!queueId) return;
-    
+
     if (!confirm(_t('tasks.deleteQueueConfirm'))) {
         return;
     }
-    
+
+    // F5：pending 态——锁列表删除按钮
+    const btn = document.querySelector('button[onclick*="deleteBatchQueueFromList"][onclick*="' + queueId + '"]');
+    const originalText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = _t('common.deleting', '删除中…'); }
+    const restoreBtn = function () { if (btn) { btn.disabled = false; btn.textContent = originalText; } };
+
     try {
         const response = await apiFetch(`/api/batch-tasks/${queueId}`, {
             method: 'DELETE',
         });
-        
+
         if (!response.ok) {
             const result = await response.json().catch(() => ({}));
             throw new Error(result.error || _t('tasks.deleteQueueFailed'));
         }
-        
+
+        // F5：成功 toast
+        if (typeof window.showToast === 'function') {
+            window.showToast(_t('tasks.deleteQueueSuccess', '队列已删除'), 'success');
+        }
+
         // 如果当前正在查看这个队列的详情，关闭详情模态框
         if (batchQueuesState.currentQueueId === queueId) {
             closeBatchQueueDetailModal();
         }
-        
+
         // 刷新队列列表
         refreshBatchQueues();
     } catch (error) {
-        console.error('删除批量任务队列失败:', error);
-        alert(_t('tasks.deleteQueueFailed') + ': ' + error.message);
+        logger.error('删除批量任务队列失败:', error);
+        // F5：失败 toast 替代 alert，恢复按钮可重试
+        const msg = _t('tasks.deleteQueueFailed') + ': ' + error.message;
+        if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+        else alert(msg);
+        restoreBtn();
     }
 }
 
@@ -2133,7 +2155,7 @@ function startBatchQueueRefresh(queueId) {
                 await showBatchQueueDetail(queueId);
                 await refreshBatchQueues();
             } catch (e) {
-                console.warn('批量队列定时刷新失败:', e);
+                logger.warn('批量队列定时刷新失败:', e);
             } finally {
                 batchQueuesState._bqDetailRefreshing = false;
             }
@@ -2256,7 +2278,7 @@ async function saveInlineTask(queueId, taskId) {
         refreshBatchQueues();
     } catch (error) {
         _bqInlineSaving = false;
-        console.error('保存任务失败:', error);
+        logger.error('保存任务失败:', error);
         alert(_t('tasks.saveTaskFailed') + ': ' + error.message);
     }
 }
@@ -2274,7 +2296,7 @@ function showAddBatchTaskModal() {
     const messageInput = document.getElementById('add-task-message');
     
     if (!modal || !messageInput) {
-        console.error('添加任务模态框元素不存在');
+        logger.error('添加任务模态框元素不存在');
         return;
     }
     
@@ -2375,7 +2397,7 @@ async function saveAddBatchTask() {
         // 刷新队列列表
         refreshBatchQueues();
     } catch (error) {
-        console.error('添加任务失败:', error);
+        logger.error('添加任务失败:', error);
         alert(_t('tasks.addTaskFailed') + ': ' + error.message);
     }
 }
@@ -2384,7 +2406,7 @@ async function saveAddBatchTask() {
 function deleteBatchTaskFromElement(button) {
     const taskItem = button.closest('.batch-task-item');
     if (!taskItem) {
-        console.error('无法找到任务项元素');
+        logger.error('无法找到任务项元素');
         return;
     }
     
@@ -2393,7 +2415,7 @@ function deleteBatchTaskFromElement(button) {
     const taskMessage = taskItem.getAttribute('data-task-message');
     
     if (!queueId || !taskId) {
-        console.error('任务信息不完整');
+        logger.error('任务信息不完整');
         return;
     }
     
@@ -2418,30 +2440,49 @@ function deleteBatchTaskFromElement(button) {
 // 删除批量任务
 async function deleteBatchTask(queueId, taskId) {
     if (!queueId || !taskId) {
-        alert(_t('tasks.taskIncomplete'));
+        const msg = _t('tasks.taskIncomplete');
+        if (typeof window.showToast === 'function') window.showToast(msg, 'warning');
+        else alert(msg);
         return;
     }
-    
+
+    // F5：pending 态——锁定删除按钮（调用方 viewBatchTaskDetail 的删除按钮）
+    const deleteBtn = document.querySelector('button[onclick*="deleteBatchTask"][onclick*="' + taskId + '"]');
+    const originalText = deleteBtn ? deleteBtn.textContent : '';
+    if (deleteBtn) { deleteBtn.disabled = true; deleteBtn.textContent = _t('common.deleting', '删除中…'); }
+    const restoreBtn = function () {
+        if (deleteBtn) { deleteBtn.disabled = false; deleteBtn.textContent = originalText; }
+    };
+
     try {
         const response = await apiFetch(`/api/batch-tasks/${queueId}/tasks/${taskId}`, {
             method: 'DELETE',
         });
-        
+
         if (!response.ok) {
             const result = await response.json().catch(() => ({}));
             throw new Error(result.error || _t('tasks.deleteTaskFailed'));
         }
-        
+
+        // F5：成功 toast（替代无反馈）
+        if (typeof window.showToast === 'function') {
+            window.showToast(_t('tasks.deleteTaskSuccess', '任务已删除'), 'success');
+        }
+
         // 刷新队列详情
         if (batchQueuesState.currentQueueId === queueId) {
             showBatchQueueDetail(queueId);
         }
-        
+
         // 刷新队列列表
         refreshBatchQueues();
     } catch (error) {
-        console.error('删除任务失败:', error);
-        alert(_t('tasks.deleteTaskFailed') + ': ' + error.message);
+        logger.error('删除任务失败:', error);
+        // F5：失败 toast 替代 alert，并恢复按钮（删除未成功，按钮应可重试）
+        const msg = _t('tasks.deleteTaskFailed') + ': ' + error.message;
+        if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+        else alert(msg);
+        restoreBtn();
     }
 }
 
@@ -2461,7 +2502,7 @@ async function updateBatchQueueScheduleEnabled(enabled) {
         showBatchQueueDetail(queueId);
         refreshBatchQueues();
     } catch (e) {
-        console.error(e);
+        logger.error(e);
         alert(_t('batchQueueDetailModal.scheduleToggleFailed') + ': ' + e.message);
         showBatchQueueDetail(queueId);
     }
@@ -2529,7 +2570,7 @@ async function saveInlineTitle() {
         refreshBatchQueues();
     } catch (e) {
         _bqInlineSaving = false;
-        console.error(e);
+        logger.error(e);
         alert(e.message);
     }
 }
@@ -2596,7 +2637,7 @@ async function saveInlineRole() {
         refreshBatchQueues();
     } catch (e) {
         _bqInlineSaving = false;
-        console.error(e);
+        logger.error(e);
         alert(e.message);
     }
 }
@@ -2663,7 +2704,7 @@ async function saveInlineAgentMode() {
         refreshBatchQueues();
     } catch (e) {
         _bqInlineSaving = false;
-        console.error(e);
+        logger.error(e);
         alert(e.message);
     }
 }
@@ -2732,7 +2773,7 @@ async function saveInlineConcurrency() {
         refreshBatchQueues();
     } catch (e) {
         _bqInlineSaving = false;
-        console.error(e);
+        logger.error(e);
         alert(e.message);
     }
 }
@@ -2755,7 +2796,7 @@ async function runSingleBatchTask(queueId, taskId) {
         showBatchQueueDetail(queueId);
         refreshBatchQueues();
     } catch (e) {
-        console.error('单条执行失败:', e);
+        logger.error('单条执行失败:', e);
         alert(e.message);
     }
 }
@@ -2847,7 +2888,7 @@ async function saveInlineSchedule() {
         refreshBatchQueues();
     } catch (e) {
         _bqInlineSaving = false;
-        console.error(e);
+        logger.error(e);
         alert(_t('batchQueueDetailModal.editScheduleError') + ': ' + e.message);
     }
 }
@@ -2912,7 +2953,7 @@ document.addEventListener('languagechange', function () {
             showBatchQueueDetail(batchQueuesState.currentQueueId);
         }
     } catch (e) {
-        console.warn('languagechange tasks refresh failed', e);
+        logger.warn('languagechange tasks refresh failed', e);
     }
 });
 

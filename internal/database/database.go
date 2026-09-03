@@ -9,9 +9,27 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
 )
+
+// sqliteDriverName 返回当前构建生效的 SQLite 驱动名。
+// CGO 构建走 mattn/go-sqlite3（"sqlite3"，生产）；纯 Go 构建（CGO_ENABLED=0，
+// 由 -tags='sqlite_pure_go' 显式启用或无 cgo 工具链时）走 modernc.org/sqlite（"sqlite"）。
+// 二者共用同一套 PRAGMA（modernc 经 _pragma DSN 或 PRAGMA 语句，行为一致）。
+func sqliteDriverName() string {
+	return sqliteDriver
+}
+
+// sqliteDSN 构造与驱动匹配的 DSN。
+// mattn：?_journal_mode=WAL&_foreign_keys=1&_busy_timeout=5000&_synchronous=NORMAL
+// modernc：同样语义经 _pragma 传递（modernc 仅识别 _pragma=...，其余 key 忽略）。
+func sqliteDSN(dbPath string) string {
+	if sqliteDriver == "sqlite3" {
+		return dbPath + "?_journal_mode=WAL&_foreign_keys=1&_busy_timeout=5000&_synchronous=NORMAL"
+	}
+	// modernc：_pragma 按 key=value，多次出现累加。
+	return dbPath + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+}
 
 const (
 	// SQLite 在 WAL 模式下建议使用较保守的连接数，降低长读快照导致 checkpoint 饥饿的概率。
@@ -122,7 +140,7 @@ func (db *DB) runPassiveCheckpoint(trigger string) {
 
 // NewDB 创建数据库连接
 func NewDB(dbPath string, logger *zap.Logger) (*DB, error) {
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=1&_busy_timeout=5000&_synchronous=NORMAL")
+	db, err := sql.Open(sqliteDriverName(), sqliteDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
@@ -969,6 +987,11 @@ func (db *DB) initTables() error {
 	if err := db.migrateRBACOwnershipColumns(); err != nil {
 		db.logger.Warn("迁移RBAC资源归属字段失败", zap.Error(err))
 	}
+	// agentmemory 迁移项 4：vulnerabilities provenance 列（source_tool/source_cve/verified_at）
+	// 幂等：addColumnIfMissing 检查 pragma_table_info，已存在则跳过。
+	if err := db.MigrateVulnerabilitiesProvenance(); err != nil {
+		db.logger.Warn("迁移vulnerabilities provenance字段失败", zap.Error(err))
+	}
 
 	if _, err := db.Exec(createIndexes); err != nil {
 		return fmt.Errorf("创建索引失败: %w", err)
@@ -1619,7 +1642,7 @@ func (db *DB) migrateC2ListenersTable() error {
 
 // NewKnowledgeDB 创建知识库数据库连接（只包含知识库相关的表）
 func NewKnowledgeDB(dbPath string, logger *zap.Logger) (*DB, error) {
-	sqlDB, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=1&_busy_timeout=5000&_synchronous=NORMAL")
+	sqlDB, err := sql.Open(sqliteDriverName(), sqliteDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("打开知识库数据库失败: %w", err)
 	}

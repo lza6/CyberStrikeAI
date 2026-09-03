@@ -28,7 +28,8 @@
     "justNow": "Just now",
     "minutesAgo": "{{n}} min ago",
     "hoursAgo": "{{n}} h ago",
-    "daysAgo": "{{n}} d ago"
+    "daysAgo": "{{n}} d ago",
+    "deleting": "Deleting…"
   },
   "header": {
     "title": "CyberStrikeAI",
@@ -820,7 +821,8 @@
     "hitlTimeoutUnlimited": "No limit",
     "hitlTimeoutHint": "Unanswered requests are rejected automatically when time expires; approval cards show the countdown.",
     "hitlStatusOff": "Human-in-the-loop: Off",
-    "rolePanelTitle": "Select role"
+    "rolePanelTitle": "Select role",
+    "attackChainLoadFailed": "Attack chain component failed to load"
   },
   "hitl": {
     "pageTitle": "HITL approvals",
@@ -965,7 +967,10 @@
     "approve": "Approve",
     "loadFailed": "Failed to load",
     "invalidJson": "Invalid JSON arguments",
-    "submitFailedPrefix": "Submit failed:"
+    "submitFailedPrefix": "Submit failed:",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "submitting": "Submitting…"
   },
   "progress": {
     "callingAI": "Calling AI model...",
@@ -1109,7 +1114,9 @@
     "updateTaskFailed": "Failed to update task",
     "durationSeconds": "s",
     "durationMinutes": "m",
-    "durationHours": "h"
+    "durationHours": "h",
+    "deleteTaskSuccess": "Task deleted",
+    "deleteQueueSuccess": "Queue deleted"
   },
   "infoCollect": {
     "enterFofaQuery": "Enter FOFA query syntax",
@@ -1574,7 +1581,8 @@
     "colPerms": "Permissions",
     "colOwner": "Owner",
     "colGroup": "Group",
-    "colType": "Type"
+    "colType": "Type",
+    "dbProfileName": "Connection name"
   },
   "mcp": {
     "monitorTitle": "MCP Status Monitor",
@@ -1869,7 +1877,14 @@
     "deleteItemConfirm": "Delete this knowledge item?",
     "notEnabledTitle": "Knowledge base function not enabled",
     "notEnabledHint": "Please go to system settings to enable knowledge retrieval.",
-    "goToSettings": "Go to settings"
+    "goToSettings": "Go to settings",
+    "addTitle": "Add Knowledge",
+    "editTitle": "Edit Knowledge",
+    "saving": "Saving…",
+    "save": "Save",
+    "deleteConfirm": "Delete this knowledge item?",
+    "deleteSuccess": "Deleted. The item has been removed from the system.",
+    "deleteFailed": "Failed to delete knowledge item"
   },
   "roles": {
     "title": "Role Management",
@@ -2353,7 +2368,11 @@
     "durationMinutes": "{{minutes}} min {{seconds}} sec",
     "durationMinutesOnly": "{{minutes}} min",
     "durationHours": "{{hours}} hr {{minutes}} min",
-    "durationHoursOnly": "{{hours}} hr"
+    "durationHoursOnly": "{{hours}} hr",
+    "jsonParseError": "Invalid JSON arguments",
+    "submitFailedRetry": "Submit failed, please retry",
+    "approvalFnNotLoaded": "Approval function not loaded",
+    "submitFailedPrefix": "Submit failed"
   },
   "knowledgePage": {
     "totalContent": "Total content",

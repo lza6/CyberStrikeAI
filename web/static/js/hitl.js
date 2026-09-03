@@ -336,7 +336,7 @@ async function initHitlDefaultReviewerFromServer() {
         }
         refreshHitlPageReviewerBar();
     } catch (e) {
-        console.warn('initHitlDefaultReviewerFromServer', e);
+        logger.warn('initHitlDefaultReviewerFromServer', e);
     }
 }
 
@@ -441,7 +441,7 @@ async function resolveHitlGlobalToolWhitelist() {
                 }
             }
         } catch (e2) {
-            console.warn('resolveHitlGlobalToolWhitelist fallback', e2);
+            logger.warn('resolveHitlGlobalToolWhitelist fallback', e2);
         }
         throw e;
     }
@@ -473,7 +473,7 @@ async function refreshHitlPageWhitelist() {
         ta.value = hitlPageWhitelistDisplayValue(globalArr, sessionArr);
         syncHitlSidebarWhitelistDisplay(ta.value);
     } catch (e) {
-        console.warn('refreshHitlPageWhitelist', e);
+        logger.warn('refreshHitlPageWhitelist', e);
         if (!ta.value.trim() && cached.length > 0) {
             ta.value = hitlPageWhitelistDisplayValue(cached, []);
         }
@@ -616,7 +616,7 @@ async function syncHitlConfigFromServer(conversationId) {
                 enabled: true,
                 timeoutSeconds: merged.timeoutSeconds
             }).catch(function (err) {
-                console.warn('HITL 会话配置同步到服务器失败（将仅保留本地 UI）:', err);
+                logger.warn('HITL 会话配置同步到服务器失败（将仅保留本地 UI）:', err);
             });
         }
     }
@@ -626,7 +626,7 @@ async function syncHitlConfigFromServer(conversationId) {
             await saveHitlConversationConfig(conversationId, merged);
             markLegacyHitlTimeoutMigrated(conversationId);
         } catch (err) {
-            console.warn('HITL 旧会话等待时限迁移失败，将在下次加载时重试:', err);
+            logger.warn('HITL 旧会话等待时限迁移失败，将在下次加载时重试:', err);
         }
     } else if (normalizeHitlTimeoutSeconds(merged.timeoutSeconds, 0) > 0) {
         markLegacyHitlTimeoutMigrated(conversationId);
@@ -708,7 +708,7 @@ async function followAgentRunAfterHitlDecision(conversationId) {
             const attached = await window.attachRunningTaskEventStream(conversationId);
             if (attached) return;
         } catch (e) {
-            console.warn('attachRunningTaskEventStream', e);
+            logger.warn('attachRunningTaskEventStream', e);
         }
     }
     var mySeq = ++hitlFollowRunSeq;
@@ -754,7 +754,7 @@ async function followAgentRunAfterHitlDecision(conversationId) {
                 return;
             }
         } catch (e) {
-            console.warn('followAgentRunAfterHitlDecision', e);
+            logger.warn('followAgentRunAfterHitlDecision', e);
         }
         await new Promise(function (r) { setTimeout(r, intervalMs); });
     }
@@ -847,6 +847,18 @@ async function submitWorkflowHitlDecisionFromPage(runId, approved, conversationI
     if (!rid) return;
     const commentEl = document.getElementById('workflow-hitl-comment-' + rid);
     const comment = commentEl ? String(commentEl.value || '').trim() : '';
+    // F5：审批按钮 pending 态——点击后立即 disable + 文案变「提交中」，防重复点击
+    const approveBtn = document.querySelector('.hitl-workflow-decision-row button.btn-primary[data-run-id="' + CSS.escape(rid) + '"]') ||
+        document.querySelector('button[onclick*="submitWorkflowHitlDecisionFromPage"][onclick*="' + rid + '"][onclick*="true"]');
+    const rejectBtn = document.querySelector('button[onclick*="submitWorkflowHitlDecisionFromPage"][onclick*="' + rid + '"][onclick*="false"]');
+    const originalApproveText = approveBtn ? approveBtn.textContent : '';
+    const originalRejectText = rejectBtn ? rejectBtn.textContent : '';
+    if (approveBtn) { approveBtn.disabled = true; approveBtn.textContent = hitlT('submitting', '提交中…'); }
+    if (rejectBtn) { rejectBtn.disabled = true; }
+    const restoreButtons = function () {
+        if (approveBtn) { approveBtn.disabled = false; approveBtn.textContent = originalApproveText; }
+        if (rejectBtn) { rejectBtn.disabled = false; rejectBtn.textContent = originalRejectText; }
+    };
     try {
         if (typeof window.submitWorkflowHitlDecision === 'function') {
             await window.submitWorkflowHitlDecision(rid, approved, comment);
@@ -860,12 +872,23 @@ async function submitWorkflowHitlDecisionFromPage(runId, approved, conversationI
             const body = await resp.json().catch(function () { return {}; });
             if (!resp.ok) throw new Error((body && body.error) ? body.error : 'submit failed');
         }
+        // F5：成功 toast（替代无反馈）
+        if (typeof window.showToast === 'function') {
+            window.showToast(approved ? hitlT('approved', '已通过') : hitlT('rejected', '已驳回'), 'success');
+        }
         if (conversationId && typeof followAgentRunAfterHitlDecision === 'function') {
             await followAgentRunAfterHitlDecision(conversationId);
         }
         await refreshHitlPending();
     } catch (e) {
-        alert((e && e.message) ? e.message : hitlT('submitFailed', 'Submit failed'));
+        // F5：失败 toast（替代 alert）
+        const msg = (e && e.message) ? e.message : hitlT('submitFailed', 'Submit failed');
+        if (typeof window.showToast === 'function') {
+            window.showToast(msg, 'error');
+        } else {
+            alert(msg);
+        }
+        restoreButtons();
     }
 }
 
@@ -909,7 +932,7 @@ async function refreshHitlPending() {
                 workflowRuns = Array.isArray(wfData.runs) ? wfData.runs : [];
             }
         } catch (wfErr) {
-            console.warn('fetch workflow pending runs failed', wfErr);
+            logger.warn('fetch workflow pending runs failed', wfErr);
         }
         const searchQ = q && q.value.trim() ? q.value.trim().toLowerCase() : '';
         if (searchQ) {
@@ -966,7 +989,10 @@ async function submitHitlDecision(interruptId, decision, conversationIdOpt) {
         try {
             editedArguments = JSON.parse(editBox.value.trim());
         } catch (e) {
-            alert(hitlT('invalidJson', 'Invalid JSON arguments'));
+            // F5：JSON 解析失败用 toast 替代 alert
+            const msg = hitlT('invalidJson', 'Invalid JSON arguments');
+            if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+            else alert(msg);
             return;
         }
     }
@@ -975,6 +1001,15 @@ async function submitHitlDecision(interruptId, decision, conversationIdOpt) {
 }
 
 async function submitHitlDecisionWithPayload(interruptId, decision, comment, editedArguments, conversationIdForFollow) {
+    // F5：审批按钮 pending 态——点击后 disable，防止重复提交（approve/reject 按钮在 hitlT 渲染处）
+    const approveBtn = document.querySelector('button[onclick*="submitHitlDecision(\'' + interruptId + '\',&quot;approve\'"]');
+    const rejectBtn = document.querySelector('button[onclick*="submitHitlDecision(\'' + interruptId + '\',&quot;reject\'"]');
+    if (approveBtn && decision === 'approve') { approveBtn.disabled = true; approveBtn.textContent = hitlT('submitting', '提交中…'); }
+    if (rejectBtn && decision === 'reject') { rejectBtn.disabled = true; rejectBtn.textContent = hitlT('submitting', '提交中…'); }
+    const restoreButtons = function () {
+        if (approveBtn && decision === 'approve') { approveBtn.disabled = false; approveBtn.textContent = hitlT('approve', 'Approve'); }
+        if (rejectBtn && decision === 'reject') { rejectBtn.disabled = false; rejectBtn.textContent = hitlT('reject', 'Reject'); }
+    };
     const resp = await hitlApiFetch('/api/hitl/decision', {
         method: 'POST',
         credentials: 'same-origin',
@@ -987,8 +1022,16 @@ async function submitHitlDecisionWithPayload(interruptId, decision, comment, edi
             await dismissHitlItem(interruptId, true);
             return true;
         }
-        alert(hitlT('submitFailedPrefix', 'Submit failed:') + ' ' + errText);
+        // F5：失败 toast 替代 alert
+        const msg = hitlT('submitFailedPrefix', 'Submit failed:') + ' ' + errText;
+        if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+        else alert(msg);
+        restoreButtons();
         return false;
+    }
+    // F5：成功 toast
+    if (typeof window.showToast === 'function') {
+        window.showToast(decision === 'approve' ? hitlT('approved', '已通过') : hitlT('rejected', '已驳回'), 'success');
     }
     refreshHitlPending();
     const cid = conversationIdForFollow || getCurrentConversationIdForHitl();
@@ -1024,7 +1067,7 @@ async function dismissHitlItem(interruptId, silent) {
             body: JSON.stringify({ interruptId: interruptId })
         });
     } catch (e) {
-        if (!silent) { console.warn('dismissHitlItem', e); }
+        if (!silent) { logger.warn('dismissHitlItem', e); }
     }
     refreshHitlPending();
 }
@@ -1147,7 +1190,7 @@ async function refreshHitlAuditStrategy() {
         }
         switchHitlStrategyMode(hitlStrategyMode);
     } catch (e) {
-        console.warn('refreshHitlAuditStrategy', e);
+        logger.warn('refreshHitlAuditStrategy', e);
     }
 }
 
@@ -1524,7 +1567,7 @@ async function batchDeleteHitlLogs() {
         await refreshHitlLogs();
         alert(hitlT('batchDeleteSuccess', 'Successfully deleted {{count}} audit log(s)', { count: deletedCount }));
     } catch (e) {
-        console.error('batchDeleteHitlLogs', e);
+        logger.error('batchDeleteHitlLogs', e);
         alert(hitlT('batchDeleteFailed', 'Batch delete failed') + ': ' + (e && e.message ? e.message : String(e)));
     }
 }
@@ -1557,7 +1600,7 @@ async function clearHitlLogs() {
         await refreshHitlLogs();
         alert(hitlT('clearAllSuccess', 'Cleared {{count}} audit log(s)', { count: deletedCount }));
     } catch (e) {
-        console.error('clearHitlLogs', e);
+        logger.error('clearHitlLogs', e);
         alert(hitlT('clearAllFailed', 'Clear failed') + ': ' + (e && e.message ? e.message : String(e)));
     }
 }
@@ -1874,7 +1917,7 @@ document.addEventListener('languagechange', function () {
     try {
         refreshHitlI18n();
     } catch (e) {
-        console.warn('languagechange hitl refresh failed', e);
+        logger.warn('languagechange hitl refresh failed', e);
     }
 });
 

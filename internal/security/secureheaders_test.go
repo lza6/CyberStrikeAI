@@ -13,6 +13,7 @@ func setupSecureHeadersRouter(isTLS bool) *gin.Engine {
 	router := gin.New()
 	router.Use(SecureHeaders(isTLS))
 	router.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/static/js/foo.js", func(c *gin.Context) { c.Status(http.StatusOK) })
 	return router
 }
 
@@ -67,6 +68,26 @@ func TestSecureHeaders(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ping", nil))
 		assertHeaders(t, w, true)
+	})
+
+	t.Run("non-static path gets no-store Cache-Control", func(t *testing.T) {
+		router := setupSecureHeadersRouter(false)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ping", nil))
+		cc := w.Header().Get("Cache-Control")
+		if cc != "no-store, no-cache, must-revalidate" {
+			t.Fatalf("非静态路径期望 Cache-Control=no-store..., 实际 %q", cc)
+		}
+	})
+
+	t.Run("static path does not get no-store Cache-Control", func(t *testing.T) {
+		router := setupSecureHeadersRouter(false)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/static/js/foo.js", nil))
+		// SecureHeaders 不应为 /static/ 设 no-store（由 StaticCacheHeaders 设长缓存）
+		if cc := w.Header().Get("Cache-Control"); cc == "no-store, no-cache, must-revalidate" {
+			t.Fatalf("/static/ 不应被 SecureHeaders 设 no-store（应由 StaticCacheHeaders 设长缓存）")
+		}
 	})
 }
 

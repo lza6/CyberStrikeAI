@@ -20,6 +20,7 @@ type KnowledgeHandler struct {
 	manager   *knowledge.Manager
 	retriever *knowledge.Retriever
 	indexer   *knowledge.Indexer
+	graph     *knowledge.GraphService // 知识图谱服务（LightRAG 迁移；nil=未启用，保持纯向量检索）
 	db        *database.DB
 	logger    *zap.Logger
 	audit     *audit.Service
@@ -28,6 +29,15 @@ type KnowledgeHandler struct {
 // SetAudit wires platform audit logging.
 func (h *KnowledgeHandler) SetAudit(s *audit.Service) {
 	h.audit = s
+}
+
+// SetGraphService 注入知识图谱服务（LightRAG 迁移：双层检索 + 增量图更新）。
+// nil 表示禁用图检索，保持纯向量检索行为（向后兼容）。
+func (h *KnowledgeHandler) SetGraphService(g *knowledge.GraphService) {
+	if h == nil {
+		return
+	}
+	h.graph = g
 }
 
 // NewKnowledgeHandler 创建新的知识库处理器
@@ -518,6 +528,21 @@ func (h *KnowledgeHandler) GetIndexStatus(c *gin.Context) {
 				status["progress_percent"] = float64(current) / float64(totalItems) * 100
 			}
 		}
+
+		// 知识图谱索引进度（LightRAG 迁移：图索引状态独立报告，与向量索引解耦）
+		if h.graph != nil {
+			gRunning, gTotal, gCurrent, gFailed, gLastItem := h.graph.GetStatus()
+			graphStatus := gin.H{
+				"enabled":      true,
+				"backend":      h.graph.Backend(),
+				"is_running":   gRunning,
+				"total":        gTotal,
+				"current":      gCurrent,
+				"failed":       gFailed,
+				"last_item_id": gLastItem,
+			}
+			status["graph"] = graphStatus
+		}
 	}
 
 	c.JSON(http.StatusOK, status)
@@ -529,6 +554,31 @@ func (h *KnowledgeHandler) Search(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// 若启用知识图谱且请求指定 graph 模式，走双层图检索（local/global/hybrid）；
+	// 否则回退纯向量检索（与 MCP 工具链一致）。
+	if h.graph != nil && c.Query("graph") != "" {
+		mode := knowledge.GraphSearchMode(c.Query("graph"))
+		greq := &knowledge.GraphSearchRequest{
+			Query:    req.Query,
+			RiskType: req.RiskType,
+			Mode:     mode,
+			TopK:     req.TopK,
+		}
+		gres, gerr := h.graph.Search(c.Request.Context(), greq)
+		if gerr != nil {
+			h.logger.Error("图检索失败，回退向量检索", zap.Error(gerr))
+		} else if gres != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"mode":      string(gres.Mode),
+				"entities":  gres.Entities,
+				"relations": gres.Relations,
+				"chunks":    gres.Chunks,
+				"score":     gres.Score,
+			})
+			return
+		}
 	}
 
 	// Retriever.Search 经 Eino VectorEinoRetriever，与 MCP 工具链一致。

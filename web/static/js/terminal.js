@@ -499,6 +499,20 @@
         }
         inited = true;
 
+        // F6：xterm+addon-fit 懒加载——settings 终端面板依赖 Terminal/FitAddon 全局
+        if (typeof Terminal === 'undefined' && typeof loadScript === 'function') {
+            Promise.all([
+                loadScript('/static/vendor/xterm.js'),
+                loadScript('/static/vendor/xterm-addon-fit.js')
+            ]).then(function () {
+                inited = false; // 重置标记，让下方正常初始化
+                initTerminal();
+            }).catch(function (e) {
+                container1.innerHTML = '<p class="terminal-error">' + escapeHtml(tr('settingsTerminal.xtermNotLoaded')) + '</p>';
+            });
+            return;
+        }
+
         if (typeof Terminal === 'undefined') {
             container1.innerHTML = '<p class="terminal-error">' + escapeHtml(tr('settingsTerminal.xtermNotLoaded')) + '</p>';
             return;

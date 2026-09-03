@@ -344,9 +344,33 @@ database:
   knowledge_db_path: data/knowledge.db # 知识库数据库文件路径（可选，为空则使用会话数据库），用于存储知识库项和向量嵌入，可独立复制和复用
 # 可选：统一 home 目录迁移。留空（默认）= 继续使用项目根 data/，不破坏现有部署。
 # 配置 home_dir 后，启动时会把 data/ 下的内容迁移到统一 home（已存在目标文件跳过，幂等可重试）。
-# 环境变量 CYBERSTRIKEAI_HOME 也可覆盖默认 home（优先级低于此处显式配置）。
+# K4：YAML 未配 home_dir 时，自动回退到环境变量 $CYBERSTRIKEAI_HOME 或 $HOME/.cyberstrikeai
+# （Convention over configuration，移植自 agent-orchestrator）。显式配置优先级仍高于环境变量。
 # storage:
 #   home_dir: ~/.cyberstrikeai # 例如 ~/.cyberstrikeai 或 C:\Users\you\.cyberstrikeai
+
+# K2：反应式安全事件引擎配置（移植自 agent-orchestrator reactions.yaml）。
+# 留空（默认）= 用默认 reactions（high-impact-tool/scope-violation/hitl-pending 等 8 条），
+# 引擎自动订阅 blackboard 事件流，匹配 Finding.Type 触发动作（notify/send-to-agent/log-only）。
+# 用户可整 key 覆盖默认（applyDefaultReactions 语义：user wins）。enabled 省略时默认 true。
+# reactions:
+#   enabled: true
+#   rules:
+#     high-impact-tool:
+#       auto: true
+#       action: notify
+#       priority: urgent
+#       message: "HIGH_IMPACT 破坏性工具被执行，已记 platform audit。"
+#     scope-violation:
+#       auto: true
+#       action: notify
+#       priority: urgent
+#     hitl-pending:
+#       auto: true
+#       action: send-to-agent
+#       message: "存在等待人工审批的工具调用。"
+#       retries: 2
+#       escalate_after: "15m"
 
 # ============================================
 # 任务管理相关配置
@@ -449,6 +473,25 @@ knowledge:
     batch_size: 10
     # Eino indexer.WithSubIndexes：逻辑分区标签列表，会写入向量表 sub_indexes，检索可用 sub_index_filter 过滤；无需求可 []
     sub_indexes: []
+  # ============================================
+  # 知识图谱（LightRAG 迁移）：图存储后端可换 + 双层检索（local/global/hybrid）+ 增量图更新
+  # ============================================
+  graph:
+    # 是否启用知识图谱。默认 false（纯向量检索）；启用后索引/检索链路附加图抽取与双层检索
+    enabled: false
+    # 图存储后端："sqlite"（默认，与知识库共库零部署）| "memory"（进程内，重启丢失，测试/临时用）
+    # 预留 "neo4j" / "postgres" 扩展点（需实现 internal/knowledge.GraphStore 接口后接入）
+    backend: sqlite
+    # 实体类型分类（对齐 LightRAG entity_types）；空则用默认安全领域类型
+    entity_types: ["CVE", "漏洞", "攻击技术", "检测方法", "防御措施", "资产", "目标", "工具", "其他"]
+    # 默认检索模式："local"（实体向量→节点→邻边→chunks）| "global"（关系向量→边→实体→chunks）| "hybrid"（默认，二者 round-robin 合并）
+    default_search_mode: hybrid
+    # 图检索 TopK（实体/关系向量召回数）；0 表示沿用 retrieval.top_k
+    top_k: 0
+    # 向量召回余弦阈值（LightRAG 默认 0.2；低于知识检索的 0.4，因为图召回后还有图结构扩展）
+    similarity_threshold: 0.2
+    # 是否启用 LLM 抽取实体/关系（false=启发式正则兜底，确定性、零额外成本；LLM 抽取召回率更高但需配置 LLM）
+    use_llm_extractor: false
 # ============================================
 # 机器人配置（企业微信、钉钉、飞书）
 # ============================================
@@ -550,6 +593,11 @@ project:
   fact_index_path_max_runes: 10000
   fact_summary_max_runes: 24000
   default_inject_deprecated: false
+  # scope_json 在项目详情/编辑页配置（不是本文件）。它定义"授权范围硬闸"：
+  # 会话绑定该项目后，所有工具目标（target/host/url 与 execute 命令行目标）执行前
+  # 强制校验，越界直接拒绝。字段结构（targets/exclude 必须是字符串数组，fail-closed）：
+  #   {"targets": ["192.168.1.0/24", "example.com"], "exclude": ["admin.example.com"], "notes": "授权说明"}
+  # 空/未配置 = 不限制（工具不受 project scope 约束）。详见 docs/adr/ADR-0006。
 
 # ============================================
 # Prometheus 指标采集
@@ -558,3 +606,17 @@ project:
 metrics:
   enabled: true   # 省略时默认 true；设为 false 关闭 /metrics 端点与 HTTP 指标中间件
   path: /metrics  # 端点路径，默认 /metrics
+
+# ============================================
+# 响应缓存（Cache-Aside）
+# ============================================
+# /api/config 等纯读热路径走 Cache-Aside：命中返回 marshal 后的 JSON bytes，
+# 跳过外部 MCP 网络 IO 与重复序列化；写路径（saveConfig/ApplyConfig）失效缓存。
+# driver 省略或 memory = 进程内 TTL map（默认，零外部依赖）；
+# driver=redis 且连接失败自动降级 memory + Warn 一次。
+cache:
+  driver: memory            # memory(默认) | redis
+  # redis_addr: 127.0.0.1:6379
+  # redis_password: ""
+  # redis_db: 0
+  default_ttl_seconds: 600  # 0=用包内默认 10min

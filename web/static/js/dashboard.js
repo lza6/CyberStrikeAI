@@ -434,7 +434,7 @@ async function refreshDashboard() {
     } catch (e) {
         // AbortError 是预期内（被新一次刷新主动取消），不视为错误
         if (e && (e.name === 'AbortError' || (signal && signal.aborted))) return;
-        console.warn('仪表盘拉取统计失败', e);
+        logger.warn('仪表盘拉取统计失败', e);
         if (runningEl) runningEl.textContent = '-';
         if (vulnTotalEl) vulnTotalEl.textContent = '-';
         setDashboardOverviewPlaceholder('-');
@@ -1167,7 +1167,7 @@ function startDashboardAutoRefresh() {
             if (typeof document !== 'undefined' && document.hidden) return;
             refreshDashboard();
         } catch (e) {
-            console.warn('auto refresh tick failed', e);
+            logger.warn('auto refresh tick failed', e);
         }
     }, DASHBOARD_POLL_INTERVAL_MS);
 
@@ -2495,7 +2495,7 @@ document.addEventListener('languagechange', function () {
             refreshDashboard();
         }
     } catch (e) {
-        console.warn('languagechange dashboard refresh failed', e);
+        logger.warn('languagechange dashboard refresh failed', e);
     }
 });
 

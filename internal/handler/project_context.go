@@ -68,6 +68,12 @@ func (h *AgentHandler) projectBlackboardBlock(conversationID string) string {
 	return strings.TrimSpace(block)
 }
 
+// ConversationProjectID 返回对话绑定的项目 ID；未绑定或查询失败时返回空字符串。
+// 导出：app.go 注入 agent 的 J4 会话级授权范围解析器需要跨包引用。
+func (h *AgentHandler) ConversationProjectID(conversationID string) string {
+	return h.conversationProjectID(conversationID)
+}
+
 // conversationProjectID 返回对话绑定的项目 ID；未绑定或查询失败时返回空字符串。
 func (h *AgentHandler) conversationProjectID(conversationID string) string {
 	if h == nil || h.db == nil {

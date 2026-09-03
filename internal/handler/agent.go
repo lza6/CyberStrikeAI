@@ -911,7 +911,8 @@ func (h *AgentHandler) ProcessMessageForRobot(ctx context.Context, platform stri
 	switch robotMode {
 	case "eino_single":
 		return h.runRobotEinoSingleWithRetry(taskCtx, conversationID, finalMessage, agentHistoryMessages, roleTools, progressCallback, assistantMessageID, &taskStatus)
-	case "deep", "plan_execute", "supervisor":
+	case "deep", "plan_execute", "supervisor", "coordinator":
+		// J6/K5：coordinator 与 deep/plan_execute/supervisor 共用多代理入口（RunDeepAgent 按 orchMode 分支）。
 		if h.config == nil || !h.config.MultiAgent.Enabled {
 			taskStatus = "failed"
 			return "", conversationID, fmt.Errorf("机器人对话模式 %s 需要启用 Eino 多代理", robotMode)

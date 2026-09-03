@@ -1,0 +1,7 @@
+# CyberStrikeAI 前端构建产物（F1 渐进增强）
+node_modules/
+static/dist/
+*.log
+.DS_Store
+tests/e2e/test-results/
+tests/e2e/playwright-report/

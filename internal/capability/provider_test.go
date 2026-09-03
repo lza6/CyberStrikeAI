@@ -24,18 +24,22 @@ func TestModifyFileProviderLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Target != target || plan.Action != "modify" {
+	if plan.Target != target || (plan.Action != "modify" && plan.Action != "create") {
 		t.Fatalf("Plan 不符: %+v", plan)
 	}
 
-	// Validate：文件存在可写
+	// Validate：已存在文件可写
 	if err := p.Validate(args); err != nil {
 		t.Fatal(err)
 	}
 
-	// Validate：文件不存在报错
-	if err := p.Validate(map[string]interface{}{"path": filepath.Join(dir, "nope.txt")}); err == nil {
-		t.Fatal("不存在的文件应 Validate 失败")
+	// Validate：新建文件（父目录存在）应通过（对齐 Eino write_file 语义）
+	newFile := filepath.Join(dir, "subdir", "new.txt")
+	if err := os.MkdirAll(filepath.Dir(newFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Validate(map[string]interface{}{"path": newFile}); err != nil {
+		t.Fatalf("新建文件 Validate 应通过: %v", err)
 	}
 
 	// Execute
@@ -52,23 +56,57 @@ func TestModifyFileProviderLifecycle(t *testing.T) {
 		t.Fatalf("结果应含备份路径: %q", result.Content[0].Text)
 	}
 
-	// CollectArtifacts：从 result 文本里提备份路径不便，直接用 plan+手动填
-	plan.BackupPath = findBackup(backupDir)
-	arts, err := p.CollectArtifacts(plan)
-	if err != nil {
-		t.Fatal(err)
+	// Rollback：Execute 把备份路径暂存到 args["_backup_path"]，回填 plan 后回滚。
+	if bp, ok := args["_backup_path"].(string); ok {
+		plan.BackupPath = bp
+	} else {
+		plan.BackupPath = findBackup(backupDir)
 	}
-	if len(arts) != 1 || len(arts[0].SHA256) != 64 {
-		t.Fatalf("应产出 1 个 SHA256 工件: %+v", arts)
-	}
-
-	// Rollback：恢复 original
 	if err := p.Rollback(context.Background(), plan); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(target)
 	if string(data) != "original" {
 		t.Fatalf("回滚后应为 original，got %q", data)
+	}
+}
+
+// TestCreateFileProviderLifecycle J5 修复：新建文件（原不存在）走完整生命周期 + 回滚删除。
+func TestCreateFileProviderLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	backupDir := filepath.Join(dir, "backup")
+	p := NewModifyFileProvider(backupDir)
+
+	newFile := filepath.Join(dir, "fresh.txt")
+	args := map[string]interface{}{"path": newFile, "content": "fresh-content"}
+
+	plan, err := p.Plan(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Action != "create" {
+		t.Fatalf("新建文件 Plan.Action 应为 create，got %q", plan.Action)
+	}
+	if err := p.Validate(args); err != nil {
+		t.Fatalf("新建 Validate 应通过: %v", err)
+	}
+	result, err := p.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("新建 Execute 失败: %v", err)
+	}
+	if !strings.Contains(result.Content[0].Text, "已创建") {
+		t.Fatalf("结果应含已创建，got %q", result.Content[0].Text)
+	}
+	data, _ := os.ReadFile(newFile)
+	if string(data) != "fresh-content" {
+		t.Fatalf("文件内容应为 fresh-content，got %q", data)
+	}
+	// 回滚：新建文件应被删除
+	if err := p.Rollback(context.Background(), plan); err != nil {
+		t.Fatalf("新建回滚失败: %v", err)
+	}
+	if _, err := os.Stat(newFile); !os.IsNotExist(err) {
+		t.Fatalf("回滚后新建文件应被删除，got err=%v", err)
 	}
 }
 

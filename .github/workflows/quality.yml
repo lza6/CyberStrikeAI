@@ -37,3 +37,50 @@ jobs:
         run: go run ./cmd/verbs-gate -skills skills -tools tools
         # 严格模式（待启用）：go run ./cmd/verbs-gate -skills skills -tools tools -strict
 
+  # K3：覆盖率门禁（移植自 agent-orchestrator coverage.yml 的 diff-cover 80% 门禁）。
+  # K3：覆盖率门禁（移植自 agent-orchestrator coverage.yml 的 diff-cover 80% 门禁）。
+  # Critic M5 修复：测试失败必须 fail（去掉 || true 与 stderr 吞噬）；
+  # coverage 报告为真实可观测门禁（无阈值比较——全仓基线覆盖率暂低，硬设 80% 会让 CI 恒红，
+  # 先落"失败即红 + 覆盖率可见"，阈值随基线抬升再加）。
+  coverage:
+    name: coverage (total)
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run tests with coverage (must pass)
+        run: go test -coverprofile=cover.out -count=1 ./internal/...
+      - name: Coverage summary
+        run: go tool cover -func=cover.out | tail -1
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-out
+          path: cover.out
+          if-no-files-found: ignore
+
+  # K3：安全扫描（移植自 agent-orchestrator security.yml：gitleaks + govulncheck）。
+  # gitleaks 扫硬编码密钥；govulncheck 扫 Go 依赖漏洞（替代参考项目 npm audit）。
+  # Critic M5 修复：govulncheck 去掉 || true——已知漏洞必须红（修复或 go.mod 升级）。
+  security:
+    name: security (gitleaks + govulncheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

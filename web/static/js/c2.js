@@ -2168,7 +2168,21 @@
 
     C2.initTerminal = function() {
         const container = document.getElementById('c2-terminal-container');
-        if (!container || typeof Terminal === 'undefined') return;
+        if (!container) return;
+
+        // F6：xterm+addon-fit 懒加载——c2 终端依赖 Terminal/FitAddon 全局
+        if (typeof Terminal === 'undefined' && typeof loadScript === 'function') {
+            Promise.all([
+                loadScript('/static/vendor/xterm.js'),
+                loadScript('/static/vendor/xterm-addon-fit.js')
+            ]).then(function () {
+                C2.initTerminal();
+            }).catch(function (e) {
+                container.innerHTML = '<p class="terminal-error">xterm 加载失败</p>';
+            });
+            return;
+        }
+        if (typeof Terminal === 'undefined') return;
 
         if (C2.terminalInstance && C2.terminalSessionId) {
             C2.terminalLogs[C2.terminalSessionId] = C2.serializeTerminalBuffer(C2.terminalInstance);
@@ -2791,7 +2805,7 @@
             payload: { path: path }
         }).then(data => {
             if (data.error) {
-                if (container) container.innerHTML = `<div class="c2-error">${data.error}</div>`;
+                if (container) container.innerHTML = `<div class="c2-error">${escapeHtml(data.error)}</div>`;
                 return;
             }
             C2.waitForFileList(data.task?.id || data.task_id, sessionId, path);
@@ -4608,7 +4622,7 @@
                 C2.renderSessionDetail(C2.selectedSessionId);
             }
         } catch (e) {
-            console.warn('languagechange C2 refresh failed', e);
+            logger.warn('languagechange C2 refresh failed', e);
         }
     });
 

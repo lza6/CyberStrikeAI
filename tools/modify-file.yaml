@@ -1,0 +1,34 @@
+name: "modify-file"
+command: "internal:capability"
+# modify-file 由 internal/capability/ModifyFileProvider 直接处理（不经 exec.Command）。
+# command 为 internal: 前缀，executor.ExecuteTool 会走 capability provider 生命周期
+# （plan→validate→execute→rollback→collect_artifacts），而非外部命令。
+args: []
+enabled: true
+short_description: "修改/创建文件（破坏性工具，自动备份可回滚）"
+description: |
+  修改或创建文件内容。破坏性工具，执行前自动备份原文件（若存在），失败可回滚。
+
+  **行为：**
+  - 文件已存在：备份原内容到 capability-backup 目录，写入新内容；失败自动回滚。
+  - 文件不存在：创建新文件（含父目录），无备份但回滚时删除新建文件。
+
+  **参数：**
+  - `path`（必填）：目标文件绝对或相对路径。
+  - `content`（必填）：写入的新内容。
+
+  **回滚：** 执行失败自动回滚到执行前状态。
+
+  **审计：** HIGH_IMPACT 工具，执行记 platform audit。
+parameters:
+  - name: "path"
+    type: "string"
+    description: "目标文件路径（绝对或相对）。"
+    required: true
+    position: 0
+    format: "positional"
+  - name: "content"
+    type: "string"
+    description: "写入的新内容。"
+    required: true
+    format: "positional"

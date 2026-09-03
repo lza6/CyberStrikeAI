@@ -1159,7 +1159,7 @@ async function loadConfig(loadTools = true, options = {}) {
             await loadToolsList(1, '');
         }
     } catch (error) {
-        console.error('加载配置失败:', error);
+        logger.error('加载配置失败:', error);
         if (!silent) {
             const baseMsg = (typeof window !== 'undefined' && typeof window.t === 'function')
                 ? window.t('settings.apply.loadFailed')
@@ -1272,7 +1272,7 @@ async function loadToolsList(page = 1, searchKeyword = '', options = {}) {
         // 被后续请求替代属于正常控制流，不显示错误，也不覆盖新请求的界面。
         if (controller.signal.aborted && requestSequence !== toolsLoadSequence) return;
 
-        console.error('加载工具列表失败:', error);
+        logger.error('加载工具列表失败:', error);
         if (toolsList) {
             const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
             const errorMsg = isTimeout 
@@ -1843,7 +1843,7 @@ async function updateToolsStats() {
             }
         }
     } catch (error) {
-        console.warn('获取工具统计失败，使用当前页数据', error);
+        logger.warn('获取工具统计失败，使用当前页数据', error);
         // 如果获取失败，使用当前页的数据
         totalTools = totalTools || currentPageTotal;
         totalEnabled = currentPageEnabled;
@@ -2222,7 +2222,7 @@ async function applySettings() {
                 });
             });
         } catch (error) {
-            console.warn('获取所有工具列表失败，仅使用全局状态映射', error);
+            logger.warn('获取所有工具列表失败，仅使用全局状态映射', error);
             // 如果获取失败，使用全局状态映射
             toolStateMap.forEach((toolData, toolKey) => {
                 // toolData.name 保存了原始工具名称
@@ -2269,7 +2269,12 @@ async function applySettings() {
         const successMsg = (typeof window !== 'undefined' && typeof window.t === 'function')
             ? window.t('settings.apply.applySuccess')
             : '配置已成功应用！';
-        alert(successMsg);
+        // F5：成功反馈用全局 toast 替代 alert（不阻塞，支持多语言）
+        if (typeof window.showToast === 'function') {
+            window.showToast(successMsg, 'success');
+        } else {
+            alert(successMsg);
+        }
         try {
             const cfgResp = await apiFetch('/api/config');
             if (cfgResp.ok) {
@@ -2277,22 +2282,28 @@ async function applySettings() {
                 syncC2NavFromConfig(fresh);
             }
         } catch (e) {
-            console.warn('refresh C2 nav after apply', e);
+            logger.warn('refresh C2 nav after apply', e);
         }
         try {
             if (typeof initChatAgentModeFromConfig === 'function') {
                 await initChatAgentModeFromConfig();
             }
         } catch (e) {
-            console.warn('initChatAgentModeFromConfig after settings', e);
+            logger.warn('initChatAgentModeFromConfig after settings', e);
         }
         closeSettings();
     } catch (error) {
-        console.error('应用配置失败:', error);
+        logger.error('应用配置失败:', error);
         const baseMsg = (typeof window !== 'undefined' && typeof window.t === 'function')
             ? window.t('settings.apply.applyFailed')
             : '应用配置失败';
-        alert(baseMsg + ': ' + error.message);
+        // F5：失败 toast 替代 alert
+        const failMsg = baseMsg + ': ' + error.message;
+        if (typeof window.showToast === 'function') {
+            window.showToast(failMsg, 'error');
+        } else {
+            alert(failMsg);
+        }
     }
 }
 
@@ -3992,7 +4003,7 @@ async function saveToolsConfig() {
                 });
             });
         } catch (error) {
-            console.warn('获取所有工具列表失败，仅使用全局状态映射', error);
+            logger.warn('获取所有工具列表失败，仅使用全局状态映射', error);
             // 如果获取失败，使用全局状态映射
             toolStateMap.forEach((toolData, toolKey) => {
                 // toolData.name 保存了原始工具名称
@@ -4030,15 +4041,27 @@ async function saveToolsConfig() {
             throw new Error(error.error || '应用配置失败');
         }
         
-        alert(typeof window.t === 'function' ? window.t('mcp.toolsConfigSaved') : '工具配置已成功保存！');
-        
+        // F5：保存工具配置成功 toast 替代 alert
+        const toolsSavedMsg = typeof window.t === 'function' ? window.t('mcp.toolsConfigSaved') : '工具配置已成功保存！';
+        if (typeof window.showToast === 'function') {
+            window.showToast(toolsSavedMsg, 'success');
+        } else {
+            alert(toolsSavedMsg);
+        }
+
         // 重新加载工具列表以反映最新状态
         if (typeof loadToolsList === 'function') {
             await loadToolsList(toolsPagination.page, toolsSearchKeyword);
         }
     } catch (error) {
-        console.error('保存工具配置失败:', error);
-        alert((typeof window.t === 'function' ? window.t('mcp.saveToolsConfigFailed') : '保存工具配置失败') + ': ' + error.message);
+        logger.error('保存工具配置失败:', error);
+        // F5：失败 toast 替代 alert
+        const failMsg = (typeof window.t === 'function' ? window.t('mcp.saveToolsConfigFailed') : '保存工具配置失败') + ': ' + error.message;
+        if (typeof window.showToast === 'function') {
+            window.showToast(failMsg, 'error');
+        } else {
+            alert(failMsg);
+        }
     }
 }
 
@@ -4111,13 +4134,24 @@ async function changePassword() {
         }
 
         const pwdMsg = typeof window.t === 'function' ? window.t('settings.security.passwordUpdated') : '密码已更新，请使用新密码重新登录。';
-        alert(pwdMsg);
+        // F5：密码更新成功 toast 替代 alert（随后会触发登出，toast 给用户一个可见确认）
+        if (typeof window.showToast === 'function') {
+            window.showToast(pwdMsg, 'success');
+        } else {
+            alert(pwdMsg);
+        }
         resetPasswordForm();
         handleUnauthorized({ message: pwdMsg, silent: false });
         closeSettings();
     } catch (error) {
-        console.error('修改密码失败:', error);
-        alert((typeof window.t === 'function' ? window.t('settings.security.changePasswordFailed') : '修改密码失败') + ': ' + error.message);
+        logger.error('修改密码失败:', error);
+        // F5：失败 toast 替代 alert
+        const failMsg = (typeof window.t === 'function' ? window.t('settings.security.changePasswordFailed') : '修改密码失败') + ': ' + error.message;
+        if (typeof window.showToast === 'function') {
+            window.showToast(failMsg, 'error');
+        } else {
+            alert(failMsg);
+        }
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
@@ -4192,7 +4226,7 @@ async function loadExternalMCPs(options = {}) {
         const data = await fetchExternalMCPs();
         renderExternalMCPData(data, options.forceRender === true);
     } catch (error) {
-        console.error('加载外部MCP列表失败:', error);
+        logger.error('加载外部MCP列表失败:', error);
         const list = document.getElementById('external-mcp-list');
         if (list) {
             const errT = typeof window.t === 'function' ? window.t : (k) => k;
@@ -4222,7 +4256,7 @@ async function pollExternalMCPToolCount(name, maxAttempts = 10) {
                 if (server && server.tool_count > 0) break;
             }
         } catch (e) {
-            console.warn('轮询工具数量失败:', e);
+            logger.warn('轮询工具数量失败:', e);
         }
     }
     await reloadMcpToolsAfterExternalChange(true);
@@ -4398,7 +4432,7 @@ async function editExternalMCP(name) {
         });
     } catch (error) {
         closeExternalMCPModal();
-        console.error('编辑外部MCP失败:', error);
+        logger.error('编辑外部MCP失败:', error);
         alert((typeof window.t === 'function' ? window.t('mcp.operationFailed') : '编辑失败') + ': ' + error.message);
     }
 }
@@ -4610,12 +4644,22 @@ async function saveExternalMCP() {
         }
         // 轮询几次以拉取后端异步更新的工具数量（无固定延迟，拿到即停）
         pollExternalMCPToolCount(null, 5);
-        alert(typeof window.t === 'function' ? window.t('mcp.saveSuccess') : '保存成功');
+        // F5：保存成功 toast 替代 alert
+        const saveSuccessMsg = typeof window.t === 'function' ? window.t('mcp.saveSuccess') : '保存成功';
+        if (typeof window.showToast === 'function') {
+            window.showToast(saveSuccessMsg, 'success');
+        } else {
+            alert(saveSuccessMsg);
+        }
     } catch (error) {
-        console.error('保存外部MCP失败:', error);
+        logger.error('保存外部MCP失败:', error);
         errorDiv.textContent = (typeof window.t === 'function' ? window.t('mcp.operationFailed') : '保存失败') + ': ' + error.message;
         errorDiv.style.display = 'block';
         jsonTextarea.classList.add('error');
+        // F5：失败同时弹 toast，让用户在关闭模态后仍可见反馈
+        if (typeof window.showToast === 'function') {
+            window.showToast((typeof window.t === 'function' ? window.t('mcp.operationFailed') : '保存失败') + ': ' + error.message, 'error');
+        }
     }
 }
 
@@ -4642,7 +4686,7 @@ async function deleteExternalMCP(name) {
         }
         alert(typeof window.t === 'function' ? window.t('mcp.deleteSuccess') : '删除成功');
     } catch (error) {
-        console.error('删除外部MCP失败:', error);
+        logger.error('删除外部MCP失败:', error);
         alert((typeof window.t === 'function' ? window.t('mcp.operationFailed') : '删除失败') + ': ' + error.message);
     }
 }
@@ -4694,7 +4738,7 @@ async function toggleExternalMCP(name, currentStatus) {
                     }
                 }
             } catch (error) {
-                console.error('检查状态失败:', error);
+                logger.error('检查状态失败:', error);
             }
             
             // 如果还未连接，开始轮询
@@ -4709,7 +4753,7 @@ async function toggleExternalMCP(name, currentStatus) {
             }
         }
     } catch (error) {
-        console.error('切换外部MCP状态失败:', error);
+        logger.error('切换外部MCP状态失败:', error);
         alert((typeof window.t === 'function' ? window.t('mcp.operationFailed') : '操作失败') + ': ' + error.message);
         
         // 恢复按钮状态
@@ -4774,7 +4818,7 @@ async function pollExternalMCPStatus(name, maxAttempts = 30) {
                 }
             }
         } catch (error) {
-            console.error('轮询状态失败:', error);
+            logger.error('轮询状态失败:', error);
         }
         
         attempts++;
@@ -4814,7 +4858,7 @@ document.addEventListener('languagechange', function () {
             }
         }
     } catch (e) {
-        console.warn('languagechange MCP refresh failed', e);
+        logger.warn('languagechange MCP refresh failed', e);
     }
 });
 

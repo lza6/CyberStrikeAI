@@ -92,7 +92,7 @@ async function loadToken() {
         }
         currentToken = localStorage.getItem('swagger_auth_token');
     } catch (e) {
-        console.error('加载token失败:', e);
+        logger.error('加载token失败:', e);
     }
 }
 
@@ -113,7 +113,7 @@ async function loadAPISpec() {
         apiSpec = await response.json();
         buildApiSpecTagToKey();
     } catch (error) {
-        console.error('加载API规范失败:', error);
+        logger.error('加载API规范失败:', error);
         showError(_t('apiDocs.errorLoadFailed') + error.message);
     }
 }
@@ -824,7 +824,7 @@ function copyCurlCommand(event, method, path) {
                 alert(_t('apiDocs.curlCopied'));
             }
         }).catch(err => {
-            console.error('复制失败:', err);
+            logger.error('复制失败:', err);
             // 如果clipboard API失败，使用fallback方法
             const textarea = document.createElement('textarea');
             textarea.value = curlCommand;
@@ -853,7 +853,7 @@ function copyCurlCommand(event, method, path) {
         });
         
     } catch (error) {
-        console.error('生成curl命令失败:', error);
+        logger.error('生成curl命令失败:', error);
         alert(_t('apiDocs.curlGenFailed') + error.message);
     }
 }

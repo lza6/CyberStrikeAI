@@ -764,7 +764,7 @@ document.addEventListener('languagechange', function () {
     try {
         refreshAuditLogsI18n();
     } catch (e) {
-        console.warn('languagechange audit refresh failed', e);
+        logger.warn('languagechange audit refresh failed', e);
     }
 });
 

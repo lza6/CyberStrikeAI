@@ -423,7 +423,7 @@ async function loadChatFilesPage() {
         }
         renderChatFilesTable();
     } catch (e) {
-        console.error(e);
+        logger.error(e);
         wrap.classList.remove('chat-files-table-wrap--grouped');
         wrap.classList.remove('chat-files-table-wrap--tree');
         const msg = (typeof window.t === 'function') ? window.t('chatFilesPage.errorLoad') : '加载失败';

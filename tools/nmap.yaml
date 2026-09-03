@@ -3,6 +3,11 @@ command: "nmap"
 # 默认：TCP 连接扫描 + 版本检测 + 默认 NSE 脚本（无 root 也可用）
 args: ["-sT", "-sV", "-sC"]
 enabled: true
+# J4 工具级 scope：声明后 executor 在执行前校验 target（target/host/ip/domain 参数）是否越界。
+# 越界目标返回 IsError 不执行。nil/空=不限制（向后兼容）。
+# 此处为示例声明；实际授权边界以会话绑定 project 的 scope_json 为准（executor 叠加校验）。
+# scope:
+#   ports: ["1-65535"]   # 允许全端口；不限制 CIDR/Domain（由 project scope 授权）
 short_description: "网络扫描：端口/服务/脚本；可选时序、自定义 NSE、OS 检测（需 root）"
 description: |
   网络映射与端口扫描。

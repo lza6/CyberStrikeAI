@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J6 批次 · open-multi-agent-main 编排模式迁移 · 变更报告</title>
+<style>
+  :root { --bg:#0f1420; --card:#171f30; --line:#26314a; --txt:#dde5f2; --dim:#8b97ad; --acc:#5b9dff; --ok:#3ecf8e; --warn:#f5a623; --bad:#ff5d5d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.75 "Segoe UI","Microsoft YaHei",sans-serif; padding:48px 24px; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 6px; letter-spacing:.5px; }
+  h2 { font-size:19px; margin:38px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line); color:var(--acc); }
+  h3 { font-size:15.5px; margin:22px 0 8px; color:var(--txt); }
+  .meta { color:var(--dim); font-size:13px; margin-bottom:28px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px 22px; margin:14px 0; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; white-space:nowrap; }
+  code { background:#0b0f18; border:1px solid var(--line); border-radius:5px; padding:1px 7px; font:13px Consolas,monospace; color:#a8c7fa; }
+  pre { background:#0b0f18; border:1px solid var(--line); border-radius:8px; padding:14px 18px; overflow-x:auto; font:13px/1.6 Consolas,monospace; }
+  pre code { border:none; padding:0; background:none; }
+  .pill { display:inline-block; border-radius:20px; padding:1px 11px; font-size:12px; font-weight:600; }
+  .ok   { background:rgba(62,207,142,.14); color:var(--ok); }
+  .warn { background:rgba(245,166,35,.14); color:var(--warn); }
+  .bad  { background:rgba(255,93,93,.14);  color:var(--bad); }
+  .info { background:rgba(91,157,255,.14); color:var(--acc); }
+  .kv b { color:var(--acc); }
+  ul { margin:8px 0; padding-left:22px; }
+  li { margin:4px 0; }
+  .foot { margin-top:44px; color:var(--dim); font-size:12.5px; border-top:1px solid var(--line); padding-top:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>J6 批次 · open-multi-agent-main 编排模式迁移</h1>
+<div class="meta">生成：2026-09-02 23:1x · 会话 cyberstrikeai-a1（主控编排） · 结论 <span class="pill ok">CONDITIONAL PASS → 审计发现已修复 → PASS</span></div>
+
+<h2>一、任务契约</h2>
+<div class="card">
+<p>把参考项目 <code>参考项目/open-multi-agent-main</code>（TS 多代理框架）的 4 项核心编排能力迁移到 CyberStrikeAI（Go 1.26 + CloudWeGo Eino ADK），并完成真实 E2E 测验、验收与独立审计。授权边界：本地修改 + 非破坏性验证；不推送不部署；不触碰其他并行会话排他文件（internal/security/*、auth.go、app.go、web/static/js/*、go.mod 等）。</p>
+</div>
+
+<h2>二、交付物总览</h2>
+<table>
+<tr><th>能力</th><th>交付文件</th><th>行数</th><th>状态</th></tr>
+<tr><td>K1 coordinator 分解→DAG→并发 dispatch→synthesis</td><td><code>internal/multiagent/coordinator_orchestrator.go</code></td><td>309</td><td><span class="pill ok">完全实现</span></td></tr>
+<tr><td>K2 title 依赖 token 解析（无需手连图）</td><td><code>internal/multiagent/coordkit/coordinator_dag.go</code> + <code>coordinator_specs.go</code></td><td>309+181</td><td><span class="pill ok">完全实现（并修复参考项目漏 validate 缺陷）</span></td></tr>
+<tr><td>K3 agent 间消息总线（点对点+广播）</td><td><code>internal/multiagent/coordkit/message_bus.go</code></td><td>210</td><td><span class="pill ok">完全实现</span></td></tr>
+<tr><td>K4 结构化输出解析/校验 + retry 一次</td><td><code>internal/multiagent/coordkit/structured_output.go</code> + <code>schema.go</code></td><td>144+243</td><td><span class="pill warn">部分实现（retry 循环留后续批次）</span></td></tr>
+<tr><td>K5 集成接线（"coordinator" 编排值全链路流通）</td><td>config.go / conversation.go / markdown.go / orchestrator_instruction.go / runner.go / openapi.go / handler/agent.go / <code>coordinator_runner_integration.go</code></td><td>338（新文件）</td><td><span class="pill ok">完成</span></td></tr>
+<tr><td>K6 E2E 测验（fake model，零真实 LLM 调用）</td><td><code>coordinator_orchestrator_test.go</code> + coordkit 3 个测试文件</td><td>281+929</td><td><span class="pill ok">41 coordkit 测试 -race 全过 + 3 个 runner E2E</span></td></tr>
+</table>
+
+<h2>三、4 项迁移设计要点</h2>
+<div class="card">
+<h3>K1 coordinator（orchestrator.ts runTeam → CoordinatorRunner）</h3>
+<ul>
+<li>两阶段：coordinator agent 调用①输出 JSON task specs（title 作为依赖 token）→ LoadSpecs 建 DAG → round-based 并发 dispatch（sem 限并发，默认 5）→ coordinator 调用②synthesis 综合全部子任务结果。</li>
+<li>解析失败走 FallbackSpecs（每 agent 一任务，goal 兜底），与参考项目一致。</li>
+<li><code>coordinatorAgentAdapter</code> 把 CoordinatorRunner 包装为 <code>adk.Agent</code>，无缝接入现有 runEinoADKAgentLoop SSE/持久化管线。</li>
+</ul>
+<h3>K2 title→ID 两遍扫描（loadSpecsIntoQueue → LoadSpecs）</h3>
+<ul>
+<li>Pass1：每个 spec 生成 UUID + 建 title→ID 索引（lower+trim 归一）；Pass2：dependsOn token 先试 ID 后试 title。</li>
+<li><b>改进参考项目 3 个缺陷</b>：重复 title 硬报错（TS 静默覆盖）、未知 depRef 硬报错（TS 静默丢弃）、LoadSpecs 强制 ValidateDependencies（TS runTeam 从不调用 validate）。</li>
+<li>Kahn 拓扑 + DFS 三色环检测。</li>
+</ul>
+<h3>K3 MessageBus（messaging.ts → message_bus.go）</h3>
+<ul>
+<li>Send/Broadcast/GetUnread/GetAll/MarkRead/GetConversation/Subscribe；广播不回送 sender；RWMutex + subscriber 快照在锁外回调（防自死锁）；unsubscribe 幂等。</li>
+<li>worker prompt 注入消息（buildTaskPrompt）与参考项目对齐。</li>
+</ul>
+<h3>K4 结构化输出（structured-output.ts → extractJSON + SchemaField）</h3>
+<ul>
+<li>extractJSON 五级容错：直接解析 → ```json fence → bare fence → {..} 切片 → [..] 切片。</li>
+<li>轻量 SchemaField 校验器（string/bool/number/array/object/any，required，嵌套），错误格式化 <code>FormatValidationIssues</code> 可直接喂回 LLM。</li>
+<li><b>缺口</b>：参考项目 validateStructuredOutput 的"校验失败→错误信息喂回 LLM 重试一次"循环未在本次实现（当前 coordinator 路径以 FallbackSpecs 兜底，功能可用）。已列为后续批次项。</li>
+</ul>
+</div>
+
+<h2>四、K7 独立审计（fork 收敛版）与修复</h2>
+<div class="card">
+<table>
+<tr><th>级别</th><th>位置</th><th>发现</th><th>处置</th></tr>
+<tr><td><span class="pill bad">HIGH</span></td><td>coordinator_runner_integration.go:217</td><td>worker 未挂 filesystem 中间件，executeScopeGuard 字段全程未引用 → J4 项目 scope 硬闸对 coordinator worker 失效</td><td><span class="pill ok">已修复</span>：对齐 runner.go:245，在 agenticSkillMW 分支内挂 subAgentAgenticFilesystemMiddleware(..., executeScopeGuard)</td></tr>
+<tr><td><span class="pill warn">MEDIUM</span></td><td>runner.go 前置校验段</td><td>coordinator 无子代理时错误延迟到运行中段才暴露</td><td><span class="pill ok">已修复</span>：加 <code>orchMode=="coordinator" && len(effectiveSubs)==0</code> 快速失败校验</td></tr>
+<tr><td><span class="pill warn">MEDIUM</span></td><td>coordkit/schema.go</td><td>retry-once 循环未实现（规格项部分完成）</td><td><span class="pill info">披露</span>：列入后续批次；基础件（FormatValidationIssues）已就绪</td></tr>
+<tr><td><span class="pill warn">MEDIUM</span></td><td>coordinator_orchestrator.go:292</td><td>buildTaskPrompt 用 GetAll 全量注入不 markRead（继承参考项目已知行为），长对话膨胀</td><td><span class="pill info">披露</span>：已知限制，建议后续改 GetUnread+MarkRead</td></tr>
+<tr><td><span class="pill ok">LOW</span></td><td>invokeAgentText / 测试缺口</td><td>nil 防御 / ctx 取消路径等测试缺口</td><td><span class="pill info">记录</span>：不阻塞</td></tr>
+</table>
+<p><b>审计确认无问题项</b>：dispatchQueue ctx.Done 无 sem 泄漏；Task 并发字段由 wg.Wait 正确同步；LoadSpecs 解析/环检测正确；runner.go 其余三分支（plan_execute/supervisor/deep）未受影响；coordinatorAgentAdapter 错误经 ev.Err 正确传播。</p>
+<p><b>审计总评</b>：CONDITIONAL PASS（1 HIGH + 3 MEDIUM）→ HIGH 与 1 项 MEDIUM 当场修复复验 → 通过。</p>
+</div>
+
+<h2>五、验证证据（实际执行的命令）</h2>
+<div class="card">
+<pre><code># 编译
+$ CGO_ENABLED=0 go build ./internal/multiagent/          → EXIT=0
+$ CGO_ENABLED=1 CC=/c/mingw64/bin/gcc.exe go build ./...  → EXIT=0
+$ CGO_ENABLED=0 go vet ./internal/multiagent/             → EXIT=0
+
+# 测试（无真实 LLM，fake model E2E）
+$ CGO_ENABLED=1 CC=/c/mingw64/bin/gcc.exe go test ./internal/multiagent/coordkit/ -count=1 -race
+ok  cyberstrike-ai/internal/multiagent/coordkit  1.098s   # 41 测试 0 FAIL
+
+$ CGO_ENABLED=1 CC=/c/mingw64/bin/gcc.exe go test ./internal/multiagent/ -run 'TestCoordinatorRunner' -count=1 -v
+--- PASS: TestCoordinatorRunner_FullDecomposeDispatchSynthesize   # 4-task diamond DAG 全流程
+--- PASS: TestCoordinatorRunner_FallbackOnUnparsableDecomposition # 解析失败兜底
+--- PASS: TestCoordinatorRunner_WorkerFailurePropagates           # worker 失败传播+独立任务继续
+
+$ CGO_ENABLED=1 CC=/c/mingw64/bin/gcc.exe go test ./internal/multiagent/ -count=1
+ok  cyberstrike-ai/internal/multiagent  15.179s</code></pre>
+<p>环境说明：系统 PATH 无 gcc，CGO=1 验证统一使用 <code>CC=/c/mingw64/bin/gcc.exe</code>（MinGW-W64 16.2.0）。</p>
+</div>
+
+<h2>六、"coordinator" 编排值流通链路（K5）</h2>
+<div class="card">
+<pre><code>请求体 orchestration:"coordinator"
+→ config.NormalizeMultiAgentOrchestration        （白名单 case，防静默降级 deep）
+→ RunDeepAgent 前置校验（无子代理快速失败）
+→ runner.go switch 后 coordinator 分支 → newCoordinatorRootAgent
+→ CoordinatorRunner（decompose→LoadSpecs→并发 dispatch→synthesis）
+→ coordinatorAgentAdapter 产出 adk.AgentEvent → 既有 SSE/持久化管线
+→ conversation.agent_mode 持久化（normalizeConversationAgentMode 加 case）
+→ OpenAPI 4 处 enum + 机器人入口 switch + agents/orchestrator-coordinator.md 覆盖</code></pre>
+</div>
+
+<h2>七、剩余风险与后续批次项</h2>
+<div class="card">
+<ul>
+<li><b>K4 retry-once 循环</b>：基础件已备（ExtractAndValidate + FormatValidationIssues），需在 CoordinatorRunner/worker 调用点包一层重试。</li>
+<li><b>消息注入膨胀</b>：GetAll 全量注入为参考项目对齐行为，长对话建议改 GetUnread+MarkRead。</li>
+<li><b>dispatchQueue ctx 取消路径</b>、MaxParallel 并发压力、coordinatorAgentAdapter 单测为测试缺口（LOW，不阻塞）。</li>
+<li><b>真实 LLM 链路</b>：受付费 API 红线约束未发起真实调用；E2E 用 fake model 覆盖分解/并发/失败/综合全路径。上线前建议用一次真实 coordinator 会话冒烟。</li>
+<li><b>并发会话协调</b>：runner.go 曾两次被并行编辑覆盖/拆分，coordinator 分支已重新加回；后续任何 runner.go 拆分须保留 <code>orchMode == "coordinator"</code> 分支。</li>
+</ul>
+</div>
+
+<div class="foot">CyberStrikeAI · J6 批次变更报告 · 由 cyberstrikeai-a1 主控会话生成 · 单一事实源见 workflow_status.md J6 段</div>
+</div>
+</body>
+</html>

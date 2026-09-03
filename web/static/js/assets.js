@@ -243,7 +243,7 @@ async function handleAssetImportFile(file) {
         const matrix = sheet ? XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false, blankrows: false }) : [];
         parseAssetImportMatrix(matrix, file.name);
     } catch (error) {
-        console.error('解析资产导入文件失败:', error);
+        logger.error('解析资产导入文件失败:', error);
         setAssetImportError(error?.message || assetT('assets.fileParseFailed', '无法解析文件，请确认文件未损坏且格式正确'));
     } finally {
         setAssetImportBusy(false);
@@ -417,7 +417,7 @@ async function loadAssetOverview() {
         renderAssetCoverage(stats.coverage || {}, Number(stats.total || 0));
         renderAssetProtocolChart(stats.protocols || [], Number(stats.total || 0));
     } catch (error) {
-        console.error('加载资产概览失败:', error);
+        logger.error('加载资产概览失败:', error);
         if (typeof showInlineToast === 'function') showInlineToast(assetT('assets.loadFailed', '加载资产失败') + ': ' + error.message);
     }
 }
@@ -703,7 +703,7 @@ async function loadAssets(page) {
         const meta = document.getElementById('asset-list-meta');
         if (meta) meta.textContent = assetT('assets.totalMeta', `共 ${data.total || 0} 条`, { count: data.total || 0 });
     } catch (error) {
-        console.error('加载资产失败:', error);
+        logger.error('加载资产失败:', error);
         assetPageState.items = [];
         assetPageState.total = 0;
         assetPageState.totalPages = 1;
@@ -1131,7 +1131,7 @@ async function submitAssetScan() {
         clearAssetSelection();
         await loadAssets(assetPageState.page);
     } catch (error) {
-        console.error('提交资产扫描失败:', error);
+        logger.error('提交资产扫描失败:', error);
         alert(assetT('assets.scanSubmitFailed', '提交扫描失败') + ': ' + error.message);
     } finally {
         button.disabled = false;
@@ -1230,7 +1230,7 @@ async function ensureAssetProjects(force) {
         assetPageState.projectsLoaded = true;
         populateAssetProjectSelects();
     } catch (error) {
-        console.warn('加载资产项目选项失败:', error);
+        logger.warn('加载资产项目选项失败:', error);
         assetPageState.projectsLoaded = true;
     }
 }

@@ -776,7 +776,7 @@ async function submitFofaSearch() {
         }
         renderFofaResults(result);
     } catch (e) {
-        console.error(providerLabel(provider) + ' 查询失败:', e);
+        logger.error(providerLabel(provider) + ' 查询失败:', e);
         setFofaMeta(_t('infoCollect.queryFailed'));
         renderFofaResults({ provider, query, fields: [], results: [], total: 0, page: 1, size: 0 });
         alert(_t('infoCollect.queryFailed') + ': ' + (e && e.message ? e.message : String(e)));
@@ -835,7 +835,7 @@ async function parseFofaNaturalLanguage() {
             showInlineToast(_t('infoCollect.parseCancelled'));
             return;
         }
-        console.error('FOFA 自然语言解析失败:', e);
+        logger.error('FOFA 自然语言解析失败:', e);
         showInlineToast(_t('infoCollect.parseFailed') + (e && e.message ? e.message : String(e)), { duration: 2800 });
     }
     finally {
@@ -1296,7 +1296,7 @@ function scanFofaRow(encodedRowJson, clickEvent) {
     try {
         row = JSON.parse(decodeURIComponent(encodedRowJson));
     } catch (e) {
-        console.warn('解析行数据失败', e);
+        logger.warn('解析行数据失败', e);
     }
 
     const fields = (document.getElementById('fofa-fields')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1654,7 +1654,7 @@ async function batchScanSelectedFofaRows() {
             showInlineToast(_t('infoCollect.batchQueueCreated'));
         }
     } catch (e) {
-        console.error('批量扫描失败:', e);
+        logger.error('批量扫描失败:', e);
         alert(_t('infoCollect.batchScanFailed') + ': ' + (e && e.message ? e.message : String(e)));
     }
 }

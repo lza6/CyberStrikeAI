@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"cyberstrike-ai/internal/metrics"
+
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
@@ -72,6 +74,7 @@ func (m *turnToolCallLimiterMiddleware) invokable() compose.InvokableToolMiddlew
 			if allowed {
 				return next(ctx, input)
 			}
+			metrics.RecordTurnToolCallDropped()
 			if m.logger != nil {
 				m.logger.Warn("turn 工具调用限流：超限拦截",
 					zap.String("toolName", input.Name),
@@ -97,6 +100,7 @@ func (m *turnToolCallLimiterMiddleware) streamable() compose.StreamableToolMiddl
 			if allowed {
 				return next(ctx, input)
 			}
+			metrics.RecordTurnToolCallDropped()
 			if m.logger != nil {
 				m.logger.Warn("turn 工具调用限流：超限拦截（流式）",
 					zap.String("toolName", input.Name),

@@ -558,6 +558,29 @@ func normalizeLLMNodeConfig(prompt string, node *graphNode, enabledTools map[str
 		ensureJoinStrategy(node)
 	case "end":
 		ensureJoinStrategy(node)
+	case "delay":
+		if readDurationMillis(node.Config) <= 0 {
+			node.Config["duration_ms"] = "1000"
+		}
+		ensureJoinStrategy(node)
+	case "loop":
+		if readCountFromConfig(node.Config) <= 0 && len(resolveLoopItems(node.Config, &WorkflowLocalState{})) == 0 {
+			node.Config["count"] = "3"
+		}
+		if cfgString(node.Config, "item_key") == "" {
+			node.Config["item_key"] = "loop_item"
+		}
+		ensureNodeOutputKey(node, usedOutputKeys, draftOutputKeyBase(node, "loop_result"))
+		ensureJoinStrategy(node)
+	case "parallel":
+		if len(readParallelBranches(node.Config)) == 0 {
+			node.Config["branches"] = []any{
+				map[string]any{"instruction": "并行分支 1"},
+				map[string]any{"instruction": "并行分支 2"},
+			}
+		}
+		ensureNodeOutputKey(node, usedOutputKeys, draftOutputKeyBase(node, "parallel_result"))
+		ensureJoinStrategy(node)
 	}
 }
 

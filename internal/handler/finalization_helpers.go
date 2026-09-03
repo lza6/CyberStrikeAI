@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cyberstrike-ai/internal/agentfinalizer"
+	"cyberstrike-ai/internal/metrics"
 	"cyberstrike-ai/internal/multiagent"
 
 	"go.uber.org/zap"
@@ -38,6 +39,8 @@ func (h *AgentHandler) finalizeAgentRunForDeliveryWithPolicy(
 		MCPExecutionIDs:          mcpExecutionIDs,
 		RequireExecutionEvidence: requireExecutionEvidence,
 	})
+	// 可观测性：在 finalizer 统一收口点上报 agent 完成率。
+	metrics.RecordAgentTurn(agentMode, decision.Status)
 	h.persistFinalizationDecision(conversationID, assistantMessageID, agentMode, mcpExecutionIDs, reasoningContent, decision)
 	return decision
 }
@@ -127,6 +130,8 @@ func (h *AgentHandler) finalizeCandidateForDeliveryWithPolicy(
 		AwaitingHITL:             awaitingHITL,
 		RequireExecutionEvidence: requireExecutionEvidence,
 	})
+	// 可观测性：在 finalizer 统一收口点上报 agent 完成率。
+	metrics.RecordAgentTurn(agentMode, decision.Status)
 	if assistantMessageID == "" || h.db == nil {
 		return decision
 	}

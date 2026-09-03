@@ -30,6 +30,9 @@ type Retriever struct {
 
 	pipeline retriever.Retriever
 	wireOpenAI *config.OpenAIConfig
+
+	// degradeLogOnce 保证"pipeline 未装配"降级日志只输出一次，避免高频检索下刷屏。
+	degradeLogOnce sync.Once
 }
 
 // RetrievalConfig 检索配置
@@ -160,7 +163,15 @@ func (r *Retriever) activeEinoRetriever() retriever.Retriever {
 	if r != nil && r.pipeline != nil {
 		return r.pipeline
 	}
-	return NewVectorEinoRetriever(r)
+	// 退化路径：pipeline 未装配（未 wire OpenAI 或装配失败），退化到裸 VectorEinoRetriever，
+	// 该路径无 MultiQuery 改写、无重排、无后处理；若已注入 DocumentReranker，则由
+	// VectorEinoRetriever.Retrieve 末尾兜底调用，避免退化路径完全跳过精排。
+	if r != nil && r.logger != nil {
+		r.degradeLogOnce.Do(func() {
+			r.logger.Warn("检索流水线未装配，退化到裸向量检索（无 multi-query/rerank/后处理）；若已注入 DocumentReranker 仍会兜底精排")
+		})
+	}
+	return NewDegradedVectorEinoRetriever(r)
 }
 
 // AsEinoRetriever 将知识库检索流水线暴露为 Eino [retriever.Retriever]。

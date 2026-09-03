@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cyberstrike-ai/internal/capability"
 	"cyberstrike-ai/internal/config"
 	"cyberstrike-ai/internal/logger"
 	"cyberstrike-ai/internal/mcp"
@@ -8,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"go.uber.org/zap"
 )
@@ -31,6 +33,11 @@ func main() {
 
 	// 创建安全工具执行器
 	executor := security.NewExecutor(&cfg.Security, mcpServer, log.Logger)
+
+	// 缺口3 注册缺失：注册 modify-file 的 Capability Provider，让破坏性工具
+	// 在 stdio MCP 模式下也走 plan→validate→execute→rollback→collect_artifacts
+	// 完整生命周期（与 web/server 模式一致）。
+	capability.NewModifyFileProvider(filepath.Join(os.TempDir(), "capability-backup"))
 
 	// 注册工具
 	executor.RegisterTools(mcpServer)
